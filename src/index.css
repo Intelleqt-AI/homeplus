@@ -43,9 +43,17 @@
     --ring: 48 100% 58%;
 
     /* Home+ Gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(48 100% 58%), hsl(48 100% 68%));
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(48 100% 58%),
+      hsl(48 100% 68%)
+    );
     --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(0 0% 98%));
-    --gradient-accent: linear-gradient(135deg, hsl(48 100% 58%), hsl(48 100% 50%));
+    --gradient-accent: linear-gradient(
+      135deg,
+      hsl(48 100% 58%),
+      hsl(48 100% 50%)
+    );
 
     /* Shadows */
     --shadow-soft: 0 2px 10px -3px hsl(0 0% 0% / 0.1);
@@ -101,7 +109,7 @@
     --border: 0 0% 20%;
     --input: 0 0% 20%;
     --ring: 48 100% 58%;
-    
+
     --sidebar-background: 0 0% 5%;
     --sidebar-foreground: 0 0% 95%;
     --sidebar-primary: 48 100% 58%;
@@ -121,4 +129,390 @@
   body {
     @apply bg-background text-foreground font-inter;
   }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(249 250 251);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(209 213 219);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(156 163 175);
+}
+
+/* Hide scrollbar for horizontal nav */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.stat-card {
+  @apply bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow;
+}
+
+.dashboard-chart {
+  @apply bg-white p-6 rounded-xl shadow-sm;
+}
+
+/* ================================= */
+.calendar-container {
+  display: flex;
+  height: 100vh;
+}
+
+.tasks-sidebar {
+  width: 300px;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-right: 1px solid #ddd;
+}
+
+.tasks-sidebar h3 {
+  margin-bottom: 1rem;
+  font-size: 18px;
+}
+
+.tasks-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.task-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: #e9ecef;
+}
+
+.task-item.to-do {
+  border-left: 4px solid #007bff;
+}
+
+.task-item.in-progress {
+  border-left: 4px solid #ffc107;
+}
+
+.task-item.in-review {
+  border-left: 4px solid #17a2b8;
+}
+
+.task-item .status {
+  font-weight: bold;
+  font-size: 12px;
+  color: #555;
+}
+
+.calendar {
+  flex-grow: 1;
+  padding: 1rem;
+}
+
+.event-wrapper {
+  padding: 4px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+}
+
+.event-wrapper.to-do {
+  background-color: #007bff;
+}
+
+.event-wrapper.in-progress {
+  background-color: #ffc107;
+}
+
+.event-wrapper.in-review {
+  background-color: #17a2b8;
+}
+
+/* React Modal */
+.ReactModal__Overlay {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  z-index: 91 !important;
+  background: #0000005c !important;
+}
+
+.ReactModal__Content {
+  position: absolute;
+  border-radius: 25px !important;
+  max-height: 90vh;
+  height: 900px;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  max-width: 900px;
+  border: none !important;
+  padding-left: 30px !important;
+  padding-right: 30px !important;
+  z-index: 9 !important;
+  background: #fff;
+  overflow: auto !important;
+  scrollbar-width: none !important;
+}
+
+.ReactModal__Content.custom {
+  padding: 0 !important;
+}
+
+.ReactModal__Content::-webkit-scrollbar {
+  display: none !important;
+  -ms-overflow-style: none !important;
+}
+.ReactModal__Content::-webkit-scrollbar-thumb {
+  background-color: transparent !important;
+}
+
+/* Hide scrollbar for Chrome, Safari, Edge */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for Firefox */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Slick Carousel CSS */
+.product_details .slick-thumb {
+  position: static;
+  display: flex !important;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.product_details .slick-dots li {
+  width: 90px;
+  height: 90px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.product_details .slick-dots .slick-active {
+  border: 2px solid black;
+}
+
+.sortable-helper {
+  z-index: 9999 !important;
+  opacity: 1 !important;
+  background-color: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  cursor: move !important;
+  transition: none !important;
+}
+
+/* Ensure buttons are visible during dragging */
+.sortable-helper .sortable-buttons {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.sortable-item {
+  transition: transform 0.1s ease;
+}
+
+/* for Doc Viewer */
+#pdf-controls {
+  box-shadow: none;
+  z-index: 999;
+}
+
+.print-color-adjust {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+/* Onboarding Form Animation */
+.slide-fade-enter {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+.slide-fade-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
+}
+
+.slide-fade-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.slide-fade-exit-active {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 200ms ease-in, transform 200ms ease-in;
+}
+
+/* Fade transition */
+.fade-enter {
+  opacity: 0;
+  transform: translateY(8px) scale(0.95);
+}
+
+.fade-enter-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
+}
+
+.fade-exit {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.fade-exit-active {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.95);
+  transition: opacity 300ms ease-in, transform 300ms ease-in;
+}
+
+/* Slide transition */
+.slide-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.slide-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 250ms ease-out, transform 250ms ease-out;
+}
+
+.slide-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.slide-exit-active {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 250ms ease-in, transform 250ms ease-in;
+}
+
+.modal-enter {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.modal-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.modal-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.modal-exit-active {
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.drawer-modal {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 400px; /* or whatever width you want */
+  background: white;
+  outline: none;
+  overflow: auto;
+}
+
+.drawer-content {
+  height: 100%;
+  background: white;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 640px) {
+  .drawer-modal {
+    width: 80%;
+  }
+}
+
+.EZDrawer .EZDrawer__checkbox {
+  display: none;
+}
+.EZDrawer .EZDrawer__checkbox:checked ~ .EZDrawer__overlay {
+  display: block;
+  opacity: 1;
+}
+.EZDrawer .EZDrawer__checkbox:checked ~ .EZDrawer__container {
+  visibility: visible;
+  transform: translate3d(0, 0, 0) !important;
+}
+.EZDrawer .EZDrawer__overlay {
+  display: none;
+  height: 100vh;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
+}
+.EZDrawer .EZDrawer__container {
+  position: fixed;
+  visibility: hidden;
+  background: white;
+  transition: all;
+  box-shadow: 0 0 10px 5px rgba(0, 0, 0, 0.1);
+  width: 500px;
+}
+
+.DocViewer #pdf-download {
+  display: none !important;
+}
+
+input[type="color"] {
+  -webkit-appearance: none; /* Chrome/Safari */
+  -moz-appearance: none; /* Firefox */
+  appearance: none;
+  border: none;
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 0.375rem; /* match your rounded-md */
 }
