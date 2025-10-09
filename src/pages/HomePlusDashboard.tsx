@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, getDay } from 'date-fns';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -18,11 +18,31 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useQuery } from '@tanstack/react-query';
-import { getEvents } from '@/lib/Api2';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { getEvents, uploadCover } from '@/lib/Api2';
+import { listFilesWithMetadata, uploadFileWithMetadata } from '@/lib/Api';
+import { toast } from 'sonner';
 
 const HomePlusDashboard = () => {
   const [showSmartMatches, setShowSmartMatches] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const { user } = useAuth();
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const handleButtonClick = () => {
+    fileInputRef.current?.click(); // manually open file picker
+  };
+
+  // Fetch files/folders
+  const {
+    data: cover,
+    isLoading: coverLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['GetCover', user.id],
+    queryFn: () => listFilesWithMetadata(`${user.id}/cover`),
+    enabled: !!user.id,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['property'],
@@ -33,6 +53,33 @@ const HomePlusDashboard = () => {
     queryKey: ['event'],
     queryFn: getEvents,
   });
+
+  const uploadMutation = useMutation({
+    mutationFn: uploadCover,
+    onMutate: () => toast.loading('Uploading...', { id: 'upload-toast' }),
+    onSuccess: () => {
+      toast.dismiss('upload-toast');
+      toast.success('Uploaded successfully!');
+      setSelectedFile(null);
+      refetch();
+    },
+    onError: e => {
+      console.log(e);
+      toast.dismiss('upload-toast');
+      toast.error('Failed to upload document.');
+    },
+  });
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      uploadMutation.mutate({
+        file: file,
+        id: `${user?.id}/cover`,
+        metadata: {},
+      });
+    }
+  };
 
   // Calendar setup
   const currentDate = new Date();
@@ -275,15 +322,29 @@ const HomePlusDashboard = () => {
             <div className="col-span-1">
               <div className="relative h-64 rounded-lg overflow-hidden group">
                 <img
-                  src="/lovable-uploads/326dc7e2-73e1-4176-b502-1deaed02919b.png"
+                  src={(!coverLoading && cover[0]?.publicUrl) || '/lovable-uploads/326dc7e2-73e1-4176-b502-1deaed02919b.png'}
                   alt="Property at 23 Oakfield Road"
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="bg-white/90 backdrop-blur-sm text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white transition-colors flex items-center space-x-2">
-                    <Camera className="w-4 h-4" strokeWidth={1} />
-                    <span>Upload New Photo</span>
-                  </button>
+                  <input
+                    ref={fileInputRef}
+                    id="file-upload2"
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  />
+                  <label htmlFor="file-upload2">
+                    <button
+                      onClick={handleButtonClick}
+                      type="button"
+                      className="bg-white/90 backdrop-blur-sm text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white transition-colors flex items-center space-x-2"
+                    >
+                      <Camera className="w-4 h-4" strokeWidth={1} />
+                      <span>Upload New Photo</span>
+                    </button>
+                  </label>
                 </div>
               </div>
             </div>
