@@ -10,68 +10,37 @@ import {
 } from "date-fns";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Search,
-  Bell,
-  User,
   Home,
   Calendar,
-  FileText,
-  Briefcase,
-  Settings,
-  HelpCircle,
-  LogOut,
   TrendingUp,
-  Upload,
   CheckCircle,
   Clock,
-  ArrowRight,
   AlertTriangle,
-  RotateCcw,
-  ExternalLink,
-  Users,
-  MessageSquare,
-  ChevronDown,
   Zap,
-  PiggyBank,
   Camera,
   Wrench,
-  Package,
-  Plus,
-  Target,
   Shield,
-  Star,
-  Eye,
-  Download,
-  Lightbulb,
-  MoreHorizontal,
   FileCheck,
   Flame,
-  Smartphone,
-  Car,
-  Paintbrush,
   TreePine,
-  Hammer,
-  X,
-  Activity,
-} from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useAuth } from "@/hooks/useAuth";
-import DashboardLayout from "@/components/layout/DashboardLayout";
+} from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useQuery } from '@tanstack/react-query';
+import { getEvents } from '@/lib/Api2';
 
 const HomePlusDashboard = () => {
-  const location = useLocation();
-  const [selectedProperty, setSelectedProperty] = useState(
-    "23 Oakfield Rd, SW12 8JD"
-  );
-  const [activeJobTab, setActiveJobTab] = useState("awaiting");
   const [showSmartMatches, setShowSmartMatches] = useState(false);
-  const { signOut, user } = useAuth();
 
-  // console.log(user);
+  const { data, isLoading } = useQuery({
+    queryKey: ['property'],
+    queryFn: () => import('@/lib/Api2').then(mod => mod.getProperty()),
+  });
+
+  const { data: eventData, isLoading: isLoadingEvents } = useQuery({
+    queryKey: ['event'],
+    queryFn: getEvents,
+  });
 
   // Calendar setup
   const currentDate = new Date();
@@ -80,52 +49,95 @@ const HomePlusDashboard = () => {
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   // Sample calendar events with colors matching the legend
-  const calendarEvents = {
-    1: "overdue", // Red - overdue/urgent
-    2: "scheduled", // Green - scheduled/confirmed
-    7: "due-week", // Yellow - due this week
-    8: "due-week", // Yellow
-    16: "future", // Gray - future task
-    23: "future", // Gray
-    29: "future", // Gray
+  // Map remote event data into UI shape for dashboard use
+  const rawEvents = eventData?.data ?? eventData ?? [];
+
+  type DashEvent = {
+    id: string;
+    title: string;
+    date: Date | null;
+    time?: string;
+    type?: string;
+    priority?: string;
+    cost?: number | string;
+    recurring?: string;
+    complianceType?: string;
+    isRequireTrade?: boolean;
+    description?: string;
   };
 
-  const getDotColor = (status) => {
+  type RawEvent = {
+    id?: string;
+    title?: string;
+    date?: string | null;
+    time?: string;
+    eventType?: string;
+    type?: string;
+    priority?: string;
+    cost?: number | string;
+    recurring?: string;
+    complianceType?: string;
+    isRequireTrade?: boolean;
+    description?: string;
+  };
+
+  const mapToDashEvents = (rows: RawEvent[] = []): DashEvent[] =>
+    rows.map(r => ({
+      id: r.id as string,
+      title: r.title || 'Untitled',
+      date: r.date ? new Date(r.date) : null,
+      time: r.time || '',
+      type: r.eventType || r.type || 'maintenance',
+      priority: r.priority || 'medium',
+      cost: typeof r.cost === 'number' ? r.cost : r.cost ? Number(r.cost) : 0,
+      recurring: r.recurring || 'never',
+      complianceType: r.complianceType || 'none',
+      isRequireTrade: !!r.isRequireTrade,
+      description: r.description || '',
+    }));
+
+  const dashEvents: DashEvent[] = Array.isArray(rawEvents) ? mapToDashEvents(rawEvents) : [];
+
+  const getDotColor = status => {
     switch (status) {
-      case "overdue":
-        return "bg-red-500";
-      case "scheduled":
-        return "bg-green-500";
-      case "due-week":
-        return "bg-yellow-500";
-      case "future":
-        return "bg-gray-400";
+      case 'overdue':
+        return 'bg-red-500';
+      case 'scheduled':
+      case 'confirmed':
+        return 'bg-green-500';
+      case 'due-week':
+      case 'action_required':
+        return 'bg-yellow-500';
+      case 'future':
+        return 'bg-gray-400';
       default:
         return "";
     }
   };
 
-  // Property details
-  const propertyDetails = {
-    address: "23 Oakfield Road, SW12 8JD",
-    type: "Detached house",
-    bedrooms: 4,
-    bathrooms: 2,
-    moveInDate: "March 2019",
-    yearsAtProperty: 5,
-    previousAddress: "14 High St (2015-2019)",
-    currentValue: 549000,
-    yearOnYearChange: 3.7,
+  const computeStatus = (d: Date | null) => {
+    if (!d) return 'unscheduled';
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return 'confirmed';
+    if (d < now) return 'overdue';
+    const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    if (diff <= 7) return 'due-week';
+    return 'future';
   };
 
-  const sidebarItems = [
-    { icon: Home, label: "Dashboard", path: "/dashboard" },
-    { icon: Calendar, label: "Calendar", path: "/dashboard/calendar" },
-    { icon: FileText, label: "Documents", path: "/dashboard/documents" },
-    { icon: Briefcase, label: "Job Leads", path: "/dashboard/job-leads" },
-    { icon: Activity, label: "Insights", path: "/dashboard/insights" },
-    { icon: Settings, label: "Settings", path: "/dashboard/settings" },
-  ];
+  // Property details
+  const propertyDetails = {
+    address: data?.data?.address || 'Loading address...',
+    type: data?.data?.type || 'Loading...',
+    bedrooms: data?.data?.bedrooms || 'Loading...',
+    bathrooms: 'N/A',
+    moveInDate: 'N/A',
+    yearsAtProperty: 'N/A',
+    previousAddress: 'N/A',
+    currentValue: 'N/A',
+    yearOnYearChange: 'N/A',
+    role: data?.data?.role || 'Loading...',
+  };
 
   // Alert defaults for UK properties - enhanced with new row anatomy
   const ALERT_DEFAULTS = [
@@ -252,9 +264,6 @@ const HomePlusDashboard = () => {
     return { overdue, today, thisWeek, laterThisMonth };
   };
 
-  const { overdue, today, thisWeek, laterThisMonth } =
-    groupAlertsByUrgency(allAlerts);
-
   // Get category chip color
   const getCategoryColor = (type) => {
     switch (type.toLowerCase()) {
@@ -271,66 +280,11 @@ const HomePlusDashboard = () => {
     }
   };
 
-  // Mock property history for trade matcher chips
-  const propertyTradeHistory = [
-    { name: "Plumber", icon: Wrench, count: 8 },
-    { name: "Electrician", icon: Zap, count: 5 },
-    { name: "Gas Engineer", icon: Flame, count: 4 },
-    { name: "Handyman", icon: Hammer, count: 12 },
-    { name: "Gardener", icon: TreePine, count: 6 },
-    { name: "Cleaner", icon: Smartphone, count: 15 },
-    { name: "Painter", icon: Paintbrush, count: 3 },
-    { name: "Roofer", icon: Home, count: 2 },
-  ];
-
-  // Documents ordered by urgency
-  const urgentDocuments = [
-    {
-      name: "Buildings Insurance",
-      daysLeft: 30,
-      hasDocument: false,
-      type: "compliance",
-    },
-    {
-      name: "Appliance Warranty",
-      daysLeft: 21,
-      hasDocument: true,
-      type: "warranty",
-    },
-    {
-      name: "Gas Safety Certificate",
-      daysLeft: 365,
-      hasDocument: true,
-      type: "compliance",
-    },
-    {
-      name: "EICR Certificate",
-      daysLeft: 730,
-      hasDocument: true,
-      type: "compliance",
-    },
-    {
-      name: "EPC Rating",
-      daysLeft: 1095,
-      hasDocument: true,
-      type: "compliance",
-    },
-  ].sort((a, b) => a.daysLeft - b.daysLeft);
-
-  const missingDocuments = [
-    { name: "Roof inspection", type: "service", notApplicable: false },
-    {
-      name: "Electrical certificate",
-      type: "compliance",
-      notApplicable: false,
-    },
-  ];
-
-  const getStatusDotColor = (dueInDays) => {
-    if (dueInDays < 0) return "bg-gray-800"; // overdue - dark grey
-    if (dueInDays <= 7) return "bg-red-500"; // urgent - red
-    if (dueInDays <= 14) return "bg-yellow-500"; // medium - yellow
-    return "bg-gray-400"; // later - grey
+  const getStatusDotColor = dueInDays => {
+    if (dueInDays < 0) return 'bg-gray-800'; // overdue - dark grey
+    if (dueInDays <= 7) return 'bg-red-500'; // urgent - red
+    if (dueInDays <= 14) return 'bg-yellow-500'; // medium - yellow
+    return 'bg-gray-400'; // later - grey
   };
 
   const getButtonStyle = (dueInDays) => {
@@ -339,23 +293,6 @@ const HomePlusDashboard = () => {
     if (dueInDays <= 14) return "bg-primary text-black hover:bg-primary/90"; // medium - your brand yellow
     return "bg-gray-300 text-gray-700 hover:bg-gray-400"; // later - grey
   };
-
-  // Jobs data with tabs
-  const jobsData = {
-    awaiting: [
-      { title: "Fix leaking tap", posted: "2 days ago", quotes: 0 },
-      { title: "Paint hallway", posted: "4 hours ago", quotes: 0 },
-    ],
-    "in-progress": [{ title: "Trim hedges", posted: "1 day ago", quotes: 2 }],
-    completed: [{ title: "Roof repair", completed: "1 week ago", rating: 5 }],
-  };
-
-  // Expiring documents
-  const expiringDocs = [
-    { name: "Gas Safety Certificate", expires: "14 days", action: "renew" },
-    { name: "EPC Certificate", expires: "90 days", action: "upload" },
-    { name: "Building Insurance", expires: "30 days", action: "renew" },
-  ];
 
   // Smart matches data
   const smartMatches = [
@@ -378,8 +315,6 @@ const HomePlusDashboard = () => {
       specialty: "General maintenance",
     },
   ];
-
-  const properties = ["23 Oakfield Rd, SW12 8JD", "4 Maple Cottage, BN20 7HH"];
 
   return (
     <DashboardLayout>
@@ -418,15 +353,10 @@ const HomePlusDashboard = () => {
                     </h3>
                     <div className="space-y-2 text-sm text-black">
                       <div>• {propertyDetails.type}</div>
-                      <div>
-                        • {propertyDetails.bedrooms} bed,{" "}
-                        {propertyDetails.bathrooms} bath
-                      </div>
-                      <div>
-                        • Moved in: {propertyDetails.moveInDate} (
-                        {propertyDetails.yearsAtProperty} years)
-                      </div>
+                      <div>• {propertyDetails.bedrooms} bed</div>
+                      <div>• Moved in: {propertyDetails.moveInDate}</div>
                       <div>• Previous: {propertyDetails.previousAddress}</div>
+                      <div>• Role: {propertyDetails.role}</div>
                     </div>
                   </div>
                 </div>
@@ -445,18 +375,10 @@ const HomePlusDashboard = () => {
                     />
                   </div>
 
-                  <div className="text-2xl font-semibold text-black mb-4">
-                    £{propertyDetails.currentValue.toLocaleString()}
-                  </div>
-                  <div className="text-sm text-green-600 mb-1 font-medium">
-                    +{propertyDetails.yearOnYearChange}% YoY
-                  </div>
+                  <div className="text-2xl font-semibold text-black mb-4">£{propertyDetails.currentValue.toLocaleString()}</div>
+                  <div className="text-sm text-green-600 mb-1 font-medium">+{propertyDetails.yearOnYearChange} YoY</div>
                   <div className="text-sm text-gray-600">
-                    +£
-                    {Math.round(
-                      propertyDetails.currentValue *
-                        (propertyDetails.yearOnYearChange / 100)
-                    ).toLocaleString()}
+                    {/* +£{Math.round(propertyDetails.currentValue * (propertyDetails.yearOnYearChange / 100)).toLocaleString()} */}
                   </div>
                 </div>
 
@@ -622,8 +544,15 @@ const HomePlusDashboard = () => {
                   {/* Month days */}
                   {monthDays.map((day) => {
                     const dayNumber = day.getDate();
-                    const eventStatus = calendarEvents[dayNumber];
                     const isCurrentDay = isToday(day);
+                    // find events for this day
+                    const eventsForDay = dashEvents.filter(ev => ev.date && ev.date.toDateString() === day.toDateString());
+                    // compute a status for the dot (priority: overdue > due-week > confirmed > future)
+                    let dotStatus = null;
+                    if (eventsForDay.some(e => computeStatus(e.date) === 'overdue')) dotStatus = 'overdue';
+                    else if (eventsForDay.some(e => computeStatus(e.date) === 'due-week')) dotStatus = 'due-week';
+                    else if (eventsForDay.some(e => computeStatus(e.date) === 'confirmed')) dotStatus = 'confirmed';
+                    else if (eventsForDay.length) dotStatus = 'future';
 
                     return (
                       <div
@@ -634,12 +563,7 @@ const HomePlusDashboard = () => {
                             : "text-gray-900"
                         }`}>
                         {dayNumber}
-                        {eventStatus && (
-                          <div
-                            className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${getDotColor(
-                              eventStatus
-                            )}`}></div>
-                        )}
+                        {dotStatus && <div className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${getDotColor(dotStatus)}`}></div>}
                       </div>
                     );
                   })}
@@ -692,25 +616,24 @@ const HomePlusDashboard = () => {
                     Overdue
                   </h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Flame
-                          className="w-4 h-4 text-red-600"
-                          strokeWidth={1}
-                        />
-                        <div>
-                          <span className="text-sm font-medium text-black">
-                            Boiler service
-                          </span>
-                          <p className="text-xs text-gray-600">
-                            2 days overdue
-                          </p>
+                    {dashEvents
+                      .filter(e => computeStatus(e.date) === 'overdue')
+                      .map(e => (
+                        <div key={e.id} className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Flame className="w-4 h-4 text-red-600" strokeWidth={1} />
+                            <div>
+                              <span className="text-sm font-medium text-black">{e.title}</span>
+                              <p className="text-xs text-gray-600">
+                                Due {e.date ? Math.ceil((Date.now() - e.date.getTime()) / (1000 * 60 * 60 * 24)) : ''} days ago
+                              </p>
+                            </div>
+                          </div>
+                          <button className="bg-red-500 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-600 transition-colors text-sm">
+                            Book Now
+                          </button>
                         </div>
-                      </div>
-                      <button className="bg-red-500 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-600 transition-colors text-sm">
-                        Book Now
-                      </button>
-                    </div>
+                      ))}
                   </div>
                 </div>
 
@@ -720,41 +643,24 @@ const HomePlusDashboard = () => {
                     Due This Week
                   </h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-white border border-yellow-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Shield
-                          className="w-4 h-4 text-yellow-600"
-                          strokeWidth={1}
-                        />
-                        <div>
-                          <span className="text-sm font-medium text-black">
-                            Smoke/CO alarm test
-                          </span>
-                          <p className="text-xs text-gray-600">Due in 5 days</p>
+                    {dashEvents
+                      .filter(e => computeStatus(e.date) === 'due-week')
+                      .map(e => (
+                        <div key={e.id} className="flex items-center justify-between p-3 bg-white border border-yellow-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Shield className="w-4 h-4 text-yellow-600" strokeWidth={1} />
+                            <div>
+                              <span className="text-sm font-medium text-black">{e.title}</span>
+                              <p className="text-xs text-gray-600">
+                                Due {e.date ? Math.ceil((e.date.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : ''} days
+                              </p>
+                            </div>
+                          </div>
+                          <button className="bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+                            Mark Done
+                          </button>
                         </div>
-                      </div>
-                      <button className="bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm">
-                        Mark Done
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-white border border-yellow-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Home
-                          className="w-4 h-4 text-yellow-600"
-                          strokeWidth={1}
-                        />
-                        <div>
-                          <span className="text-sm font-medium text-black">
-                            Gutter clean
-                          </span>
-                          <p className="text-xs text-gray-600">Due in 6 days</p>
-                        </div>
-                      </div>
-                      <button className="bg-primary text-black font-medium py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm">
-                        Get Quotes
-                      </button>
-                    </div>
+                      ))}
                   </div>
                 </div>
 
@@ -764,25 +670,20 @@ const HomePlusDashboard = () => {
                     Scheduled
                   </h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Wrench
-                          className="w-4 h-4 text-green-600"
-                          strokeWidth={1}
-                        />
-                        <div>
-                          <span className="text-sm font-medium text-black">
-                            Window cleaning
-                          </span>
-                          <p className="text-xs text-gray-600">
-                            Confirmed for Tuesday
-                          </p>
+                    {dashEvents
+                      .filter(e => computeStatus(e.date) === 'confirmed')
+                      .map(e => (
+                        <div key={e.id} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Wrench className="w-4 h-4 text-green-600" strokeWidth={1} />
+                            <div>
+                              <span className="text-sm font-medium text-black">{e.title}</span>
+                              <p className="text-xs text-gray-600">{e.date ? e.date.toLocaleDateString() : ''}</p>
+                            </div>
+                          </div>
+                          <span className="text-sm text-green-600 font-medium">Confirmed</span>
                         </div>
-                      </div>
-                      <span className="text-sm text-green-600 font-medium">
-                        Confirmed
-                      </span>
-                    </div>
+                      ))}
                   </div>
                 </div>
               </div>
