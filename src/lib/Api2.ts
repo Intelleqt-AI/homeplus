@@ -29,3 +29,23 @@ export const getEvents = async () => {
   }
   return { data };
 };
+
+// Upload Cover
+export const uploadCover = async ({ file, id, metadata }) => {
+  if (!file) throw new Error('No file provided.');
+
+  // Get file extension (e.g. .jpg, .png)
+  const extension = file.name.substring(file.name.lastIndexOf('.'));
+  // Always name it "cover" with same extension
+  const filePath = `${id}/cover${extension}`;
+
+  // Upload and overwrite if exists
+  const { data, error } = await supabase.storage.from('user-docs').upload(filePath, file, {
+    cacheControl: '3600',
+    upsert: true, // replaces the existing cover
+    metadata,
+  });
+
+  if (error) throw error;
+  return data;
+};
