@@ -48,13 +48,16 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const HomePlusDashboard = () => {
   const location = useLocation();
   const [selectedProperty, setSelectedProperty] = useState('23 Oakfield Rd, SW12 8JD');
   const [activeJobTab, setActiveJobTab] = useState('awaiting');
   const [showSmartMatches, setShowSmartMatches] = useState(false);
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+
+  console.log(user);
 
   // Calendar setup
   const currentDate = new Date();
@@ -291,115 +294,10 @@ const HomePlusDashboard = () => {
   const properties = ['23 Oakfield Rd, SW12 8JD', '4 Maple Cottage, BN20 7HH'];
 
   return (
-    <div className="min-h-screen bg-gray-50 font-inter">
-      {/* Left Navigation */}
-      <nav className="fixed left-0 top-0 h-full w-[72px] bg-white border-r border-gray-200 z-40">
-        <div className="flex flex-col h-full">
-          {/* Navigation Items */}
-          <div className="flex-1 pt-6">
-            {sidebarItems.map((item, index) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <Tooltip key={index}>
-                  <TooltipTrigger asChild>
-                    <Link to={item.path} className="block relative">
-                      {isActive && <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-primary rounded-r"></div>}
-                      <div
-                        className={`flex items-center justify-center h-12 mx-2 rounded-lg transition-colors ${
-                          isActive ? 'bg-primary' : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        <item.icon className={`w-5 h-5 ${isActive ? 'text-black' : 'text-black'}`} strokeWidth={1} />
-                      </div>
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
-          </div>
-
-          {/* Bottom Items */}
-          <div className="pb-6">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center justify-center h-12 mx-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-                  <HelpCircle className="w-5 h-5 text-black" strokeWidth={1} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Help</p>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  onClick={() => signOut()}
-                  className="flex items-center justify-center h-12 mx-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                >
-                  <LogOut className="w-5 h-5 text-black" strokeWidth={1} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Log Out</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <div className="ml-[72px]">
-        {/* Top Bar */}
-        <header className="sticky top-0 bg-white h-16 border-b border-gray-200 px-6 flex items-center justify-between z-30">
-          <div className="font-bold text-xl text-black">Home⁺</div>
-
-          {/* Quick Actions */}
-          <div className="flex-1 max-w-4xl mx-8">
-            <div className="flex items-center justify-center space-x-4">
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Camera className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Scan Doc</span>
-              </button>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Calendar className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Add Task</span>
-              </button>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Wrench className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Get Quotes</span>
-              </button>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Package className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Home Pack</span>
-              </button>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <MessageSquare className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Help</span>
-              </button>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Plus className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Property</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Right Section */}
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Bell className="w-5 h-5 text-gray-400 hover:text-primary transition-colors cursor-pointer" strokeWidth={1} />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full"></div>
-            </div>
-            <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
-              <User className="w-4 h-4 text-white" strokeWidth={1} />
-            </div>
-          </div>
-        </header>
-
+    <DashboardLayout>
+      <div className=" bg-gray-50 font-inter">
         {/* Dashboard Content */}
-        <main className="p-6 space-y-6">
+        <main className=" space-y-6">
           {/* Property Header Section */}
           <div className="grid grid-cols-3 gap-6">
             {/* Property Photo */}
@@ -850,7 +748,7 @@ const HomePlusDashboard = () => {
           )}
         </main>
       </div>
-    </div>
+    </DashboardLayout>
   );
 };
 
