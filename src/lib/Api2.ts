@@ -19,3 +19,13 @@ export const getProperty = async () => {
   }
   return { data };
 };
+
+//  get all event
+export const getEvents = async () => {
+  const { data, error } = await supabase.from('event').select('*');
+  if (error) {
+    console.log(error);
+    throw new Error(error.message);
+  }
+  return { data };
+};

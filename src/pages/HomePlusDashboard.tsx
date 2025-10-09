@@ -2,65 +2,36 @@ import { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, getDay } from 'date-fns';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Search,
-  Bell,
-  User,
   Home,
   Calendar,
-  FileText,
-  Briefcase,
-  Settings,
-  HelpCircle,
-  LogOut,
   TrendingUp,
-  Upload,
   CheckCircle,
   Clock,
-  ArrowRight,
   AlertTriangle,
-  RotateCcw,
-  ExternalLink,
-  Users,
-  MessageSquare,
-  ChevronDown,
   Zap,
-  PiggyBank,
   Camera,
   Wrench,
-  Package,
-  Plus,
-  Target,
   Shield,
-  Star,
-  Eye,
-  Download,
-  Lightbulb,
-  MoreHorizontal,
   FileCheck,
   Flame,
-  Smartphone,
-  Car,
-  Paintbrush,
   TreePine,
-  Hammer,
-  X,
-  Activity,
 } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useQuery } from '@tanstack/react-query';
+import { getEvents } from '@/lib/Api2';
 
 const HomePlusDashboard = () => {
-  const location = useLocation();
-  const [selectedProperty, setSelectedProperty] = useState('23 Oakfield Rd, SW12 8JD');
-  const [activeJobTab, setActiveJobTab] = useState('awaiting');
   const [showSmartMatches, setShowSmartMatches] = useState(false);
-  const { signOut, user } = useAuth();
 
   const { data, isLoading } = useQuery({
     queryKey: ['property'],
     queryFn: () => import('@/lib/Api2').then(mod => mod.getProperty()),
+  });
+
+  const { data: eventData, isLoading: isLoadingEvents } = useQuery({
+    queryKey: ['event'],
+    queryFn: getEvents,
   });
 
   // Calendar setup
@@ -70,29 +41,80 @@ const HomePlusDashboard = () => {
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   // Sample calendar events with colors matching the legend
-  const calendarEvents = {
-    1: 'overdue', // Red - overdue/urgent
-    2: 'scheduled', // Green - scheduled/confirmed
-    7: 'due-week', // Yellow - due this week
-    8: 'due-week', // Yellow
-    16: 'future', // Gray - future task
-    23: 'future', // Gray
-    29: 'future', // Gray
+  // Map remote event data into UI shape for dashboard use
+  const rawEvents = eventData?.data ?? eventData ?? [];
+
+  type DashEvent = {
+    id: string;
+    title: string;
+    date: Date | null;
+    time?: string;
+    type?: string;
+    priority?: string;
+    cost?: number | string;
+    recurring?: string;
+    complianceType?: string;
+    isRequireTrade?: boolean;
+    description?: string;
   };
+
+  type RawEvent = {
+    id?: string;
+    title?: string;
+    date?: string | null;
+    time?: string;
+    eventType?: string;
+    type?: string;
+    priority?: string;
+    cost?: number | string;
+    recurring?: string;
+    complianceType?: string;
+    isRequireTrade?: boolean;
+    description?: string;
+  };
+
+  const mapToDashEvents = (rows: RawEvent[] = []): DashEvent[] =>
+    rows.map(r => ({
+      id: r.id as string,
+      title: r.title || 'Untitled',
+      date: r.date ? new Date(r.date) : null,
+      time: r.time || '',
+      type: r.eventType || r.type || 'maintenance',
+      priority: r.priority || 'medium',
+      cost: typeof r.cost === 'number' ? r.cost : r.cost ? Number(r.cost) : 0,
+      recurring: r.recurring || 'never',
+      complianceType: r.complianceType || 'none',
+      isRequireTrade: !!r.isRequireTrade,
+      description: r.description || '',
+    }));
+
+  const dashEvents: DashEvent[] = Array.isArray(rawEvents) ? mapToDashEvents(rawEvents) : [];
 
   const getDotColor = status => {
     switch (status) {
       case 'overdue':
         return 'bg-red-500';
       case 'scheduled':
+      case 'confirmed':
         return 'bg-green-500';
       case 'due-week':
+      case 'action_required':
         return 'bg-yellow-500';
       case 'future':
         return 'bg-gray-400';
       default:
         return '';
     }
+  };
+
+  const computeStatus = (d: Date | null) => {
+    if (!d) return 'unscheduled';
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return 'confirmed';
+    if (d < now) return 'overdue';
+    const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    if (diff <= 7) return 'due-week';
+    return 'future';
   };
 
   // Property details
@@ -414,8 +436,15 @@ const HomePlusDashboard = () => {
                   {/* Month days */}
                   {monthDays.map(day => {
                     const dayNumber = day.getDate();
-                    const eventStatus = calendarEvents[dayNumber];
                     const isCurrentDay = isToday(day);
+                    // find events for this day
+                    const eventsForDay = dashEvents.filter(ev => ev.date && ev.date.toDateString() === day.toDateString());
+                    // compute a status for the dot (priority: overdue > due-week > confirmed > future)
+                    let dotStatus = null;
+                    if (eventsForDay.some(e => computeStatus(e.date) === 'overdue')) dotStatus = 'overdue';
+                    else if (eventsForDay.some(e => computeStatus(e.date) === 'due-week')) dotStatus = 'due-week';
+                    else if (eventsForDay.some(e => computeStatus(e.date) === 'confirmed')) dotStatus = 'confirmed';
+                    else if (eventsForDay.length) dotStatus = 'future';
 
                     return (
                       <div
@@ -425,9 +454,7 @@ const HomePlusDashboard = () => {
                         }`}
                       >
                         {dayNumber}
-                        {eventStatus && (
-                          <div className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${getDotColor(eventStatus)}`}></div>
-                        )}
+                        {dotStatus && <div className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${getDotColor(dotStatus)}`}></div>}
                       </div>
                     );
                   })}
@@ -474,18 +501,24 @@ const HomePlusDashboard = () => {
                 <div>
                   <h4 className="text-sm font-medium text-red-600 mb-3">Overdue</h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Flame className="w-4 h-4 text-red-600" strokeWidth={1} />
-                        <div>
-                          <span className="text-sm font-medium text-black">Boiler service</span>
-                          <p className="text-xs text-gray-600">2 days overdue</p>
+                    {dashEvents
+                      .filter(e => computeStatus(e.date) === 'overdue')
+                      .map(e => (
+                        <div key={e.id} className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Flame className="w-4 h-4 text-red-600" strokeWidth={1} />
+                            <div>
+                              <span className="text-sm font-medium text-black">{e.title}</span>
+                              <p className="text-xs text-gray-600">
+                                Due {e.date ? Math.ceil((Date.now() - e.date.getTime()) / (1000 * 60 * 60 * 24)) : ''} days ago
+                              </p>
+                            </div>
+                          </div>
+                          <button className="bg-red-500 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-600 transition-colors text-sm">
+                            Book Now
+                          </button>
                         </div>
-                      </div>
-                      <button className="bg-red-500 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-600 transition-colors text-sm">
-                        Book Now
-                      </button>
-                    </div>
+                      ))}
                   </div>
                 </div>
 
@@ -493,31 +526,24 @@ const HomePlusDashboard = () => {
                 <div>
                   <h4 className="text-sm font-medium text-yellow-600 mb-3">Due This Week</h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-white border border-yellow-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Shield className="w-4 h-4 text-yellow-600" strokeWidth={1} />
-                        <div>
-                          <span className="text-sm font-medium text-black">Smoke/CO alarm test</span>
-                          <p className="text-xs text-gray-600">Due in 5 days</p>
+                    {dashEvents
+                      .filter(e => computeStatus(e.date) === 'due-week')
+                      .map(e => (
+                        <div key={e.id} className="flex items-center justify-between p-3 bg-white border border-yellow-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Shield className="w-4 h-4 text-yellow-600" strokeWidth={1} />
+                            <div>
+                              <span className="text-sm font-medium text-black">{e.title}</span>
+                              <p className="text-xs text-gray-600">
+                                Due {e.date ? Math.ceil((e.date.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : ''} days
+                              </p>
+                            </div>
+                          </div>
+                          <button className="bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+                            Mark Done
+                          </button>
                         </div>
-                      </div>
-                      <button className="bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors text-sm">
-                        Mark Done
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-white border border-yellow-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Home className="w-4 h-4 text-yellow-600" strokeWidth={1} />
-                        <div>
-                          <span className="text-sm font-medium text-black">Gutter clean</span>
-                          <p className="text-xs text-gray-600">Due in 6 days</p>
-                        </div>
-                      </div>
-                      <button className="bg-primary text-black font-medium py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm">
-                        Get Quotes
-                      </button>
-                    </div>
+                      ))}
                   </div>
                 </div>
 
@@ -525,16 +551,20 @@ const HomePlusDashboard = () => {
                 <div>
                   <h4 className="text-sm font-medium text-green-600 mb-3">Scheduled</h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Wrench className="w-4 h-4 text-green-600" strokeWidth={1} />
-                        <div>
-                          <span className="text-sm font-medium text-black">Window cleaning</span>
-                          <p className="text-xs text-gray-600">Confirmed for Tuesday</p>
+                    {dashEvents
+                      .filter(e => computeStatus(e.date) === 'confirmed')
+                      .map(e => (
+                        <div key={e.id} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Wrench className="w-4 h-4 text-green-600" strokeWidth={1} />
+                            <div>
+                              <span className="text-sm font-medium text-black">{e.title}</span>
+                              <p className="text-xs text-gray-600">{e.date ? e.date.toLocaleDateString() : ''}</p>
+                            </div>
+                          </div>
+                          <span className="text-sm text-green-600 font-medium">Confirmed</span>
                         </div>
-                      </div>
-                      <span className="text-sm text-green-600 font-medium">Confirmed</span>
-                    </div>
+                      ))}
                   </div>
                 </div>
               </div>
