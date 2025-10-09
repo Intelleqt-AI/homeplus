@@ -71,3 +71,11 @@ export const deleteFile = async ({ id, fileName }) => {
 
   return true;
 };
+
+export const updateUserInfo = async ({ userData }) => {
+  console.log(userData);
+  const { data, error } = await supabase.auth.updateUser(userData);
+
+  if (error) throw error;
+  return data;
+};
