@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,10 +12,32 @@ import {
   Shield,
   FileText,
   Users,
+  List,
+  Grid3X3,
+  Eye,
+  X,
+  Search,
+  RotateCcw,
+  PoundSterling,
   Zap,
+  TrendingUp,
+  Quote,
+  Star,
+  Repeat,
   Building,
+  MapPin,
+  Phone,
+  Mail,
+  Camera,
+  Paperclip,
   MessageSquare,
+  DollarSign,
+  TrendingDown,
+  Trash2,
+  CreditCard,
   Home,
+  Car,
+  Settings,
   Flame,
 } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -29,99 +51,230 @@ import { getEvents } from '@/lib/Api2';
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'list' | 'board'>('month');
-  type FilterType = 'all' | 'safety' | 'maintenance' | 'financial' | 'household' | 'custom';
-  const [filterType, setFilterType] = useState<FilterType>('all');
-  const [selectedEvents, setSelectedEvents] = useState<Array<string | number>>([]);
+  const [filterType, setFilterType] = useState<'all' | 'safety' | 'maintenance' | 'financial' | 'household' | 'custom'>('all');
+  const [selectedEvents, setSelectedEvents] = useState<number[]>([]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['event'],
     queryFn: getEvents,
   });
 
+  console.log(data);
+
   const today = new Date();
 
-  const computeStatusFromDate = (d: Date | null) => {
-    if (!d) return 'pending';
-    if (d.toDateString() === today.toDateString()) return 'confirmed';
-    if (d < today) return 'overdue';
-    return 'confirmed';
-  };
-
-  // Map remote `getEvents` data to the UI shape. Prefer `date` field for calendar placement.
-  const remoteRaw = data?.data ?? data ?? [];
-  type RawEvent = {
-    id?: string;
-    created_at?: string;
-    title?: string;
-    date?: string | null;
-    time?: string;
-    eventType?: string;
-    type?: string;
-    description?: string;
-    contractor?: string;
-    cost?: number | string;
-    priority?: string;
-    complianceType?: string;
-    hasDocument?: boolean;
-    hasQuotes?: boolean;
-    isRequireTrade?: boolean;
-    tradeConfirmed?: boolean;
-    photosRequired?: boolean;
-    user_id?: string;
-    recurring?: string;
-  };
-
-  const mappedRemoteEvents = Array.isArray(remoteRaw)
-    ? (remoteRaw as RawEvent[]).map((ev: RawEvent) => {
-        const parsedDate = ev?.date ? new Date(ev.date) : null;
-        const costField = typeof ev?.cost === 'number' ? (ev.cost === 0 ? 'Free' : `£${ev.cost}`) : ev?.cost ?? 'Free';
-
-        return {
-          id: ev.id,
-          created_at: ev.created_at,
-          title: ev.title ?? '',
-          date: parsedDate,
-          time: ev.time ?? '',
-          type: ev.eventType ?? ev.type ?? 'maintenance',
-          status: computeStatusFromDate(parsedDate),
-          description: ev.description ?? '',
-          contractor: ev.contractor ?? '',
-          cost: costField,
-          priority: ev.priority ?? 'medium',
-          complianceType: ev.complianceType ?? 'none',
-          hasDocument: !!ev.hasDocument,
-          hasQuotes: !!ev.hasQuotes,
-          tradeConfirmed: !!ev.isRequireTrade || !!ev.tradeConfirmed,
-          photosRequired: !!ev.photosRequired,
-          user_id: ev.user_id,
-          recurring: ev.recurring ?? 'never',
-        };
-      })
-    : [];
-
-  const fallbackEvents = [
+  const events = [
+    // Overdue events
     {
-      id: 'ca206a4f-db58-41e0-afc7-3ac7308d7666',
-      created_at: '2025-10-09T10:27:19.130604+00:00',
-      title: 'Test',
-      date: null,
-      time: '',
+      id: 0,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 47),
+      time: '09:00',
+      title: 'Boiler Service',
       type: 'maintenance',
-      status: computeStatusFromDate(null),
-      description: '',
-      contractor: '',
+      status: 'overdue',
+      description: 'OVERDUE: Annual boiler service required - warranty at risk',
+      contractor: 'Not booked',
+      cost: '£120-180',
+      priority: 'high',
+      complianceType: 'gas_safety',
+      hasDocument: false,
+      hasQuotes: false,
+      tradeConfirmed: false,
+      photosRequired: true,
+    },
+    // Today's events
+    {
+      id: 1,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+      time: '09:00',
+      title: 'Boiler Annual Service',
+      type: 'maintenance',
+      status: 'confirmed',
+      description: 'Annual boiler service and efficiency check',
+      contractor: 'British Gas',
+      cost: '£125',
+      priority: 'medium',
+      complianceType: 'gas_safety',
+      hasDocument: true,
+      hasQuotes: true,
+      tradeConfirmed: true,
+      photosRequired: false,
+    },
+    {
+      id: 2,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+      time: '14:30',
+      title: 'Smoke Alarm Test',
+      type: 'safety',
+      status: 'pending',
+      description: 'Monthly smoke alarm and carbon monoxide detector test',
+      contractor: 'Self',
       cost: 'Free',
+      priority: 'high',
+      complianceType: 'safety',
+      hasDocument: false,
+      hasQuotes: false,
+      tradeConfirmed: false,
+      photosRequired: true,
+    },
+    // Insurance renewal (due soon)
+    {
+      id: 2.5,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 5),
+      time: '00:00',
+      title: 'Insurance Renewal',
+      type: 'admin',
+      status: 'due_this_week',
+      description: 'Home insurance policy renewal - current £420/year',
+      contractor: 'Self',
+      cost: '£420',
+      priority: 'high',
+      complianceType: 'insurance',
+      hasDocument: true,
+      hasQuotes: true,
+      tradeConfirmed: false,
+      photosRequired: false,
+    },
+    // Tomorrow's events
+    {
+      id: 3,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
+      time: '11:00',
+      title: 'Gutter Cleaning',
+      type: 'maintenance',
+      status: 'quotes_ready',
+      description: 'Autumn gutter cleaning and downpipe check - 3 quotes received',
+      contractor: 'Not booked',
+      cost: '£120-180',
       priority: 'medium',
       complianceType: 'none',
+      hasDocument: false,
+      hasQuotes: true,
+      tradeConfirmed: false,
+      photosRequired: true,
+    },
+    // This week's events
+    {
+      id: 4,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3),
+      time: '10:30',
+      title: 'HVAC Filter Change',
+      type: 'maintenance',
+      status: 'action_required',
+      description: 'Replace air conditioning and heating filters',
+      contractor: 'Self',
+      cost: '£45',
+      priority: 'low',
+      complianceType: 'none',
+      hasDocument: true,
+      hasQuotes: false,
+      tradeConfirmed: false,
+      photosRequired: false,
+    },
+    {
+      id: 5,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 5),
+      time: '15:00',
+      title: 'Plumbing Inspection',
+      type: 'inspection',
+      status: 'pending',
+      description: '6-month plumbing system inspection',
+      contractor: 'AquaFlow Plumbing',
+      cost: '£95',
+      priority: 'medium',
+      complianceType: 'none',
+      hasDocument: false,
+      hasQuotes: true,
+      tradeConfirmed: true,
+      photosRequired: false,
+    },
+    {
+      id: 6,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7),
+      time: '09:30',
+      title: 'Window Cleaning',
+      type: 'maintenance',
+      status: 'confirmed',
+      description: 'External window cleaning service',
+      contractor: 'Crystal Clear Windows',
+      cost: '£65',
+      priority: 'low',
+      complianceType: 'none',
+      hasDocument: false,
+      hasQuotes: false,
+      tradeConfirmed: true,
+      photosRequired: false,
+    },
+    // Later this month
+    {
+      id: 7,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 10),
+      time: '13:00',
+      title: 'Garden Maintenance',
+      type: 'maintenance',
+      status: 'quotes_ready',
+      description: 'Winter pruning and garden tidy - 3 quotes available',
+      contractor: 'Not booked',
+      cost: '£120-200',
+      priority: 'low',
+      complianceType: 'none',
+      hasDocument: false,
+      hasQuotes: true,
+      tradeConfirmed: false,
+      photosRequired: true,
+    },
+    {
+      id: 8,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 12),
+      time: '11:30',
+      title: 'EICR Testing',
+      type: 'safety',
+      status: 'due_this_week',
+      description: 'Electrical Installation Condition Report - required for compliance',
+      contractor: 'Not booked',
+      cost: '£200-350',
+      priority: 'high',
+      complianceType: 'eicr',
       hasDocument: false,
       hasQuotes: false,
       tradeConfirmed: false,
       photosRequired: false,
-      user_id: '2aa3c70e-c10c-4a31-9654-3e37adcd9cdd',
+    },
+    {
+      id: 9,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 15),
+      time: '10:00',
+      title: 'Gas Safety Certificate',
+      type: 'safety',
+      status: 'confirmed',
+      description: 'Annual gas safety inspection and certificate',
+      contractor: 'SafeGas Engineers',
+      cost: '£85',
+      priority: 'high',
+      complianceType: 'gas_safety',
+      hasDocument: true,
+      hasQuotes: false,
+      tradeConfirmed: true,
+      photosRequired: false,
+    },
+    {
+      id: 10,
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 18),
+      time: '14:00',
+      title: 'Electrical PAT Testing',
+      type: 'safety',
+      status: 'completed',
+      description: 'Portable appliance testing for safety compliance - COMPLETED',
+      contractor: 'ElectriSafe',
+      cost: '£120',
+      priority: 'medium',
+      complianceType: 'pat_testing',
+      hasDocument: true,
+      hasQuotes: false,
+      tradeConfirmed: true,
+      photosRequired: false,
     },
   ];
-
-  const events = mappedRemoteEvents.length ? mappedRemoteEvents : fallbackEvents;
 
   // Enhanced filtering and data processing
   const filteredEvents = events.filter(event => {
@@ -143,7 +296,7 @@ const Calendar = () => {
   const overdueEvents = filteredEvents.filter(event => event.status === 'overdue');
 
   const thisWeekEvents = filteredEvents.filter(event => {
-    const eventDate = new Date(event?.date);
+    const eventDate = new Date(event.date);
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     const weekEnd = new Date(weekStart);
@@ -154,18 +307,18 @@ const Calendar = () => {
   const actionRequiredEvents = filteredEvents.filter(event => ['action_required', 'due_this_week', 'quotes_ready'].includes(event.status));
 
   const upcomingEvents = filteredEvents
-    .filter(event => event?.date > new Date() && event.date.toDateString() !== new Date().toDateString())
+    .filter(event => event.date > new Date() && event.date.toDateString() !== new Date().toDateString())
     .slice(0, 5);
 
   // Cost calculations
   const thisMonthCost = filteredEvents
     .filter(event => {
-      const eventDate = new Date(event?.date);
+      const eventDate = new Date(event.date);
       const now = new Date();
       return eventDate.getMonth() === now.getMonth() && eventDate.getFullYear() === now.getFullYear();
     })
     .reduce((total, event) => {
-      const cost = event.cost.replace(/[£,-]/g, '');
+      const cost = event.cost.replace(/[£,\-]/g, '');
       const numCost = parseInt(cost) || 0;
       return total + numCost;
     }, 0);
@@ -224,21 +377,6 @@ const Calendar = () => {
           </>
         );
     }
-  };
-
-  // Helpers to safely handle event.date which may be Date, string, or null
-  const getEventDateString = (ev: RawEvent | unknown) => {
-    const e = ev as RawEvent | undefined;
-    if (!e?.date) return null;
-    const d = typeof e.date === 'string' ? new Date(e.date as string) : (e.date as Date);
-    return d.toDateString();
-  };
-
-  const formatEventDateLong = (ev: RawEvent | unknown) => {
-    const e = ev as RawEvent | undefined;
-    if (!e?.date) return '—';
-    const d = typeof e.date === 'string' ? new Date(e.date as string) : (e.date as Date);
-    return d.toLocaleDateString();
   };
 
   const getStatusBorder = (status: string) => {
@@ -331,7 +469,7 @@ const Calendar = () => {
 
   const formatCost = (cost: string, status: string) => {
     if (status === 'quotes_ready') {
-      const cleanCost = cost.replace(/[£,-]/g, '');
+      const cleanCost = cost.replace(/[£,\-]/g, '');
       if (cleanCost.includes('-')) {
         return `£${cleanCost.split('-')[0]} (3 quotes)`;
       }
@@ -345,10 +483,10 @@ const Calendar = () => {
   };
 
   const getEventsForDate = (date: Date) => {
-    return filteredEvents.filter(event => getEventDateString(event) === date.toDateString());
+    return filteredEvents.filter(event => event.date.toDateString() === date.toDateString());
   };
 
-  const toggleEventSelection = (eventId: string | number) => {
+  const toggleEventSelection = (eventId: number) => {
     setSelectedEvents(prev => (prev.includes(eventId) ? prev.filter(id => id !== eventId) : [...prev, eventId]));
   };
 
@@ -423,7 +561,7 @@ const Calendar = () => {
                     key={filter.value}
                     variant={filterType === filter.value ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setFilterType(filter.value as FilterType)}
+                    onClick={() => setFilterType(filter.value as any)}
                     className={`px-3 py-1 text-xs ${
                       filterType === filter.value
                         ? filter.value === 'safety'
@@ -561,7 +699,7 @@ const Calendar = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
                               <div>
                                 <p className="text-xs text-gray-500">Date</p>
-                                <p className="text-sm">{event?.date?.toLocaleDateString()}</p>
+                                <p className="text-sm">{event.date.toLocaleDateString()}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-gray-500">Contractor</p>
@@ -771,7 +909,7 @@ const Calendar = () => {
                     <div className="flex items-center gap-2">
                       {getServiceIcon(event.title, event.type)}
                       <span className="text-sm font-medium text-black">
-                        {event?.date?.toLocaleDateString('en-GB', { weekday: 'short' })}: {event.title}
+                        {event.date.toLocaleDateString('en-GB', { weekday: 'short' })}: {event.title}
                       </span>
                     </div>
                     <button className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 border-0">
@@ -787,7 +925,7 @@ const Calendar = () => {
                   <span className="font-semibold text-green-600">
                     £
                     {thisWeekEvents.reduce((total, event) => {
-                      const cost = event.cost.replace(/[£,-]/g, '');
+                      const cost = event.cost.replace(/[£,\-]/g, '');
                       return total + (parseInt(cost) || 0);
                     }, 0)}
                   </span>
