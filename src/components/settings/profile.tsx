@@ -4,15 +4,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { updateUserInfo } from "@/lib/Api";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 const Profile = () => {
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
-    email: "",
     phone: "",
   });
   const [message, setMessage] = useState("");
+
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  console.log(user);
 
   // Fetch current user info on mount
   // useEffect(() => {
@@ -34,6 +41,17 @@ const Profile = () => {
   //   fetchUser();
   // }, []);
 
+  const mutation = useMutation({
+    mutationFn: updateUserInfo, // your API function
+    onSuccess: () => {
+      toast.success("User updated successfully!");
+      // queryClient.invalidateQueries(["getUser"]); // update user data cache
+    },
+    onError: (error) => {
+      toast.error(error.message || "Error! Could not update user.");
+    },
+  });
+
   const handleChange = (e) => {
     const { id, value } = e.target;
     setForm((prev) => ({ ...prev, [id]: value }));
@@ -41,7 +59,12 @@ const Profile = () => {
 
   const handleSave = () => {
     setMessage("");
-    console.log(form);
+    const data = {
+      user_metadata: { display_name: `${form.firstName} ${form.lastName}` },
+      // phone: `+880${form.phone.slice(1)}`, // optional
+    };
+    console.log(data);
+    mutation.mutate({ userData: data });
   };
 
   return (
@@ -68,7 +91,7 @@ const Profile = () => {
             />
           </div>
         </div>
-        <div>
+        {/* <div>
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
@@ -76,7 +99,7 @@ const Profile = () => {
             value={form.email}
             onChange={handleChange}
           />
-        </div>
+        </div> */}
         <div>
           <Label htmlFor="phone">Phone</Label>
           <Input

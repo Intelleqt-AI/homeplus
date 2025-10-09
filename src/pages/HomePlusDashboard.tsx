@@ -45,12 +45,12 @@ const HomePlusDashboard = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['property'],
-    queryFn: () => import('@/lib/Api2').then(mod => mod.getProperty()),
+    queryKey: ["property"],
+    queryFn: () => import("@/lib/Api2").then((mod) => mod.getProperty()),
   });
 
   const { data: eventData, isLoading: isLoadingEvents } = useQuery({
-    queryKey: ['event'],
+    queryKey: ["event"],
     queryFn: getEvents,
   });
 
@@ -121,61 +121,73 @@ const HomePlusDashboard = () => {
   };
 
   const mapToDashEvents = (rows: RawEvent[] = []): DashEvent[] =>
-    rows.map(r => ({
+    rows.map((r) => ({
       id: r.id as string,
-      title: r.title || 'Untitled',
+      title: r.title || "Untitled",
       date: r.date ? new Date(r.date) : null,
-      time: r.time || '',
-      type: r.eventType || r.type || 'maintenance',
-      priority: r.priority || 'medium',
-      cost: typeof r.cost === 'number' ? r.cost : r.cost ? Number(r.cost) : 0,
-      recurring: r.recurring || 'never',
-      complianceType: r.complianceType || 'none',
+      time: r.time || "",
+      type: r.eventType || r.type || "maintenance",
+      priority: r.priority || "medium",
+      cost: typeof r.cost === "number" ? r.cost : r.cost ? Number(r.cost) : 0,
+      recurring: r.recurring || "never",
+      complianceType: r.complianceType || "none",
       isRequireTrade: !!r.isRequireTrade,
-      description: r.description || '',
+      description: r.description || "",
     }));
 
-  const dashEvents: DashEvent[] = Array.isArray(rawEvents) ? mapToDashEvents(rawEvents) : [];
+  const dashEvents: DashEvent[] = Array.isArray(rawEvents)
+    ? mapToDashEvents(rawEvents)
+    : [];
 
-  const getDotColor = status => {
+  const getDotColor = (status) => {
     switch (status) {
-      case 'overdue':
-        return 'bg-red-500';
-      case 'scheduled':
-      case 'confirmed':
-        return 'bg-green-500';
-      case 'due-week':
-      case 'action_required':
-        return 'bg-yellow-500';
-      case 'future':
-        return 'bg-gray-400';
+      case "overdue":
+        return "bg-red-500";
+      case "scheduled":
+      case "confirmed":
+        return "bg-green-500";
+      case "due-week":
+      case "action_required":
+        return "bg-yellow-500";
+      case "future":
+        return "bg-gray-400";
       default:
         return "";
     }
   };
 
+  // const computeStatus = (d: Date | null) => {
+  //   if (!d) return "unscheduled";
+  //   const now = new Date();
+  //   if (d.toDateString() === now.toDateString()) return "confirmed";
+  //   if (d < now) return "overdue";
+  //   const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  //   if (diff <= 7) return "due-week";
+  //   return "future";
+  // };
+
   const computeStatus = (d: Date | null) => {
-    if (!d) return 'unscheduled';
+    if (!d) return "unscheduled";
     const now = new Date();
-    if (d.toDateString() === now.toDateString()) return 'confirmed';
-    if (d < now) return 'overdue';
+    if (d.toDateString() === now.toDateString()) return "confirmed";
+    if (d < now) return "overdue";
     const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    if (diff <= 7) return 'due-week';
-    return 'future';
+    if (diff <= 7) return "due-week";
+    return "future";
   };
 
   // Property details
   const propertyDetails = {
-    address: data?.data?.address || 'Loading address...',
-    type: data?.data?.type || 'Loading...',
-    bedrooms: data?.data?.bedrooms || 'Loading...',
-    bathrooms: 'N/A',
-    moveInDate: 'N/A',
-    yearsAtProperty: 'N/A',
-    previousAddress: 'N/A',
-    currentValue: 'N/A',
-    yearOnYearChange: 'N/A',
-    role: data?.data?.role || 'Loading...',
+    address: data?.data?.address || "Loading address...",
+    type: data?.data?.type || "Loading...",
+    bedrooms: data?.data?.bedrooms || "Loading...",
+    bathrooms: "N/A",
+    moveInDate: "N/A",
+    yearsAtProperty: "N/A",
+    previousAddress: "N/A",
+    currentValue: "N/A",
+    yearOnYearChange: "N/A",
+    role: data?.data?.role || "Loading...",
   };
 
   // Alert defaults for UK properties - enhanced with new row anatomy
@@ -319,11 +331,11 @@ const HomePlusDashboard = () => {
     }
   };
 
-  const getStatusDotColor = dueInDays => {
-    if (dueInDays < 0) return 'bg-gray-800'; // overdue - dark grey
-    if (dueInDays <= 7) return 'bg-red-500'; // urgent - red
-    if (dueInDays <= 14) return 'bg-yellow-500'; // medium - yellow
-    return 'bg-gray-400'; // later - grey
+  const getStatusDotColor = (dueInDays) => {
+    if (dueInDays < 0) return "bg-gray-800"; // overdue - dark grey
+    if (dueInDays <= 7) return "bg-red-500"; // urgent - red
+    if (dueInDays <= 14) return "bg-yellow-500"; // medium - yellow
+    return "bg-gray-400"; // later - grey
   };
 
   const getButtonStyle = (dueInDays) => {
@@ -428,8 +440,12 @@ const HomePlusDashboard = () => {
                     />
                   </div>
 
-                  <div className="text-2xl font-semibold text-black mb-4">£{propertyDetails.currentValue.toLocaleString()}</div>
-                  <div className="text-sm text-green-600 mb-1 font-medium">+{propertyDetails.yearOnYearChange} YoY</div>
+                  <div className="text-2xl font-semibold text-black mb-4">
+                    £{propertyDetails.currentValue.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-green-600 mb-1 font-medium">
+                    +{propertyDetails.yearOnYearChange} YoY
+                  </div>
                   <div className="text-sm text-gray-600">
                     {/* +£{Math.round(propertyDetails.currentValue * (propertyDetails.yearOnYearChange / 100)).toLocaleString()} */}
                   </div>
@@ -599,13 +615,31 @@ const HomePlusDashboard = () => {
                     const dayNumber = day.getDate();
                     const isCurrentDay = isToday(day);
                     // find events for this day
-                    const eventsForDay = dashEvents.filter(ev => ev.date && ev.date.toDateString() === day.toDateString());
+                    const eventsForDay = dashEvents.filter(
+                      (ev) =>
+                        ev.date && ev.date.toDateString() === day.toDateString()
+                    );
                     // compute a status for the dot (priority: overdue > due-week > confirmed > future)
                     let dotStatus = null;
-                    if (eventsForDay.some(e => computeStatus(e.date) === 'overdue')) dotStatus = 'overdue';
-                    else if (eventsForDay.some(e => computeStatus(e.date) === 'due-week')) dotStatus = 'due-week';
-                    else if (eventsForDay.some(e => computeStatus(e.date) === 'confirmed')) dotStatus = 'confirmed';
-                    else if (eventsForDay.length) dotStatus = 'future';
+                    if (
+                      eventsForDay.some(
+                        (e) => computeStatus(e.date) === "overdue"
+                      )
+                    )
+                      dotStatus = "overdue";
+                    else if (
+                      eventsForDay.some(
+                        (e) => computeStatus(e.date) === "due-week"
+                      )
+                    )
+                      dotStatus = "due-week";
+                    else if (
+                      eventsForDay.some(
+                        (e) => computeStatus(e.date) === "confirmed"
+                      )
+                    )
+                      dotStatus = "confirmed";
+                    else if (eventsForDay.length) dotStatus = "future";
 
                     return (
                       <div
@@ -616,7 +650,12 @@ const HomePlusDashboard = () => {
                             : "text-gray-900"
                         }`}>
                         {dayNumber}
-                        {dotStatus && <div className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${getDotColor(dotStatus)}`}></div>}
+                        {dotStatus && (
+                          <div
+                            className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${getDotColor(
+                              dotStatus
+                            )}`}></div>
+                        )}
                       </div>
                     );
                   })}
@@ -670,15 +709,29 @@ const HomePlusDashboard = () => {
                   </h4>
                   <div className="space-y-3">
                     {dashEvents
-                      .filter(e => computeStatus(e.date) === 'overdue')
-                      .map(e => (
-                        <div key={e.id} className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                      .filter((e) => computeStatus(e.date) === "overdue")
+                      .map((e) => (
+                        <div
+                          key={e.id}
+                          className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <Flame className="w-4 h-4 text-red-600" strokeWidth={1} />
+                            <Flame
+                              className="w-4 h-4 text-red-600"
+                              strokeWidth={1}
+                            />
                             <div>
-                              <span className="text-sm font-medium text-black">{e.title}</span>
+                              <span className="text-sm font-medium text-black">
+                                {e.title}
+                              </span>
                               <p className="text-xs text-gray-600">
-                                Due {e.date ? Math.ceil((Date.now() - e.date.getTime()) / (1000 * 60 * 60 * 24)) : ''} days ago
+                                Due{" "}
+                                {e.date
+                                  ? Math.ceil(
+                                      (Date.now() - e.date.getTime()) /
+                                        (1000 * 60 * 60 * 24)
+                                    )
+                                  : ""}{" "}
+                                days ago
                               </p>
                             </div>
                           </div>
@@ -697,15 +750,29 @@ const HomePlusDashboard = () => {
                   </h4>
                   <div className="space-y-3">
                     {dashEvents
-                      .filter(e => computeStatus(e.date) === 'due-week')
-                      .map(e => (
-                        <div key={e.id} className="flex items-center justify-between p-3 bg-white border border-yellow-200 rounded-lg">
+                      .filter((e) => computeStatus(e.date) === "due-week")
+                      .map((e) => (
+                        <div
+                          key={e.id}
+                          className="flex items-center justify-between p-3 bg-white border border-yellow-200 rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <Shield className="w-4 h-4 text-yellow-600" strokeWidth={1} />
+                            <Shield
+                              className="w-4 h-4 text-yellow-600"
+                              strokeWidth={1}
+                            />
                             <div>
-                              <span className="text-sm font-medium text-black">{e.title}</span>
+                              <span className="text-sm font-medium text-black">
+                                {e.title}
+                              </span>
                               <p className="text-xs text-gray-600">
-                                Due {e.date ? Math.ceil((e.date.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : ''} days
+                                Due{" "}
+                                {e.date
+                                  ? Math.ceil(
+                                      (e.date.getTime() - Date.now()) /
+                                        (1000 * 60 * 60 * 24)
+                                    )
+                                  : ""}{" "}
+                                days
                               </p>
                             </div>
                           </div>
@@ -724,17 +791,28 @@ const HomePlusDashboard = () => {
                   </h4>
                   <div className="space-y-3">
                     {dashEvents
-                      .filter(e => computeStatus(e.date) === 'confirmed')
-                      .map(e => (
-                        <div key={e.id} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                      .filter((e) => computeStatus(e.date) === "confirmed")
+                      .map((e) => (
+                        <div
+                          key={e.id}
+                          className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <Wrench className="w-4 h-4 text-green-600" strokeWidth={1} />
+                            <Wrench
+                              className="w-4 h-4 text-green-600"
+                              strokeWidth={1}
+                            />
                             <div>
-                              <span className="text-sm font-medium text-black">{e.title}</span>
-                              <p className="text-xs text-gray-600">{e.date ? e.date.toLocaleDateString() : ''}</p>
+                              <span className="text-sm font-medium text-black">
+                                {e.title}
+                              </span>
+                              <p className="text-xs text-gray-600">
+                                {e.date ? e.date.toLocaleDateString() : ""}
+                              </p>
                             </div>
                           </div>
-                          <span className="text-sm text-green-600 font-medium">Confirmed</span>
+                          <span className="text-sm text-green-600 font-medium">
+                            Confirmed
+                          </span>
                         </div>
                       ))}
                   </div>
