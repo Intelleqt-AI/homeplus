@@ -64,3 +64,19 @@ export const listFilesWithMetadata = async (id) => {
 
   return filesWithMetadata;
 };
+
+export const deleteFile = async ({ id, fileName }) => {
+  const filePath = `${id}/${fileName}`;
+  console.log(filePath);
+
+  const { data, error } = await supabase.storage
+    .from("user-docs")
+    .remove([filePath]); // remove() expects an array of file paths
+
+  if (error) {
+    console.error(`Failed to delete file ${fileName}:`, error.message);
+    return false;
+  }
+
+  return true;
+};

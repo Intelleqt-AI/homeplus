@@ -38,10 +38,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format, isPast } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { listFilesWithMetadata, uploadFileWithMetadata } from "@/lib/Api";
+import {
+  deleteFile,
+  listFilesWithMetadata,
+  uploadFileWithMetadata,
+} from "@/lib/Api";
 import { useAuth } from "@/hooks/useAuth";
 import Modal from "react-modal";
 import DocViewer, { DocViewerRenderers } from "@cyntler/react-doc-viewer";
+import { DeleteDialog } from "@/components/DeleteDialog";
 
 const documents = [
   {
@@ -108,6 +113,10 @@ const Documents = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [currentDoc, setCurrentDoc] = useState<any>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    name: string;
+  } | null>(null);
 
   const { user } = useAuth();
 
@@ -161,6 +170,23 @@ const Documents = () => {
     },
   });
 
+  // File delete Function
+  const deleteMutation = useMutation({
+    mutationFn: deleteFile,
+    onMutate: () => {
+      toast.loading("Deleting...", { id: "delete-toast" });
+    },
+    onSuccess: () => {
+      refetch();
+      toast.dismiss("delete-toast");
+      toast.success(`Deleted successfully!`);
+    },
+    onError: () => {
+      toast.dismiss("delete-toast");
+      toast.error("Failed to delete file.");
+    },
+  });
+
   const handleSubmit = () => {
     const data = {
       type: documentType,
@@ -199,7 +225,13 @@ const Documents = () => {
     setViewerOpen(true);
   }
 
-  console.log(docs);
+  // Delete files or folders
+  const handleDeleteTask = (name) => {
+    deleteMutation.mutate({
+      fileName: name,
+      id: user?.id,
+    });
+  };
 
   return (
     <>
@@ -346,7 +378,7 @@ const Documents = () => {
 
                             {/* Delete file */}
                             <button
-                              // onClick={() => handleDeleteFile(id)}
+                              onClick={() => handleDeleteTask(name)}
                               className="p-1 hover:bg-gray-100 rounded transition-colors">
                               <Trash2 className="w-4 h-4 text-gray-600" />
                             </button>
@@ -488,59 +520,78 @@ const Documents = () => {
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          {/* <DeleteDialog
+        isOpen={isDeleteOpen}
+        onClose={() => {
+          setIsDeleteOpen(false);
+          setDeleteTarget(null);
+        }}
+        onConfirm={() => {
+          if (deleteTarget) {
+            handleDeleteTask(deleteTarget.name, deleteTarget.isFolder);
+            setDeleteTarget(null);
+          }
+        }}
+        title={deleteTarget?.isFolder ? "Delete Folder" : "Delete File"}
+        description="Are you sure you want to delete this item? This action cannot be undone."
+        itemName={deleteTarget?.name}
+        requireConfirmation={false}
+      /> */}
+
+          {/* Viewer Modal */}
+          <Modal
+            className="!h-[90vh] !max-w-[1200px] !py-7 z-[99999]"
+            isOpen={viewerOpen}
+            onRequestClose={() => setViewerOpen(false)}
+            contentLabel="Document Viewer">
+            <div className="navbar  flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2" />
+              <div className="buttons flex items-center gap-4 !mt-0 px-2">
+                {currentDoc && currentDoc[0]?.fileName && (
+                  <button
+                    onClick={() =>
+                      downloadFile(currentDoc[0].uri, currentDoc[0].fileName)
+                    }
+                    className="text-sm text-[#17181B] bg-transparent h-7 w-7 flex items-center justify-center rounded-full transition-all hover:bg-gray-200"
+                    title="Download with original filename">
+                    <Download className="h-5 w-5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewerOpen(false)}
+                  className="close text-sm text-[#17181B] bg-transparent h-7 w-7 flex items-center justify-center rounded-full transition-all hover:bg-gray-200">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    viewBox="0 0 24 24">
+                    <path
+                      fill="currentColor"
+                      d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div style={{ marginTop: "20px", width: "100%", height: "500px" }}>
+              <DocViewer
+                pluginRenderers={DocViewerRenderers}
+                className="DocViewr"
+                documents={currentDoc || []}
+                config={{
+                  header: {
+                    disableHeader: false,
+                    disableFileName: false,
+                    retainURLParams: false,
+                  },
+                }}
+                style={{ height: "100%" }}
+              />
+            </div>
+          </Modal>
         </div>
       </DashboardLayout>
-
-      {/* Viewer Modal */}
-      <Modal
-        className="!h-[90vh] !max-w-[1200px] !py-7 z-[99999]"
-        isOpen={viewerOpen}
-        onRequestClose={() => setViewerOpen(false)}
-        contentLabel="Document Viewer">
-        <div className="navbar  flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2" />
-          <div className="buttons flex items-center gap-4 !mt-0 px-2">
-            {currentDoc && currentDoc[0]?.fileName && (
-              <button
-                onClick={() =>
-                  downloadFile(currentDoc[0].uri, currentDoc[0].fileName)
-                }
-                className="text-sm text-[#17181B] bg-transparent h-7 w-7 flex items-center justify-center rounded-full transition-all hover:bg-gray-200"
-                title="Download with original filename">
-                <Download className="h-5 w-5" />
-              </button>
-            )}
-            <button
-              onClick={() => setViewerOpen(false)}
-              className="close text-sm text-[#17181B] bg-transparent h-7 w-7 flex items-center justify-center rounded-full transition-all hover:bg-gray-200">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                viewBox="0 0 24 24">
-                <path
-                  fill="currentColor"
-                  d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div style={{ marginTop: "20px", width: "100%", height: "500px" }}>
-          <DocViewer
-            pluginRenderers={DocViewerRenderers}
-            className="DocViewr"
-            documents={currentDoc || []}
-            config={{
-              header: {
-                disableHeader: false,
-                disableFileName: false,
-                retainURLParams: false,
-              },
-            }}
-            style={{ height: "100%" }}
-          />
-        </div>
-      </Modal>
     </>
   );
 };
