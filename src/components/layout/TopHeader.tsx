@@ -1,59 +1,35 @@
-import React from 'react';
-import { Bell, User, Camera, Calendar, Wrench, Package, MessageSquare, Plus, Upload, FileText, Clock, X } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { addNewProperty } from '@/lib/Api';
-import { toast } from 'sonner';
+import React, { useState } from "react";
+import {
+  Bell,
+  User,
+  Camera,
+  Calendar,
+  Wrench,
+  Package,
+  MessageSquare,
+  Plus,
+  Upload,
+  FileText,
+  Clock,
+  X,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { addNewProperty } from "@/lib/Api";
+import { toast } from "sonner";
+import Property from "../topbar/Property";
+import Event from "../topbar/Event";
+import DocsUploadDialog from "../docsUploadDialog";
 
 const TopHeader = () => {
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: addNewProperty,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['property'] });
-    },
-    onError: error => {
-      console.log(error);
-      toast.error('Error! Try again');
-    },
-  });
-
-  // form state for Add Property
-  const [isAddPropertyOpen, setIsAddPropertyOpen] = React.useState(false);
-  const [address, setAddress] = React.useState('');
-  const [type, setType] = React.useState('House');
-  const [bedrooms, setBedrooms] = React.useState('1');
-  const [role, setRole] = React.useState('Owner-occupier');
-
-  const handleAddProperty = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const payload = {
-      address: address.trim(),
-      type,
-      bedrooms,
-      role,
-    };
-
-    if (!payload.address) {
-      toast.error('Please enter an address');
-      return;
-    }
-
-    mutation.mutate(payload, {
-      onSuccess: () => {
-        toast.success('Property added');
-        setIsAddPropertyOpen(false);
-        // reset simple fields
-        setAddress('');
-        setType('House');
-        setBedrooms('1');
-        setRole('Owner-occupier');
-      },
-    });
-  };
+  const [openForm, setOpenForm] = useState(false);
 
   return (
     <header className="sticky top-0 bg-white h-16 border-b border-gray-200 px-6 flex items-center justify-between z-30">
@@ -63,12 +39,15 @@ const TopHeader = () => {
       <div className="flex-1 max-w-4xl mx-8">
         <div className="flex items-center justify-center space-x-4">
           {/* Scan Doc Modal */}
-          <Dialog>
+          <button
+            onClick={() => setOpenForm(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <Camera className="w-4 h-4 text-gray-600" strokeWidth={1} />
+            <span className="text-sm font-medium text-gray-700">Scan Doc</span>
+          </button>
+          <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} />
+          {/* <Dialog>
             <DialogTrigger asChild>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Camera className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Scan Doc</span>
-              </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
@@ -104,71 +83,17 @@ const TopHeader = () => {
                 </div>
               </div>
             </DialogContent>
-          </Dialog>
-
-          {/* Add Task Modal */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Calendar className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Add Task</span>
-              </button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Add New Task</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Task Title</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Check boiler pressure"
-                    className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Description</label>
-                  <textarea
-                    placeholder="Add details about the task..."
-                    rows={3}
-                    className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Priority</label>
-                    <select className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-                      <option>Low</option>
-                      <option>Medium</option>
-                      <option>High</option>
-                      <option>Urgent</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Due Date</label>
-                    <input
-                      type="date"
-                      className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-                <div className="flex space-x-3 pt-4">
-                  <Button className="flex-1">Create Task</Button>
-                  <Button variant="outline" className="flex-1">
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
+          </Dialog> */}
+          {/* Task */}
+          <Event />
           {/* Get Quotes Modal */}
           <Dialog>
             <DialogTrigger asChild>
               <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
                 <Wrench className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Get Quotes</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Get Quotes
+                </span>
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
@@ -177,7 +102,9 @@ const TopHeader = () => {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Service Required</label>
+                  <label className="text-sm font-medium text-gray-600">
+                    Service Required
+                  </label>
                   <select className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
                     <option>Plumbing</option>
                     <option>Electrical</option>
@@ -188,7 +115,9 @@ const TopHeader = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Job Description</label>
+                  <label className="text-sm font-medium text-gray-600">
+                    Job Description
+                  </label>
                   <textarea
                     placeholder="Describe what work needs to be done..."
                     rows={3}
@@ -197,7 +126,9 @@ const TopHeader = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Budget Range</label>
+                    <label className="text-sm font-medium text-gray-600">
+                      Budget Range
+                    </label>
                     <select className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
                       <option>£0-50</option>
                       <option>£50-100</option>
@@ -207,7 +138,9 @@ const TopHeader = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Urgency</label>
+                    <label className="text-sm font-medium text-gray-600">
+                      Urgency
+                    </label>
                     <select className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
                       <option>Emergency</option>
                       <option>This week</option>
@@ -231,7 +164,9 @@ const TopHeader = () => {
             <DialogTrigger asChild>
               <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
                 <Package className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Home Pack</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Home Pack
+                </span>
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
@@ -244,9 +179,12 @@ const TopHeader = () => {
                     <Package className="w-8 h-8 text-gray-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-black mb-2">Digital Home Pack</h3>
+                    <h3 className="text-lg font-semibold text-black mb-2">
+                      Digital Home Pack
+                    </h3>
                     <p className="text-gray-600 text-sm">
-                      Access all your property documents, certificates, warranties, and important information in one place.
+                      Access all your property documents, certificates,
+                      warranties, and important information in one place.
                     </p>
                   </div>
                 </div>
@@ -254,23 +192,35 @@ const TopHeader = () => {
                   <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <FileText className="w-5 h-5 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-700">Property Deeds</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        Property Deeds
+                      </span>
                     </div>
-                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">Complete</span>
+                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                      Complete
+                    </span>
                   </div>
                   <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <FileText className="w-5 h-5 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-700">EPC Certificate</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        EPC Certificate
+                      </span>
                     </div>
-                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">Complete</span>
+                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                      Complete
+                    </span>
                   </div>
                   <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <FileText className="w-5 h-5 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-700">Gas Safety Certificate</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        Gas Safety Certificate
+                      </span>
                     </div>
-                    <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded">Expires Soon</span>
+                    <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded">
+                      Expires Soon
+                    </span>
                   </div>
                 </div>
                 <div className="flex space-x-3 pt-4">
@@ -287,7 +237,10 @@ const TopHeader = () => {
           <Dialog>
             <DialogTrigger asChild>
               <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <MessageSquare className="w-4 h-4 text-gray-600" strokeWidth={1} />
+                <MessageSquare
+                  className="w-4 h-4 text-gray-600"
+                  strokeWidth={1}
+                />
                 <span className="text-sm font-medium text-gray-700">Help</span>
               </button>
             </DialogTrigger>
@@ -301,30 +254,47 @@ const TopHeader = () => {
                     <MessageSquare className="w-8 h-8 text-gray-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-black mb-2">How can we help?</h3>
-                    <p className="text-gray-600 text-sm">Get support, browse our knowledge base, or connect with our team.</p>
+                    <h3 className="text-lg font-semibold text-black mb-2">
+                      How can we help?
+                    </h3>
+                    <p className="text-gray-600 text-sm">
+                      Get support, browse our knowledge base, or connect with
+                      our team.
+                    </p>
                   </div>
                 </div>
                 <div className="grid gap-3 pt-4">
                   <button className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
                     <MessageSquare className="w-5 h-5 text-gray-600" />
                     <div>
-                      <div className="text-sm font-medium text-gray-700">Live Chat</div>
-                      <div className="text-xs text-gray-500">Get instant help from our support team</div>
+                      <div className="text-sm font-medium text-gray-700">
+                        Live Chat
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Get instant help from our support team
+                      </div>
                     </div>
                   </button>
                   <button className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
                     <FileText className="w-5 h-5 text-gray-600" />
                     <div>
-                      <div className="text-sm font-medium text-gray-700">Knowledge Base</div>
-                      <div className="text-xs text-gray-500">Browse guides and frequently asked questions</div>
+                      <div className="text-sm font-medium text-gray-700">
+                        Knowledge Base
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Browse guides and frequently asked questions
+                      </div>
                     </div>
                   </button>
                   <button className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left">
                     <Clock className="w-5 h-5 text-gray-600" />
                     <div>
-                      <div className="text-sm font-medium text-gray-700">Book a Call</div>
-                      <div className="text-xs text-gray-500">Schedule a one-on-one support session</div>
+                      <div className="text-sm font-medium text-gray-700">
+                        Book a Call
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Schedule a one-on-one support session
+                      </div>
                     </div>
                   </button>
                 </div>
@@ -338,90 +308,17 @@ const TopHeader = () => {
             </DialogContent>
           </Dialog>
 
-          {/* Add Property Modal */}
-          <Dialog open={isAddPropertyOpen} onOpenChange={setIsAddPropertyOpen}>
-            <DialogTrigger asChild>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Plus className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">Property</span>
-              </button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Add New Property</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleAddProperty} className="space-y-4 py-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Property Address</label>
-                  <input
-                    type="text"
-                    placeholder="Enter full address"
-                    value={address}
-                    onChange={e => setAddress(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Property Type</label>
-                    <select
-                      value={type}
-                      onChange={e => setType(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option>House</option>
-                      <option>Flat</option>
-                      <option>Apartment</option>
-                      <option>Studio</option>
-                      <option>Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Bedrooms</label>
-                    <select
-                      value={bedrooms}
-                      onChange={e => setBedrooms(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option>1</option>
-                      <option>2</option>
-                      <option>3</option>
-                      <option>4</option>
-                      <option>5+</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Your Role</label>
-                  <select
-                    value={role}
-                    onChange={e => setRole(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option>Owner-occupier</option>
-                    <option>Landlord</option>
-                    <option>Tenant</option>
-                    <option>Property Manager</option>
-                  </select>
-                </div>
-                <div className="flex space-x-3 pt-4">
-                  <Button type="submit" className="flex-1" disabled={mutation.status === 'pending'}>
-                    {mutation.status === 'pending' ? 'Adding...' : 'Add Property'}
-                  </Button>
-                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsAddPropertyOpen(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Property />
         </div>
       </div>
 
       {/* Right Section */}
       <div className="flex items-center space-x-4">
         <div className="relative">
-          <Bell className="w-5 h-5 text-gray-400 hover:text-primary transition-colors cursor-pointer" strokeWidth={1} />
+          <Bell
+            className="w-5 h-5 text-gray-400 hover:text-primary transition-colors cursor-pointer"
+            strokeWidth={1}
+          />
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full"></div>
         </div>
         <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
