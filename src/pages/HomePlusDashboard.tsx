@@ -49,6 +49,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useQuery } from '@tanstack/react-query';
 
 const HomePlusDashboard = () => {
   const location = useLocation();
@@ -57,7 +58,10 @@ const HomePlusDashboard = () => {
   const [showSmartMatches, setShowSmartMatches] = useState(false);
   const { signOut, user } = useAuth();
 
-  console.log(user);
+  const { data, isLoading } = useQuery({
+    queryKey: ['property'],
+    queryFn: () => import('@/lib/Api2').then(mod => mod.getProperty()),
+  });
 
   // Calendar setup
   const currentDate = new Date();
@@ -93,25 +97,17 @@ const HomePlusDashboard = () => {
 
   // Property details
   const propertyDetails = {
-    address: '23 Oakfield Road, SW12 8JD',
-    type: 'Detached house',
-    bedrooms: 4,
-    bathrooms: 2,
-    moveInDate: 'March 2019',
-    yearsAtProperty: 5,
-    previousAddress: '14 High St (2015-2019)',
-    currentValue: 549000,
-    yearOnYearChange: 3.7,
+    address: data?.data?.address || 'Loading address...',
+    type: data?.data?.type || 'Loading...',
+    bedrooms: data?.data?.bedrooms || 'Loading...',
+    bathrooms: 'N/A',
+    moveInDate: 'N/A',
+    yearsAtProperty: 'N/A',
+    previousAddress: 'N/A',
+    currentValue: 'N/A',
+    yearOnYearChange: 'N/A',
+    role: data?.data?.role || 'Loading...',
   };
-
-  const sidebarItems = [
-    { icon: Home, label: 'Dashboard', path: '/dashboard' },
-    { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
-    { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
-    { icon: Briefcase, label: 'Job Leads', path: '/dashboard/job-leads' },
-    { icon: Activity, label: 'Insights', path: '/dashboard/insights' },
-    { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
-  ];
 
   // Alert defaults for UK properties - enhanced with new row anatomy
   const ALERT_DEFAULTS = [
@@ -209,8 +205,6 @@ const HomePlusDashboard = () => {
     return { overdue, today, thisWeek, laterThisMonth };
   };
 
-  const { overdue, today, thisWeek, laterThisMonth } = groupAlertsByUrgency(allAlerts);
-
   // Get category chip color
   const getCategoryColor = type => {
     switch (type.toLowerCase()) {
@@ -227,32 +221,6 @@ const HomePlusDashboard = () => {
     }
   };
 
-  // Mock property history for trade matcher chips
-  const propertyTradeHistory = [
-    { name: 'Plumber', icon: Wrench, count: 8 },
-    { name: 'Electrician', icon: Zap, count: 5 },
-    { name: 'Gas Engineer', icon: Flame, count: 4 },
-    { name: 'Handyman', icon: Hammer, count: 12 },
-    { name: 'Gardener', icon: TreePine, count: 6 },
-    { name: 'Cleaner', icon: Smartphone, count: 15 },
-    { name: 'Painter', icon: Paintbrush, count: 3 },
-    { name: 'Roofer', icon: Home, count: 2 },
-  ];
-
-  // Documents ordered by urgency
-  const urgentDocuments = [
-    { name: 'Buildings Insurance', daysLeft: 30, hasDocument: false, type: 'compliance' },
-    { name: 'Appliance Warranty', daysLeft: 21, hasDocument: true, type: 'warranty' },
-    { name: 'Gas Safety Certificate', daysLeft: 365, hasDocument: true, type: 'compliance' },
-    { name: 'EICR Certificate', daysLeft: 730, hasDocument: true, type: 'compliance' },
-    { name: 'EPC Rating', daysLeft: 1095, hasDocument: true, type: 'compliance' },
-  ].sort((a, b) => a.daysLeft - b.daysLeft);
-
-  const missingDocuments = [
-    { name: 'Roof inspection', type: 'service', notApplicable: false },
-    { name: 'Electrical certificate', type: 'compliance', notApplicable: false },
-  ];
-
   const getStatusDotColor = dueInDays => {
     if (dueInDays < 0) return 'bg-gray-800'; // overdue - dark grey
     if (dueInDays <= 7) return 'bg-red-500'; // urgent - red
@@ -267,31 +235,12 @@ const HomePlusDashboard = () => {
     return 'bg-gray-300 text-gray-700 hover:bg-gray-400'; // later - grey
   };
 
-  // Jobs data with tabs
-  const jobsData = {
-    awaiting: [
-      { title: 'Fix leaking tap', posted: '2 days ago', quotes: 0 },
-      { title: 'Paint hallway', posted: '4 hours ago', quotes: 0 },
-    ],
-    'in-progress': [{ title: 'Trim hedges', posted: '1 day ago', quotes: 2 }],
-    completed: [{ title: 'Roof repair', completed: '1 week ago', rating: 5 }],
-  };
-
-  // Expiring documents
-  const expiringDocs = [
-    { name: 'Gas Safety Certificate', expires: '14 days', action: 'renew' },
-    { name: 'EPC Certificate', expires: '90 days', action: 'upload' },
-    { name: 'Building Insurance', expires: '30 days', action: 'renew' },
-  ];
-
   // Smart matches data
   const smartMatches = [
     { name: 'ABC Plumbing', rating: 4.8, reviews: 156, specialty: 'Emergency repairs' },
     { name: 'Smith Gas Services', rating: 4.9, reviews: 89, specialty: 'Boiler specialists' },
     { name: 'Local Handyman Co', rating: 4.7, reviews: 203, specialty: 'General maintenance' },
   ];
-
-  const properties = ['23 Oakfield Rd, SW12 8JD', '4 Maple Cottage, BN20 7HH'];
 
   return (
     <DashboardLayout>
@@ -326,13 +275,10 @@ const HomePlusDashboard = () => {
                     <h3 className="text-sm font-medium text-gray-600 mb-4">Property Details:</h3>
                     <div className="space-y-2 text-sm text-black">
                       <div>• {propertyDetails.type}</div>
-                      <div>
-                        • {propertyDetails.bedrooms} bed, {propertyDetails.bathrooms} bath
-                      </div>
-                      <div>
-                        • Moved in: {propertyDetails.moveInDate} ({propertyDetails.yearsAtProperty} years)
-                      </div>
+                      <div>• {propertyDetails.bedrooms} bed</div>
+                      <div>• Moved in: {propertyDetails.moveInDate}</div>
                       <div>• Previous: {propertyDetails.previousAddress}</div>
+                      <div>• Role: {propertyDetails.role}</div>
                     </div>
                   </div>
                 </div>
@@ -349,9 +295,9 @@ const HomePlusDashboard = () => {
                   </div>
 
                   <div className="text-2xl font-semibold text-black mb-4">£{propertyDetails.currentValue.toLocaleString()}</div>
-                  <div className="text-sm text-green-600 mb-1 font-medium">+{propertyDetails.yearOnYearChange}% YoY</div>
+                  <div className="text-sm text-green-600 mb-1 font-medium">+{propertyDetails.yearOnYearChange} YoY</div>
                   <div className="text-sm text-gray-600">
-                    +£{Math.round(propertyDetails.currentValue * (propertyDetails.yearOnYearChange / 100)).toLocaleString()}
+                    {/* +£{Math.round(propertyDetails.currentValue * (propertyDetails.yearOnYearChange / 100)).toLocaleString()} */}
                   </div>
                 </div>
 
