@@ -4,10 +4,11 @@ import { MessageSquare, Edit, Filter, Plus, MapPin, Clock, PoundSterling, Star, 
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { fetchLeads } from '@/lib/Api';
-import { useQuery } from '@tanstack/react-query';
+import { createJob, fetchLeads, modifyBid } from '@/lib/Api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import Quote from '@/components/topbar/Quote';
+import { toast } from 'sonner';
 
 const JobLeads = () => {
   const [compareMode, setCompareMode] = useState<Record<number, boolean>>({});
@@ -15,6 +16,41 @@ const JobLeads = () => {
   const { user } = useAuth();
   const [leads, setLeads] = useState<any[]>([]);
   const [quoteOpen, setQuoteOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [currentItem, setCurrentItem] = useState(null);
+  const [currentBid, setCurrentBid] = useState(null);
+
+  const addJob = useMutation({
+    mutationFn: createJob,
+    onSuccess: data => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      setCurrentItem(null);
+      setCurrentBid(null);
+    },
+    onError: err => {},
+  });
+
+  const modifyBidMutation = useMutation({
+    mutationFn: modifyBid,
+    onSuccess: data => {
+      toast.success('Bid updated successfully ');
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['bids'] });
+      const newJob = {
+        trade: currentItem?.service,
+        location: currentItem?.location,
+        rate: currentBid?.proposedValue,
+        status: 'todo',
+        priority: 'medium',
+        leads_id: currentItem?.id,
+        trader_id: currentBid?.bid_by,
+      };
+      addJob.mutate(newJob);
+    },
+    onError: error => {
+      toast.error(error.message || 'Failed to update bid ');
+    },
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['leads'],
@@ -28,13 +64,9 @@ const JobLeads = () => {
     }
   }, [data, isLoading, user]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'awaiting_quotes':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'quotes_received':
-        return 'bg-blue-100 text-blue-800';
-      case 'in_progress':
+  const getStatusColor = isApproved => {
+    switch (isApproved) {
+      case isApproved !== 'true':
         return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -69,6 +101,17 @@ const JobLeads = () => {
       ...prev,
       [jobId]: !prev[jobId],
     }));
+  };
+
+  const handleApprove = (job, bid) => {
+    setCurrentItem(job);
+    setCurrentBid(bid);
+    modifyBidMutation.mutate({
+      bid_id: bid.id,
+      status: 'accepted',
+      lead_id: job.id,
+      isApproved: true,
+    });
   };
 
   return (
@@ -115,8 +158,8 @@ const JobLeads = () => {
                 </div>
 
                 <div className="flex items-center space-x-3">
-                  <span className={`px-3 py-1 text-xs font-medium rounded-lg border ${getStatusColor(job.status)}`}>
-                    {job?.isApproved ? 'Approved' : ' Pending Approval'}
+                  <span className={`px-3 py-1 text-xs font-medium rounded-lg border ${getStatusColor(job?.isApproved)}`}>
+                    {job?.isApproved ? 'Approved' : job?.bids?.length < 1 ? 'Waiting for quote' : 'Quote Received'}
                   </span>
                 </div>
               </div>
@@ -170,11 +213,11 @@ const JobLeads = () => {
                               <td className="py-3">
                                 <div className="flex items-center space-x-1">
                                   <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                                  <span className="text-gray-600">{bid.bidder?.rating ?? '—'}</span>
+                                  <span className="text-gray-600">4</span>
                                 </div>
                               </td>
                               <td className="py-3 font-medium text-black">{`£${bid.proposedValue}`}</td>
-                              <td className="py-3 text-gray-600">{bid.Available ?? 'N/A'}</td>
+                              <td className="py-3 text-gray-600 capitalize">{bid.Available ?? 'N/A'}</td>
                               <td className="py-3 text-gray-600">{new Date(bid.created_at).toLocaleString()}</td>
                               <td className="py-3">
                                 <Dialog>
@@ -206,11 +249,11 @@ const JobLeads = () => {
                                         </div>
                                         <div>
                                           <label className="text-sm font-medium text-gray-600">Status</label>
-                                          <p className="text-sm text-gray-600">{bid.status}</p>
+                                          <p className="text-sm text-gray-600 capitalize">{bid.status}</p>
                                         </div>
                                         <div>
                                           <label className="text-sm font-medium text-gray-600">Available</label>
-                                          <p className="font-medium text-black">{bid.Available}</p>
+                                          <p className="font-medium capitalize text-black">{bid.Available}</p>
                                         </div>
                                       </div>
                                       <div className="pt-4 border-t">
@@ -220,7 +263,13 @@ const JobLeads = () => {
                                         </p>
                                       </div>
                                       <div className="flex space-x-3 pt-4">
-                                        <Button className="flex-1">Accept Bid</Button>
+                                        <Button
+                                          disabled={bid.status == 'accepted' || job?.isApproved}
+                                          onClick={() => handleApprove(job, bid)}
+                                          className="flex-1"
+                                        >
+                                          {bid.status == 'accepted' ? 'Accepted' : 'Accept Bid'}
+                                        </Button>
                                         <Button variant="outline" className="flex-1">
                                           Message Bidder
                                         </Button>
@@ -243,7 +292,8 @@ const JobLeads = () => {
                             <h4 className="font-medium text-black">{bid.bidder?.first_name || bid.bidder?.email}</h4>
                             <div className="flex items-center space-x-1">
                               <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                              <span className="text-sm text-gray-600">{bid.bidder?.rating ?? '—'}</span>
+                              {/* {bid.bidder?.rating ?? '—'} */}
+                              <span className="text-sm text-gray-600">4</span>
                             </div>
                           </div>
                           <div className="space-y-1 text-sm text-gray-600">
@@ -253,7 +303,7 @@ const JobLeads = () => {
                             </div>
                             <div className="flex justify-between">
                               <span>Available:</span>
-                              <span>{bid.Available}</span>
+                              <span className=" capitalize">{bid.Available}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Placed:</span>
@@ -266,7 +316,7 @@ const JobLeads = () => {
                                 className="w-full mt-3 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm"
                                 onClick={() => setSelectedQuote(bid)}
                               >
-                                View Details
+                                {bid.status == 'accepted' ? 'Accepted' : ' View Details'}
                               </button>
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-[500px]">
@@ -288,11 +338,11 @@ const JobLeads = () => {
                                   </div>
                                   <div>
                                     <label className="text-sm font-medium text-gray-600">Status</label>
-                                    <p className="text-sm text-gray-600">{bid.status}</p>
+                                    <p className="text-sm text-gray-600 capitalize">{bid.status}</p>
                                   </div>
                                   <div>
                                     <label className="text-sm font-medium text-gray-600">Available</label>
-                                    <p className="font-medium text-black">{bid.Available}</p>
+                                    <p className="font-medium text-black capitalize">{bid.Available}</p>
                                   </div>
                                 </div>
                                 <div className="pt-4 border-t">
@@ -302,7 +352,13 @@ const JobLeads = () => {
                                   </p>
                                 </div>
                                 <div className="flex space-x-3 pt-4">
-                                  <Button className="flex-1">Accept Bid</Button>
+                                  <Button
+                                    disabled={bid.status == 'accepted' || job?.isApproved}
+                                    onClick={() => handleApprove(job, bid)}
+                                    className="flex-1"
+                                  >
+                                    {bid.status == 'accepted' ? 'Accepted' : 'Accept Bid'}
+                                  </Button>
                                   <Button variant="outline" className="flex-1">
                                     Message Bidder
                                   </Button>

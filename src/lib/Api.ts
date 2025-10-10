@@ -96,3 +96,33 @@ export const fetchLeads = async () => {
 
   return res.json();
 };
+
+export const modifyBid = async ({ bid_id, status, lead_id, isApproved }) => {
+  const res = await fetch('https://bozuxpzratqjsjqgjchq.supabase.co/functions/v1/modify-bid', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvenV4cHpyYXRxanNqcWdqY2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwNzY3ODMsImV4cCI6MjA3MjY1Mjc4M30.X25eruOvP6dZlxRwrzJdIB_nRoms_vH2ZOCNaA_a76E`,
+    },
+    body: JSON.stringify({ bid_id, status, lead_id, isApproved }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to modify bid');
+  return data;
+};
+
+export const createJob = async job => {
+  const res = await fetch('https://bozuxpzratqjsjqgjchq.supabase.co/functions/v1/create-job', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvenV4cHpyYXRxanNqcWdqY2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwNzY3ODMsImV4cCI6MjA3MjY1Mjc4M30.X25eruOvP6dZlxRwrzJdIB_nRoms_vH2ZOCNaA_a76E`,
+    },
+    body: JSON.stringify(job),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to create job');
+  return data;
+};
