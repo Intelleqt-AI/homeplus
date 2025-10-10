@@ -30,6 +30,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import SetupWizard from "@/components/SetupWizard";
 import Profile from "@/components/settings/profile";
+import Security from "@/components/settings/security";
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState<
@@ -603,30 +604,7 @@ const Settings = () => {
               </Card>
             )}
 
-            {activeTab === "security" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Password & Security</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="currentPassword">Current Password</Label>
-                    <Input id="currentPassword" type="password" />
-                  </div>
-                  <div>
-                    <Label htmlFor="newPassword">New Password</Label>
-                    <Input id="newPassword" type="password" />
-                  </div>
-                  <div>
-                    <Label htmlFor="confirmPassword">
-                      Confirm New Password
-                    </Label>
-                    <Input id="confirmPassword" type="password" />
-                  </div>
-                  <Button>Update Password</Button>
-                </CardContent>
-              </Card>
-            )}
+            {activeTab === "security" && <Security />}
 
             {activeTab === "properties" && (
               <Card>
