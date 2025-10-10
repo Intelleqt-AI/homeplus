@@ -73,9 +73,26 @@ export const deleteFile = async ({ id, fileName }) => {
 };
 
 export const updateUserInfo = async ({ userData }) => {
-  console.log(userData);
+  console.log('Payload to Supabase:', userData);
   const { data, error } = await supabase.auth.updateUser(userData);
 
   if (error) throw error;
   return data;
+};
+
+// src/api/getLeads.ts
+export const fetchLeads = async () => {
+  const res = await fetch('https://bozuxpzratqjsjqgjchq.supabase.co/functions/v1/get-services', {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvenV4cHpyYXRxanNqcWdqY2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwNzY3ODMsImV4cCI6MjA3MjY1Mjc4M30.X25eruOvP6dZlxRwrzJdIB_nRoms_vH2ZOCNaA_a76E`, // keep existing auth header
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error?.error || 'Failed to fetch leads');
+  }
+
+  return res.json();
 };

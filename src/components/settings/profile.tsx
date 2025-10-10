@@ -11,35 +11,15 @@ import { useAuth } from "@/hooks/useAuth";
 
 const Profile = () => {
   const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
+    full_name: "",
     phone: "",
+    email: "",
   });
   const [message, setMessage] = useState("");
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  console.log(user);
-
-  // Fetch current user info on mount
-  // useEffect(() => {
-  //   const fetchUser = async () => {
-  //     const { data, error } = await supabase.auth.getUser();
-  //     if (error) {
-  //       setMessage(error.message);
-  //       return;
-  //     }
-  //     if (data?.user) {
-  //       setForm({
-  //         firstName: data.user.user_metadata?.first_name || "",
-  //         lastName: data.user.user_metadata?.last_name || "",
-  //         email: data.user.email || "",
-  //         phone: data.user.user_metadata?.phone || "",
-  //       });
-  //     }
-  //   };
-  //   fetchUser();
-  // }, []);
+  // console.log(user);
 
   const mutation = useMutation({
     mutationFn: updateUserInfo, // your API function
@@ -53,19 +33,35 @@ const Profile = () => {
   });
 
   const handleChange = (e) => {
-    const { id, value } = e.target;
-    setForm((prev) => ({ ...prev, [id]: value }));
+    const { name, value } = e.target;
+    // console.log(name, value);
+    setForm((prev) => {
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleSave = () => {
     setMessage("");
-    const data = {
-      user_metadata: { display_name: `${form.firstName} ${form.lastName}` },
-      // phone: `+880${form.phone.slice(1)}`, // optional
+
+    // ✅ Supabase client expects metadata under the "data" key
+    const payload = {
+      data: { full_name: form.full_name },
     };
-    console.log(data);
-    mutation.mutate({ userData: data });
+
+    // console.log("Update payload:", payload);
+    mutation.mutate({ userData: payload });
   };
+
+  useEffect(() => {
+    if (!user) return;
+
+    const { full_name, phone, email } = user.user_metadata || {};
+    setForm({
+      full_name: full_name || "",
+      phone: phone || "",
+      email: email || "",
+    });
+  }, [user]);
 
   return (
     <Card>
@@ -73,33 +69,36 @@ const Profile = () => {
         <CardTitle>Profile Information</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <div>
-            <Label htmlFor="firstName">First Name</Label>
+            <Label htmlFor="full_name">Full Name</Label>
             <Input
-              id="firstName"
-              value={form.firstName}
+              id="full_name"
+              name="full_name"
+              value={form.full_name}
               onChange={handleChange}
             />
           </div>
-          <div>
+          {/* <div>
             <Label htmlFor="lastName">Last Name</Label>
             <Input
               id="lastName"
               value={form.lastName}
               onChange={handleChange}
             />
-          </div>
+          </div> */}
         </div>
-        {/* <div>
+        <div>
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
             value={form.email}
             onChange={handleChange}
+            readOnly
+            className="bg-gray-100 text-gray-600 cursor-not-allowed border border-gray-300"
           />
-        </div> */}
+        </div>
         <div>
           <Label htmlFor="phone">Phone</Label>
           <Input
