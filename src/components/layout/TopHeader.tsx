@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import Property from "../topbar/Property";
 import Event from "../topbar/Event";
 import DocsUploadDialog from "../docsUploadDialog";
+import HomePack from "./homePack";
 
 const TopHeader = () => {
   const [openForm, setOpenForm] = useState(false);
@@ -160,78 +161,7 @@ const TopHeader = () => {
           </Dialog>
 
           {/* Home Pack Modal */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                <Package className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                <span className="text-sm font-medium text-gray-700">
-                  Home Pack
-                </span>
-              </button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Your Home Pack</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="text-center space-y-3">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
-                    <Package className="w-8 h-8 text-gray-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-black mb-2">
-                      Digital Home Pack
-                    </h3>
-                    <p className="text-gray-600 text-sm">
-                      Access all your property documents, certificates,
-                      warranties, and important information in one place.
-                    </p>
-                  </div>
-                </div>
-                <div className="grid gap-3 pt-4">
-                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <FileText className="w-5 h-5 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-700">
-                        Property Deeds
-                      </span>
-                    </div>
-                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
-                      Complete
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <FileText className="w-5 h-5 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-700">
-                        EPC Certificate
-                      </span>
-                    </div>
-                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
-                      Complete
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <FileText className="w-5 h-5 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-700">
-                        Gas Safety Certificate
-                      </span>
-                    </div>
-                    <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded">
-                      Expires Soon
-                    </span>
-                  </div>
-                </div>
-                <div className="flex space-x-3 pt-4">
-                  <Button className="flex-1">View All Documents</Button>
-                  <Button variant="outline" className="flex-1">
-                    Add Document
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <HomePack setOpenForm={setOpenForm} />
 
           {/* Help Modal */}
           <Dialog>
