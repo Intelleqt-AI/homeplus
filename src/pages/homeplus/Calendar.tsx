@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,34 +17,44 @@ import {
   MessageSquare,
   Home,
   Flame,
-} from 'lucide-react';
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import AddEvent from '@/components/event/AddEvent';
-import { useQuery } from '@tanstack/react-query';
-import { getEvents } from '@/lib/Api2';
+} from "lucide-react";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import AddEvent from "@/components/event/AddEvent";
+import { useQuery } from "@tanstack/react-query";
+import { getEvents } from "@/lib/Api2";
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'list' | 'board'>('month');
-  type FilterType = 'all' | 'safety' | 'maintenance' | 'financial' | 'household' | 'custom';
-  const [filterType, setFilterType] = useState<FilterType>('all');
-  const [selectedEvents, setSelectedEvents] = useState<Array<string | number>>([]);
+  const [viewMode, setViewMode] = useState<"month" | "week" | "list" | "board">(
+    "month"
+  );
+  type FilterType =
+    | "all"
+    | "safety"
+    | "maintenance"
+    | "financial"
+    | "household"
+    | "custom";
+  const [filterType, setFilterType] = useState<FilterType>("all");
+  const [selectedEvents, setSelectedEvents] = useState<Array<string | number>>(
+    []
+  );
 
   const { data, isLoading } = useQuery({
-    queryKey: ['event'],
+    queryKey: ["event"],
     queryFn: getEvents,
   });
 
   const today = new Date();
 
   const computeStatusFromDate = (d: Date | null) => {
-    if (!d) return 'pending';
-    if (d.toDateString() === today.toDateString()) return 'confirmed';
-    if (d < today) return 'overdue';
-    return 'confirmed';
+    if (!d) return "pending";
+    if (d.toDateString() === today.toDateString()) return "confirmed";
+    if (d < today) return "overdue";
+    return "confirmed";
   };
 
   // Map remote `getEvents` data to the UI shape. Prefer `date` field for calendar placement.
@@ -74,98 +84,131 @@ const Calendar = () => {
   const mappedRemoteEvents = Array.isArray(remoteRaw)
     ? (remoteRaw as RawEvent[]).map((ev: RawEvent) => {
         const parsedDate = ev?.date ? new Date(ev.date) : null;
-        const costField = typeof ev?.cost === 'number' ? (ev.cost === 0 ? 'Free' : `£${ev.cost}`) : ev?.cost ?? 'Free';
+        const costField =
+          typeof ev?.cost === "number"
+            ? ev.cost === 0
+              ? "Free"
+              : `£${ev.cost}`
+            : ev?.cost ?? "Free";
 
         return {
           id: ev.id,
           created_at: ev.created_at,
-          title: ev.title ?? '',
+          title: ev.title ?? "",
           date: parsedDate,
-          time: ev.time ?? '',
-          type: ev.eventType ?? ev.type ?? 'maintenance',
+          time: ev.time ?? "",
+          type: ev.eventType ?? ev.type ?? "maintenance",
           status: computeStatusFromDate(parsedDate),
-          description: ev.description ?? '',
-          contractor: ev.contractor ?? '',
+          description: ev.description ?? "",
+          contractor: ev.contractor ?? "",
           cost: costField,
-          priority: ev.priority ?? 'medium',
-          complianceType: ev.complianceType ?? 'none',
+          priority: ev.priority ?? "medium",
+          complianceType: ev.complianceType ?? "none",
           hasDocument: !!ev.hasDocument,
           hasQuotes: !!ev.hasQuotes,
           tradeConfirmed: !!ev.isRequireTrade || !!ev.tradeConfirmed,
           photosRequired: !!ev.photosRequired,
           user_id: ev.user_id,
-          recurring: ev.recurring ?? 'never',
+          recurring: ev.recurring ?? "never",
         };
       })
     : [];
 
   const fallbackEvents = [
     {
-      id: 'ca206a4f-db58-41e0-afc7-3ac7308d7666',
-      created_at: '2025-10-09T10:27:19.130604+00:00',
-      title: 'Test',
+      id: "ca206a4f-db58-41e0-afc7-3ac7308d7666",
+      created_at: "2025-10-09T10:27:19.130604+00:00",
+      title: "Test",
       date: null,
-      time: '',
-      type: 'maintenance',
+      time: "",
+      type: "maintenance",
       status: computeStatusFromDate(null),
-      description: '',
-      contractor: '',
-      cost: 'Free',
-      priority: 'medium',
-      complianceType: 'none',
+      description: "",
+      contractor: "",
+      cost: "Free",
+      priority: "medium",
+      complianceType: "none",
       hasDocument: false,
       hasQuotes: false,
       tradeConfirmed: false,
       photosRequired: false,
-      user_id: '2aa3c70e-c10c-4a31-9654-3e37adcd9cdd',
+      user_id: "2aa3c70e-c10c-4a31-9654-3e37adcd9cdd",
     },
   ];
 
-  const events = mappedRemoteEvents.length ? mappedRemoteEvents : fallbackEvents;
+  const events = mappedRemoteEvents.length
+    ? mappedRemoteEvents
+    : fallbackEvents;
 
   // Enhanced filtering and data processing
-  const filteredEvents = events.filter(event => {
-    if (filterType === 'all') return true;
-    if (filterType === 'safety') return ['safety', 'inspection'].includes(event.type) || event.complianceType !== 'none';
-    if (filterType === 'maintenance') return event.type === 'maintenance';
-    if (filterType === 'financial')
-      return event.type === 'admin' || event.title.toLowerCase().includes('insurance') || event.title.toLowerCase().includes('payment');
-    if (filterType === 'household')
+  const filteredEvents = events.filter((event) => {
+    if (filterType === "all") return true;
+    if (filterType === "safety")
       return (
-        event.title.toLowerCase().includes('bin') ||
-        event.title.toLowerCase().includes('meter') ||
-        event.title.toLowerCase().includes('shopping')
+        ["safety", "inspection"].includes(event.type) ||
+        event.complianceType !== "none"
       );
-    if (filterType === 'custom') return !['safety', 'maintenance', 'admin', 'inspection'].includes(event.type);
+    if (filterType === "maintenance") return event.type === "maintenance";
+    if (filterType === "financial")
+      return (
+        event.type === "admin" ||
+        event.title.toLowerCase().includes("insurance") ||
+        event.title.toLowerCase().includes("payment")
+      );
+    if (filterType === "household")
+      return (
+        event.title.toLowerCase().includes("bin") ||
+        event.title.toLowerCase().includes("meter") ||
+        event.title.toLowerCase().includes("shopping")
+      );
+    if (filterType === "custom")
+      return !["safety", "maintenance", "admin", "inspection"].includes(
+        event.type
+      );
     return true;
   });
 
-  const overdueEvents = filteredEvents.filter(event => event.status === 'overdue');
+  const overdueEvents = filteredEvents.filter(
+    (event) => event.status === "overdue"
+  );
 
-  const thisWeekEvents = filteredEvents.filter(event => {
+  const thisWeekEvents = filteredEvents.filter((event) => {
     const eventDate = new Date(event?.date);
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 7);
-    return eventDate >= weekStart && eventDate <= weekEnd && event.status !== 'overdue';
+    return (
+      eventDate >= weekStart &&
+      eventDate <= weekEnd &&
+      event.status !== "overdue"
+    );
   });
 
-  const actionRequiredEvents = filteredEvents.filter(event => ['action_required', 'due_this_week', 'quotes_ready'].includes(event.status));
+  const actionRequiredEvents = filteredEvents.filter((event) =>
+    ["action_required", "due_this_week", "quotes_ready"].includes(event.status)
+  );
 
   const upcomingEvents = filteredEvents
-    .filter(event => event?.date > new Date() && event.date.toDateString() !== new Date().toDateString())
+    .filter(
+      (event) =>
+        event?.date > new Date() &&
+        event.date.toDateString() !== new Date().toDateString()
+    )
     .slice(0, 5);
 
   // Cost calculations
   const thisMonthCost = filteredEvents
-    .filter(event => {
+    .filter((event) => {
       const eventDate = new Date(event?.date);
       const now = new Date();
-      return eventDate.getMonth() === now.getMonth() && eventDate.getFullYear() === now.getFullYear();
+      return (
+        eventDate.getMonth() === now.getMonth() &&
+        eventDate.getFullYear() === now.getFullYear()
+      );
     })
     .reduce((total, event) => {
-      const cost = event.cost.replace(/[£,-]/g, '');
+      const cost = event.cost.replace(/[£,-]/g, "");
       const numCost = parseInt(cost) || 0;
       return total + numCost;
     }, 0);
@@ -174,42 +217,42 @@ const Calendar = () => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'confirmed':
+      case "confirmed":
         return (
           <>
             <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
             Confirmed
           </>
         );
-      case 'action_required':
+      case "action_required":
         return (
           <>
             <AlertTriangle className="w-3 h-3 text-yellow-600 mr-1" />
             Book now
           </>
         );
-      case 'overdue':
+      case "overdue":
         return (
           <>
             <AlertTriangle className="w-3 h-3 text-red-600 mr-1" />
             Overdue
           </>
         );
-      case 'due_this_week':
+      case "due_this_week":
         return (
           <>
             <AlertTriangle className="w-3 h-3 text-yellow-600 mr-1" />
             Book now
           </>
         );
-      case 'quotes_ready':
+      case "quotes_ready":
         return (
           <>
             <MessageSquare className="w-3 h-3 text-blue-600 mr-1" />
             Quotes ready
           </>
         );
-      case 'completed':
+      case "completed":
         return (
           <>
             <CheckCircle className="w-3 h-3 text-gray-600 mr-1" />
@@ -230,56 +273,62 @@ const Calendar = () => {
   const getEventDateString = (ev: RawEvent | unknown) => {
     const e = ev as RawEvent | undefined;
     if (!e?.date) return null;
-    const d = typeof e.date === 'string' ? new Date(e.date as string) : (e.date as Date);
+    const d =
+      typeof e.date === "string"
+        ? new Date(e.date as string)
+        : (e.date as Date);
     return d.toDateString();
   };
 
   const formatEventDateLong = (ev: RawEvent | unknown) => {
     const e = ev as RawEvent | undefined;
-    if (!e?.date) return '—';
-    const d = typeof e.date === 'string' ? new Date(e.date as string) : (e.date as Date);
+    if (!e?.date) return "—";
+    const d =
+      typeof e.date === "string"
+        ? new Date(e.date as string)
+        : (e.date as Date);
     return d.toLocaleDateString();
   };
 
   const getStatusBorder = (status: string) => {
     switch (status) {
-      case 'overdue':
-        return 'bg-red-50 border border-red-200';
-      case 'due_this_week':
-      case 'action_required':
-        return 'bg-yellow-50 border border-yellow-200';
-      case 'confirmed':
-        return 'bg-green-50 border border-green-200';
-      case 'completed':
-        return 'bg-gray-50 border border-gray-200';
+      case "overdue":
+        return "bg-red-50 border border-red-200";
+      case "due_this_week":
+      case "action_required":
+        return "bg-yellow-50 border border-yellow-200";
+      case "confirmed":
+        return "bg-green-50 border border-green-200";
+      case "completed":
+        return "bg-gray-50 border border-gray-200";
       default:
-        return 'bg-white border border-gray-200';
+        return "bg-white border border-gray-200";
     }
   };
 
   const getBoardStatusBorder = (status: string) => {
     switch (status) {
-      case 'overdue':
-        return 'bg-red-50 border border-red-200';
-      case 'due_this_week':
-      case 'action_required':
-        return 'bg-yellow-50 border border-yellow-200';
-      case 'confirmed':
-        return 'bg-green-50 border border-green-200';
-      case 'completed':
-        return 'bg-gray-50 border border-gray-200';
+      case "overdue":
+        return "bg-red-50 border border-red-200";
+      case "due_this_week":
+      case "action_required":
+        return "bg-yellow-50 border border-yellow-200";
+      case "confirmed":
+        return "bg-green-50 border border-green-200";
+      case "completed":
+        return "bg-gray-50 border border-gray-200";
       default:
-        return 'bg-white border border-gray-200';
+        return "bg-white border border-gray-200";
     }
   };
 
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
-      case 'high':
+      case "high":
         return <AlertTriangle className="w-3 h-3 text-red-500" />;
-      case 'medium':
+      case "medium":
         return <Clock className="w-3 h-3 text-yellow-500" />;
-      case 'low':
+      case "low":
         return <CheckCircle className="w-3 h-3 text-green-500" />;
       default:
         return null;
@@ -288,28 +337,28 @@ const Calendar = () => {
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'maintenance':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'safety':
-        return 'bg-red-50 text-red-700 border-red-200';
-      case 'inspection':
-        return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'admin':
-        return 'bg-gray-50 text-gray-700 border-gray-200';
+      case "maintenance":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "safety":
+        return "bg-red-50 text-red-700 border-red-200";
+      case "inspection":
+        return "bg-purple-50 text-purple-700 border-purple-200";
+      case "admin":
+        return "bg-gray-50 text-gray-700 border-gray-200";
       default:
-        return 'bg-gray-50 text-gray-700 border-gray-200';
+        return "bg-gray-50 text-gray-700 border-gray-200";
     }
   };
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'maintenance':
+      case "maintenance":
         return <Wrench className="w-3 h-3 text-blue-600" />;
-      case 'safety':
+      case "safety":
         return <Shield className="w-3 h-3 text-red-600" />;
-      case 'inspection':
+      case "inspection":
         return <FileText className="w-3 h-3 text-purple-600" />;
-      case 'admin':
+      case "admin":
         return <Users className="w-3 h-3 text-gray-600" />;
       default:
         return <CalendarIcon className="w-3 h-3 text-gray-600" />;
@@ -319,46 +368,72 @@ const Calendar = () => {
   // Enhanced type icon function for specific services
   const getServiceIcon = (title: string, type: string) => {
     const titleLower = title.toLowerCase();
-    if (titleLower.includes('boiler')) return <Flame className="w-3 h-3 text-orange-600" />;
-    if (titleLower.includes('smoke') || titleLower.includes('alarm')) return <Shield className="w-3 h-3 text-red-600" />;
-    if (titleLower.includes('insurance')) return <FileText className="w-3 h-3 text-blue-600" />;
-    if (titleLower.includes('gas')) return <Flame className="w-3 h-3 text-orange-600" />;
-    if (titleLower.includes('eicr') || titleLower.includes('electrical')) return <Zap className="w-3 h-3 text-yellow-600" />;
-    if (titleLower.includes('gutter')) return <Building className="w-3 h-3 text-gray-600" />;
-    if (titleLower.includes('garden')) return <Home className="w-3 h-3 text-green-600" />;
+    if (titleLower.includes("boiler"))
+      return <Flame className="w-3 h-3 text-orange-600" />;
+    if (titleLower.includes("smoke") || titleLower.includes("alarm"))
+      return <Shield className="w-3 h-3 text-red-600" />;
+    if (titleLower.includes("insurance"))
+      return <FileText className="w-3 h-3 text-blue-600" />;
+    if (titleLower.includes("gas"))
+      return <Flame className="w-3 h-3 text-orange-600" />;
+    if (titleLower.includes("eicr") || titleLower.includes("electrical"))
+      return <Zap className="w-3 h-3 text-yellow-600" />;
+    if (titleLower.includes("gutter"))
+      return <Building className="w-3 h-3 text-gray-600" />;
+    if (titleLower.includes("garden"))
+      return <Home className="w-3 h-3 text-green-600" />;
     return getTypeIcon(type);
   };
 
   const formatCost = (cost: string, status: string) => {
-    if (status === 'quotes_ready') {
-      const cleanCost = cost.replace(/[£,-]/g, '');
-      if (cleanCost.includes('-')) {
-        return `£${cleanCost.split('-')[0]} (3 quotes)`;
+    if (status === "quotes_ready") {
+      const cleanCost = cost.replace(/[£,-]/g, "");
+      if (cleanCost.includes("-")) {
+        return `£${cleanCost.split("-")[0]} (3 quotes)`;
       }
       return `${cost} (3 quotes)`;
     }
-    if (cost === 'Free') return cost;
-    if (status === 'overdue' || status === 'action_required') {
-      return 'Get quote';
+    if (cost === "Free") return cost;
+    if (status === "overdue" || status === "action_required") {
+      return "Get quote";
     }
     return cost;
   };
 
   const getEventsForDate = (date: Date) => {
-    return filteredEvents.filter(event => getEventDateString(event) === date.toDateString());
+    return filteredEvents.filter(
+      (event) => getEventDateString(event) === date.toDateString()
+    );
   };
 
   const toggleEventSelection = (eventId: string | number) => {
-    setSelectedEvents(prev => (prev.includes(eventId) ? prev.filter(id => id !== eventId) : [...prev, eventId]));
+    setSelectedEvents((prev) =>
+      prev.includes(eventId)
+        ? prev.filter((id) => id !== eventId)
+        : [...prev, eventId]
+    );
   };
 
-  const monthYear = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthYear = currentDate.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 
-  const previousMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  const previousMonth = () =>
+    setCurrentDate(
+      new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+    );
+  const nextMonth = () =>
+    setCurrentDate(
+      new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+    );
 
   const generateCalendarDays = () => {
-    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const firstDay = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      1
+    );
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     const days: Date[] = [];
@@ -379,32 +454,31 @@ const Calendar = () => {
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-6">
-              <h1 className="text-xl font-semibold text-black">Property Calendar</h1>
+              <h1 className="text-xl font-semibold text-black">
+                Property Calendar
+              </h1>
 
               {/* View Mode Toggle */}
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                 <Button
-                  variant={viewMode === 'month' ? 'default' : 'ghost'}
+                  variant={viewMode === "month" ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setViewMode('month')}
-                  className="px-3 py-1 text-xs"
-                >
+                  onClick={() => setViewMode("month")}
+                  className="px-3 py-1 text-xs text-black hover:bg-black hover:text-white">
                   Calendar
                 </Button>
                 <Button
-                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  variant={viewMode === "list" ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setViewMode('list')}
-                  className="px-3 py-1 text-xs"
-                >
+                  onClick={() => setViewMode("list")}
+                  className="px-3 py-1 text-xs text-black hover:bg-black hover:text-white">
                   List
                 </Button>
                 <Button
-                  variant={viewMode === 'board' ? 'default' : 'ghost'}
+                  variant={viewMode === "board" ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setViewMode('board')}
-                  className="px-3 py-1 text-xs"
-                >
+                  onClick={() => setViewMode("board")}
+                  className="px-3 py-1 text-xs text-black hover:bg-black hover:text-white">
                   Board
                 </Button>
               </div>
@@ -412,32 +486,37 @@ const Calendar = () => {
               {/* Enhanced Filter Pills */}
               <div className="flex items-center gap-2">
                 {[
-                  { value: 'all', label: 'All', color: 'default' },
-                  { value: 'safety', label: 'Safety', color: 'destructive' },
-                  { value: 'maintenance', label: 'Maintenance', color: 'secondary' },
-                  { value: 'financial', label: 'Financial', color: 'default' },
-                  { value: 'household', label: 'Household', color: 'default' },
-                  { value: 'custom', label: 'Custom', color: 'outline' },
-                ].map(filter => (
+                  { value: "all", label: "All", color: "default" },
+                  { value: "safety", label: "Safety", color: "destructive" },
+                  {
+                    value: "maintenance",
+                    label: "Maintenance",
+                    color: "secondary",
+                  },
+                  { value: "financial", label: "Financial", color: "default" },
+                  { value: "household", label: "Household", color: "default" },
+                  { value: "custom", label: "Custom", color: "outline" },
+                ].map((filter) => (
                   <Button
                     key={filter.value}
-                    variant={filterType === filter.value ? 'default' : 'outline'}
+                    variant={
+                      filterType === filter.value ? "default" : "outline"
+                    }
                     size="sm"
                     onClick={() => setFilterType(filter.value as FilterType)}
-                    className={`px-3 py-1 text-xs ${
+                    className={`px-3 py-1 text-xs text-black ${
                       filterType === filter.value
-                        ? filter.value === 'safety'
-                          ? 'bg-red-500 text-white'
-                          : filter.value === 'maintenance'
-                          ? 'bg-orange-500 text-white'
-                          : filter.value === 'financial'
-                          ? 'bg-blue-500 text-white'
-                          : filter.value === 'household'
-                          ? 'bg-green-500 text-white'
-                          : 'bg-gray-800 text-white'
-                        : 'hover:bg-gray-100'
-                    }`}
-                  >
+                        ? filter.value === "safety"
+                          ? "bg-red-500 text-white"
+                          : filter.value === "maintenance"
+                          ? "bg-orange-500 text-white"
+                          : filter.value === "financial"
+                          ? "bg-blue-500 text-white"
+                          : filter.value === "household"
+                          ? "bg-green-500 text-white"
+                          : "bg-gray-800 text-white"
+                        : "hover:bg-gray-100"
+                    }`}>
                     {filter.label}
                   </Button>
                 ))}
@@ -448,10 +527,16 @@ const Calendar = () => {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-4 text-sm">
                 <div className="flex items-center gap-1 text-red-600">
-                  <AlertTriangle className="w-4 h-4" /> <span className="font-medium">{overdueEvents.length} Overdue</span>
+                  <AlertTriangle className="w-4 h-4" />{" "}
+                  <span className="font-medium">
+                    {overdueEvents.length} Overdue
+                  </span>
                 </div>
                 <div className="flex items-center gap-1 text-orange-600">
-                  <Clock className="w-4 h-4" /> <span className="font-medium">{thisWeekEvents.length} This Week</span>
+                  <Clock className="w-4 h-4" />{" "}
+                  <span className="font-medium">
+                    {thisWeekEvents.length} This Week
+                  </span>
                 </div>
                 <AddEvent />
               </div>
@@ -461,15 +546,21 @@ const Calendar = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">
-            {viewMode === 'month' ? (
+            {viewMode === "month" ? (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-black">{monthYear}</h2>
+                  <h2 className="text-lg font-semibold text-black">
+                    {monthYear}
+                  </h2>
                   <div className="flex items-center space-x-2">
-                    <button onClick={previousMonth} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <button
+                      onClick={previousMonth}
+                      className="p-2 hover:bg-gray-100 rounded-lg">
                       <ChevronLeft className="w-4 h-4 text-gray-600" />
                     </button>
-                    <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <button
+                      onClick={nextMonth}
+                      className="p-2 hover:bg-gray-100 rounded-lg">
                       <ChevronRight className="w-4 h-4 text-gray-600" />
                     </button>
                   </div>
@@ -477,49 +568,67 @@ const Calendar = () => {
 
                 <>
                   <div className="grid grid-cols-7 gap-1 mb-4">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className="p-2 text-center text-sm font-medium text-gray-600">
-                        {day}
-                      </div>
-                    ))}
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                      (day) => (
+                        <div
+                          key={day}
+                          className="p-2 text-center text-sm font-medium text-gray-600">
+                          {day}
+                        </div>
+                      )
+                    )}
                   </div>
 
                   <div className="grid grid-cols-7 gap-1">
                     {calendarDays.map((day, index) => {
-                      const isCurrentMonth = day.getMonth() === currentDate.getMonth();
-                      const isToday = day.toDateString() === new Date().toDateString();
+                      const isCurrentMonth =
+                        day.getMonth() === currentDate.getMonth();
+                      const isToday =
+                        day.toDateString() === new Date().toDateString();
                       const dayEvents = getEventsForDate(day);
 
                       return (
                         <div
                           key={index}
                           className={`min-h-[100px] p-2 border border-gray-100 hover:bg-gray-50 cursor-pointer ${
-                            !isCurrentMonth ? 'text-gray-400 bg-gray-50' : ''
-                          } ${isToday ? 'bg-primary/10 border-primary' : ''}`}
-                        >
-                          <div className={`text-sm mb-1 ${isToday ? 'font-bold text-primary' : ''}`}>{day.getDate()}</div>
+                            !isCurrentMonth ? "text-gray-400 bg-gray-50" : ""
+                          } ${isToday ? "bg-primary/10 border-primary" : ""}`}>
+                          <div
+                            className={`text-sm mb-1 ${
+                              isToday ? "font-bold text-primary" : ""
+                            }`}>
+                            {day.getDate()}
+                          </div>
 
                           {/* Clean Event Display */}
                           <div className="space-y-1">
-                            {dayEvents.slice(0, 2).map(event => (
+                            {dayEvents.slice(0, 2).map((event) => (
                               <div
                                 key={event.id}
                                 className={`text-xs px-2 py-2 rounded border ${getStatusBorder(
                                   event.status
                                 )} cursor-pointer hover:shadow-sm transition-shadow`}
                                 title={`${event.time} - ${event.title}\n${event.description}`}
-                                onClick={() => toggleEventSelection(event.id)}
-                              >
-                                <div className="font-medium text-gray-900 truncate">{event.title}</div>
+                                onClick={() => toggleEventSelection(event.id)}>
+                                <div className="font-medium text-gray-900 truncate">
+                                  {event.title}
+                                </div>
                                 <div className="text-xs text-gray-600 flex items-center justify-between mt-1">
                                   <span>
-                                    {event.time} • {formatCost(event.cost, event.status)}
+                                    {event.time} •{" "}
+                                    {formatCost(event.cost, event.status)}
                                   </span>
                                 </div>
-                                <div className="text-xs text-gray-500 mt-1">{getStatusIcon(event.status)}</div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {getStatusIcon(event.status)}
+                                </div>
                               </div>
                             ))}
-                            {dayEvents.length > 2 && <div className="text-xs text-gray-500 pl-2 py-1">+{dayEvents.length - 2} more</div>}
+                            {dayEvents.length > 2 && (
+                              <div className="text-xs text-gray-500 pl-2 py-1">
+                                +{dayEvents.length - 2} more
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -527,64 +636,101 @@ const Calendar = () => {
                   </div>
                 </>
               </div>
-            ) : viewMode === 'list' ? (
+            ) : viewMode === "list" ? (
               <Card>
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">Events List</CardTitle>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" className="text-xs px-3 py-1.5 h-8">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs px-3 py-1.5 h-8">
                         <Filter className="w-3 h-3 mr-1" />
                         Filter
                       </Button>
-                      <Button variant="outline" size="sm" className="text-xs px-3 py-1.5 h-8">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs px-3 py-1.5 h-8">
                         Sort by date
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {filteredEvents.map(event => (
-                    <Card key={event.id} className={`${getStatusBorder(event.status)} hover:shadow-sm transition-shadow`}>
+                  {filteredEvents.map((event) => (
+                    <Card
+                      key={event.id}
+                      className={`${getStatusBorder(
+                        event.status
+                      )} hover:shadow-sm transition-shadow`}>
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-1">
-                              <h3 className="text-sm font-medium text-black">{event.title}</h3>
+                              <h3 className="text-sm font-medium text-black">
+                                {event.title}
+                              </h3>
                               <span className="text-xs text-gray-600">
-                                {event.time} • {formatCost(event.cost, event.status)}
+                                {event.time} •{" "}
+                                {formatCost(event.cost, event.status)}
                               </span>
                             </div>
 
-                            <div className="text-xs text-gray-600 mb-2 flex items-center">{getStatusIcon(event.status)}</div>
+                            <div className="text-xs text-gray-600 mb-2 flex items-center">
+                              {getStatusIcon(event.status)}
+                            </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
                               <div>
                                 <p className="text-xs text-gray-500">Date</p>
-                                <p className="text-sm">{event?.date?.toLocaleDateString()}</p>
+                                <p className="text-sm">
+                                  {event?.date?.toLocaleDateString()}
+                                </p>
                               </div>
                               <div>
-                                <p className="text-xs text-gray-500">Contractor</p>
-                                <p className="text-sm">{event.contractor === 'Not booked' ? 'To be booked' : event.contractor}</p>
+                                <p className="text-xs text-gray-500">
+                                  Contractor
+                                </p>
+                                <p className="text-sm">
+                                  {event.contractor === "Not booked"
+                                    ? "To be booked"
+                                    : event.contractor}
+                                </p>
                               </div>
                             </div>
                           </div>
 
                           <div className="flex flex-col gap-2 ml-4">
-                            {event.status === 'quotes_ready' ? (
-                              <Button size="sm" variant="secondary" className="px-3 py-1.5 h-7 text-xs bg-gray-100 hover:bg-gray-200">
+                            {event.status === "quotes_ready" ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="px-3 py-1.5 h-7 text-xs bg-gray-100 hover:bg-gray-200">
                                 View quotes
                               </Button>
-                            ) : event.status === 'overdue' || event.status === 'action_required' || event.status === 'due_this_week' ? (
-                              <Button size="sm" variant="secondary" className="px-3 py-1.5 h-7 text-xs bg-gray-100 hover:bg-gray-200">
+                            ) : event.status === "overdue" ||
+                              event.status === "action_required" ||
+                              event.status === "due_this_week" ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="px-3 py-1.5 h-7 text-xs bg-gray-100 hover:bg-gray-200">
                                 Get quotes
                               </Button>
-                            ) : event.status === 'confirmed' ? (
-                              <Button size="sm" variant="outline" className="px-3 py-1.5 h-7 text-xs">
+                            ) : event.status === "confirmed" ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="px-3 py-1.5 h-7 text-xs">
                                 Reschedule
                               </Button>
                             ) : (
-                              <Button size="sm" variant="ghost" className="px-3 py-1.5 h-7 text-xs">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="px-3 py-1.5 h-7 text-xs">
                                 Complete
                               </Button>
                             )}
@@ -606,23 +752,32 @@ const Calendar = () => {
                     <Card className="bg-white border border-gray-200">
                       <CardHeader className="pb-3 border-b border-gray-100">
                         <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-red-600" /> Overdue ({overdueEvents.length})
+                          <AlertTriangle className="w-5 h-5 text-red-600" />{" "}
+                          Overdue ({overdueEvents.length})
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2">
-                        {overdueEvents.map(event => (
-                          <Card key={event.id} className={`${getBoardStatusBorder(event.status)} shadow-sm`}>
+                        {overdueEvents.map((event) => (
+                          <Card
+                            key={event.id}
+                            className={`${getBoardStatusBorder(
+                              event.status
+                            )} shadow-sm`}>
                             <CardContent className="p-3">
-                              <h4 className="text-sm font-medium mb-1">{event.title}</h4>
+                              <h4 className="text-sm font-medium mb-1">
+                                {event.title}
+                              </h4>
                               <p className="text-xs text-gray-600 mb-2">
-                                {event.time} • {formatCost(event.cost, event.status)}
+                                {event.time} •{" "}
+                                {formatCost(event.cost, event.status)}
                               </p>
-                              <div className="text-xs text-red-600 mb-3 flex items-center">{getStatusIcon(event.status)}</div>
+                              <div className="text-xs text-red-600 mb-3 flex items-center">
+                                {getStatusIcon(event.status)}
+                              </div>
                               <Button
                                 size="sm"
                                 variant="secondary"
-                                className="w-full text-xs px-2 py-1.5 h-7 bg-gray-100 hover:bg-gray-200"
-                              >
+                                className="w-full text-xs px-2 py-1.5 h-7 bg-gray-100 hover:bg-gray-200">
                                 Get quotes
                               </Button>
                             </CardContent>
@@ -635,24 +790,35 @@ const Calendar = () => {
                     <Card className="bg-white border border-gray-200">
                       <CardHeader className="pb-3 border-b border-gray-100">
                         <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <Clock className="w-5 h-5 text-orange-600" /> This Week ({thisWeekEvents.length})
+                          <Clock className="w-5 h-5 text-orange-600" /> This
+                          Week ({thisWeekEvents.length})
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2">
-                        {thisWeekEvents.map(event => (
-                          <Card key={event.id} className={`${getBoardStatusBorder(event.status)} shadow-sm`}>
+                        {thisWeekEvents.map((event) => (
+                          <Card
+                            key={event.id}
+                            className={`${getBoardStatusBorder(
+                              event.status
+                            )} shadow-sm`}>
                             <CardContent className="p-3">
-                              <h4 className="text-sm font-medium mb-1">{event.title}</h4>
+                              <h4 className="text-sm font-medium mb-1">
+                                {event.title}
+                              </h4>
                               <p className="text-xs text-gray-600 mb-2">
-                                {event.time} • {formatCost(event.cost, event.status)}
+                                {event.time} •{" "}
+                                {formatCost(event.cost, event.status)}
                               </p>
-                              <div className="text-xs text-yellow-600 mb-3 flex items-center">{getStatusIcon(event.status)}</div>
+                              <div className="text-xs text-yellow-600 mb-3 flex items-center">
+                                {getStatusIcon(event.status)}
+                              </div>
                               <Button
                                 size="sm"
                                 variant="secondary"
-                                className="w-full text-xs px-2 py-1.5 h-7 bg-gray-100 hover:bg-gray-200"
-                              >
-                                {event.status === 'quotes_ready' ? 'View quotes' : 'Get quotes'}
+                                className="w-full text-xs px-2 py-1.5 h-7 bg-gray-100 hover:bg-gray-200">
+                                {event.status === "quotes_ready"
+                                  ? "View quotes"
+                                  : "Get quotes"}
                               </Button>
                             </CardContent>
                           </Card>
@@ -664,17 +830,29 @@ const Calendar = () => {
                     <Card className="bg-white border border-gray-200">
                       <CardHeader className="pb-3 border-b border-gray-100">
                         <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-green-600" /> Confirmed (
-                          {filteredEvents.filter(e => e.status === 'confirmed').length})
+                          <CheckCircle className="w-5 h-5 text-green-600" />{" "}
+                          Confirmed (
+                          {
+                            filteredEvents.filter(
+                              (e) => e.status === "confirmed"
+                            ).length
+                          }
+                          )
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2">
                         {filteredEvents
-                          .filter(e => e.status === 'confirmed')
-                          .map(event => (
-                            <Card key={event.id} className={`${getBoardStatusBorder(event.status)} shadow-sm`}>
+                          .filter((e) => e.status === "confirmed")
+                          .map((event) => (
+                            <Card
+                              key={event.id}
+                              className={`${getBoardStatusBorder(
+                                event.status
+                              )} shadow-sm`}>
                               <CardContent className="p-3">
-                                <h4 className="text-sm font-medium mb-1">{event.title}</h4>
+                                <h4 className="text-sm font-medium mb-1">
+                                  {event.title}
+                                </h4>
                                 <p className="text-xs text-gray-600 mb-2">
                                   {event.time} • {event.cost}
                                 </p>
@@ -682,7 +860,10 @@ const Calendar = () => {
                                   <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
                                   {event.contractor}
                                 </div>
-                                <Button size="sm" variant="outline" className="w-full text-xs px-2 py-1.5 h-7">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full text-xs px-2 py-1.5 h-7">
                                   Reschedule
                                 </Button>
                               </CardContent>
@@ -695,17 +876,29 @@ const Calendar = () => {
                     <Card className="bg-white border border-gray-200">
                       <CardHeader className="pb-3 border-b border-gray-100">
                         <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-gray-600" /> Completed (
-                          {filteredEvents.filter(e => e.status === 'completed').length})
+                          <CheckCircle className="w-5 h-5 text-gray-600" />{" "}
+                          Completed (
+                          {
+                            filteredEvents.filter(
+                              (e) => e.status === "completed"
+                            ).length
+                          }
+                          )
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2">
                         {filteredEvents
-                          .filter(e => e.status === 'completed')
-                          .map(event => (
-                            <Card key={event.id} className={`${getBoardStatusBorder(event.status)} shadow-sm opacity-75`}>
+                          .filter((e) => e.status === "completed")
+                          .map((event) => (
+                            <Card
+                              key={event.id}
+                              className={`${getBoardStatusBorder(
+                                event.status
+                              )} shadow-sm opacity-75`}>
                               <CardContent className="p-3">
-                                <h4 className="text-sm font-medium text-gray-600 mb-1">{event.title}</h4>
+                                <h4 className="text-sm font-medium text-gray-600 mb-1">
+                                  {event.title}
+                                </h4>
                                 <p className="text-xs text-gray-500 mb-2">
                                   {event.time} • {event.cost}
                                 </p>
@@ -729,18 +922,33 @@ const Calendar = () => {
             {/* Requires Action Panel */}
             <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col">
               <div className="flex items-center space-x-2 mb-6">
-                <AlertTriangle className="w-5 h-5 text-yellow-600" strokeWidth={1} />
-                <h3 className="font-semibold text-black">Requires Action ({actionRequiredEvents.length})</h3>
+                <AlertTriangle
+                  className="w-5 h-5 text-yellow-600"
+                  strokeWidth={1}
+                />
+                <h3 className="font-semibold text-black">
+                  Requires Action ({actionRequiredEvents.length})
+                </h3>
               </div>
               <div className="space-y-1">
-                {[...overdueEvents.slice(0, 2), ...thisWeekEvents.slice(0, 2), ...upcomingEvents.slice(0, 2)].map(event => (
-                  <div key={event.id} className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
+                {[
+                  ...overdueEvents.slice(0, 2),
+                  ...thisWeekEvents.slice(0, 2),
+                  ...upcomingEvents.slice(0, 2),
+                ].map((event) => (
+                  <div
+                    key={event.id}
+                    className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
                     <div className="flex items-center gap-2">
                       {getServiceIcon(event.title, event.type)}
-                      <span className="text-sm font-medium text-black">{event.title}</span>
+                      <span className="text-sm font-medium text-black">
+                        {event.title}
+                      </span>
                     </div>
                     <button className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 border-0">
-                      {event.status === 'quotes_ready' ? 'View quotes' : 'Get quotes'}
+                      {event.status === "quotes_ready"
+                        ? "View quotes"
+                        : "Get quotes"}
                     </button>
                   </div>
                 ))}
@@ -749,13 +957,19 @@ const Calendar = () => {
               <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">This month</span>
-                  <span className="font-medium">£{thisMonthCost.toLocaleString()}</span>
+                  <span className="font-medium">
+                    £{thisMonthCost.toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">This year</span>
-                  <span className="font-medium">£{yearlySpent.toLocaleString()}</span>
+                  <span className="font-medium">
+                    £{yearlySpent.toLocaleString()}
+                  </span>
                 </div>
-                <button className="text-xs text-gray-600 hover:text-gray-800 mt-2 w-full text-left">View breakdown</button>
+                <button className="text-xs text-gray-600 hover:text-gray-800 mt-2 w-full text-left">
+                  View breakdown
+                </button>
               </div>
             </div>
 
@@ -766,16 +980,23 @@ const Calendar = () => {
                 <h3 className="font-semibold text-black">This Week</h3>
               </div>
               <div className="space-y-1">
-                {thisWeekEvents.slice(0, 3).map(event => (
-                  <div key={event.id} className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
+                {thisWeekEvents.slice(0, 3).map((event) => (
+                  <div
+                    key={event.id}
+                    className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
                     <div className="flex items-center gap-2">
                       {getServiceIcon(event.title, event.type)}
                       <span className="text-sm font-medium text-black">
-                        {event?.date?.toLocaleDateString('en-GB', { weekday: 'short' })}: {event.title}
+                        {event?.date?.toLocaleDateString("en-GB", {
+                          weekday: "short",
+                        })}
+                        : {event.title}
                       </span>
                     </div>
                     <button className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 border-0">
-                      {event.status === 'quotes_ready' ? 'View quotes' : 'Book now'}
+                      {event.status === "quotes_ready"
+                        ? "View quotes"
+                        : "Book now"}
                     </button>
                   </div>
                 ))}
@@ -787,7 +1008,7 @@ const Calendar = () => {
                   <span className="font-semibold text-green-600">
                     £
                     {thisWeekEvents.reduce((total, event) => {
-                      const cost = event.cost.replace(/[£,-]/g, '');
+                      const cost = event.cost.replace(/[£,-]/g, "");
                       return total + (parseInt(cost) || 0);
                     }, 0)}
                   </span>
@@ -799,37 +1020,67 @@ const Calendar = () => {
             <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col">
               <div className="flex items-center space-x-2 mb-6">
                 <Shield className="w-5 h-5 text-gray-600" strokeWidth={1} />
-                <h3 className="font-semibold text-black">Compliance Timeline</h3>
+                <h3 className="font-semibold text-black">
+                  Compliance Timeline
+                </h3>
               </div>
               <div className="space-y-1">
                 {[
-                  { cert: 'EICR Testing', status: 'due', desc: 'Electrical Installation Condition Report', deadline: '15 Jan 2024' },
-                  { cert: 'Gas Safety', status: 'ok', desc: 'Annual gas safety inspection', deadline: '20 Apr 2024' },
-                  { cert: 'Boiler Service', status: 'ok', desc: 'Annual boiler maintenance', deadline: '10 Jul 2024' },
-                  { cert: 'Insurance Renewal', status: 'expiring', desc: 'Home insurance policy renewal', deadline: '31 Oct 2024' },
+                  {
+                    cert: "EICR Testing",
+                    status: "due",
+                    desc: "Electrical Installation Condition Report",
+                    deadline: "15 Jan 2024",
+                  },
+                  {
+                    cert: "Gas Safety",
+                    status: "ok",
+                    desc: "Annual gas safety inspection",
+                    deadline: "20 Apr 2024",
+                  },
+                  {
+                    cert: "Boiler Service",
+                    status: "ok",
+                    desc: "Annual boiler maintenance",
+                    deadline: "10 Jul 2024",
+                  },
+                  {
+                    cert: "Insurance Renewal",
+                    status: "expiring",
+                    desc: "Home insurance policy renewal",
+                    deadline: "31 Oct 2024",
+                  },
                 ].map((item, index) => (
-                  <div key={index} className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
+                  <div
+                    key={index}
+                    className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
                     <div className="flex items-center gap-2">
                       <div
                         className={`w-3 h-3 rounded-full ${
-                          item.status === 'due' ? 'bg-red-500' : item.status === 'expiring' ? 'bg-yellow-500' : 'bg-green-500'
-                        }`}
-                      ></div>
+                          item.status === "due"
+                            ? "bg-red-500"
+                            : item.status === "expiring"
+                            ? "bg-yellow-500"
+                            : "bg-green-500"
+                        }`}></div>
                       <div className="flex flex-col">
-                        <span className="text-sm font-medium text-black">{item.cert}</span>
-                        <span className="text-xs text-gray-600">Due: {item.deadline}</span>
+                        <span className="text-sm font-medium text-black">
+                          {item.cert}
+                        </span>
+                        <span className="text-xs text-gray-600">
+                          Due: {item.deadline}
+                        </span>
                       </div>
                     </div>
                     <Badge
                       variant="secondary"
                       className={`text-xs px-2 py-1 ${
-                        item.status === 'due'
-                          ? 'bg-red-100 text-red-800'
-                          : item.status === 'expiring'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}
-                    >
+                        item.status === "due"
+                          ? "bg-red-100 text-red-800"
+                          : item.status === "expiring"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-green-100 text-green-800"
+                      }`}>
                       {item.status}
                     </Badge>
                   </div>

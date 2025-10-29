@@ -545,7 +545,7 @@ const Settings = () => {
                     onClick={() => setActiveTab(tab.id)}
                     className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                       activeTab === tab.id
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-primary text-white"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}>
                     <IconComponent className="w-4 h-4 mr-3" />

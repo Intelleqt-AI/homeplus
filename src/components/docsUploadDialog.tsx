@@ -157,8 +157,8 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
                     id="status-date"
                     variant="outline"
                     className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground"
+                      "w-full justify-start text-left font-normal text-black hover:bg-black hover:text-white",
+                      !selectedDate && "text-muted-black"
                     )}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {selectedDate ? (
@@ -174,6 +174,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
                     selected={selectedDate}
                     onSelect={setSelectedDate}
                     initialFocus
+                    className="!text-black"
                   />
                 </PopoverContent>
               </Popover>
@@ -186,7 +187,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
             </Button>
             <Button
               variant="outline"
-              className="flex-1"
+              className="flex-1 bg-black text-white hover:bg-primary/90 hover:text-white"
               onClick={() => setOpenForm(false)}>
               Cancel
             </Button>
