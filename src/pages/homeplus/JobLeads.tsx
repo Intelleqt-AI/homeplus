@@ -1,123 +1,117 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  MessageSquare,
-  Edit,
-  Filter,
-  Plus,
-  MapPin,
-  Clock,
-  PoundSterling,
-  Star,
-  ExternalLink,
-  X
-} from "lucide-react";
-import DashboardLayout from "@/components/layout/DashboardLayout";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { MessageSquare, Edit, Filter, Plus, MapPin, Clock, PoundSterling, Star, ExternalLink, X } from 'lucide-react';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { createJob, fetchLeads, modifyBid } from '@/lib/Api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import Quote from '@/components/topbar/Quote';
+import { toast } from 'sonner';
 
 const JobLeads = () => {
   const [compareMode, setCompareMode] = useState<Record<number, boolean>>({});
   const [selectedQuote, setSelectedQuote] = useState<any>(null);
-  const jobLeads = [
-    {
-      id: 1,
-      title: "Boiler Service Required",
-      description: "Annual boiler service and safety check for a 3-bedroom house",
-      location: "Clapham, SW4",
-      budget: "£80-120",
-      postedDate: "2 days ago",
-      status: "awaiting_quotes",
-      messagesCount: 3,
-      quotesCount: 3
-    },
-    {
-      id: 2,
-      title: "Kitchen Sink Repair",
-      description: "Leaking kitchen sink pipe needs urgent repair",
-      location: "Battersea, SW11",
-      budget: "£50-100",
-      postedDate: "1 day ago",
-      status: "quotes_received",
-      messagesCount: 1,
-      quotesCount: 3
-    },
-    {
-      id: 3,
-      title: "Garden Maintenance",
-      description: "Monthly garden maintenance including lawn mowing and hedge trimming",
-      location: "Wandsworth, SW18",
-      budget: "£40-60",
-      postedDate: "3 days ago",
-      status: "in_progress",
-      messagesCount: 5,
-      quotesCount: 3
-    }
-  ];
+  const { user } = useAuth();
+  const [leads, setLeads] = useState<any[]>([]);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [currentItem, setCurrentItem] = useState(null);
+  const [currentBid, setCurrentBid] = useState(null);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "awaiting_quotes":
-        return "bg-yellow-100 text-yellow-800";
-      case "quotes_received":
-        return "bg-blue-100 text-blue-800";
-      case "in_progress":
-        return "bg-green-100 text-green-800";
+  const addJob = useMutation({
+    mutationFn: createJob,
+    onSuccess: data => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      setCurrentItem(null);
+      setCurrentBid(null);
+    },
+    onError: err => {},
+  });
+
+  const modifyBidMutation = useMutation({
+    mutationFn: modifyBid,
+    onSuccess: data => {
+      toast.success('Bid updated successfully ');
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['bids'] });
+      const newJob = {
+        trade: currentItem?.service,
+        location: currentItem?.location,
+        rate: currentBid?.proposedValue,
+        status: 'todo',
+        priority: 'medium',
+        leads_id: currentItem?.id,
+        trader_id: currentBid?.bid_by,
+      };
+      addJob.mutate(newJob);
+    },
+    onError: error => {
+      toast.error(error.message || 'Failed to update bid ');
+    },
+  });
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['leads'],
+    queryFn: fetchLeads,
+  });
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (data) {
+      setLeads(data.filter((lead: any) => lead.homeID === user?.id) || []);
+    }
+  }, [data, isLoading, user]);
+
+  const getStatusColor = isApproved => {
+    switch (isApproved) {
+      case isApproved !== 'true':
+        return 'bg-green-100 text-green-800';
       default:
-        return "bg-gray-100 text-gray-800";
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case "awaiting_quotes":
-        return "Awaiting Quotes";
-      case "quotes_received":
-        return "Quotes Received";
-      case "in_progress":
-        return "In Progress";
+      case 'awaiting_quotes':
+        return 'Awaiting Quotes';
+      case 'quotes_received':
+        return 'Quotes Received';
+      case 'in_progress':
+        return 'In Progress';
       default:
-        return "Unknown";
+        return 'Unknown';
     }
   };
 
-  const getQuotesForJob = (jobId: number) => {
-    return [
-      {
-        id: 1,
-        tradeName: "Swift Plumbing",
-        rating: 4.8,
-        reviews: 124,
-        price: "£95",
-        availability: "Available today",
-        responseTime: "2 hours"
-      },
-      {
-        id: 2,
-        tradeName: "ProFix Services",
-        rating: 4.6,
-        reviews: 89,
-        price: "£110",
-        availability: "Available tomorrow",
-        responseTime: "4 hours"
-      },
-      {
-        id: 3,
-        tradeName: "London Heating Co",
-        rating: 4.9,
-        reviews: 156,
-        price: "£85",
-        availability: "Available this week",
-        responseTime: "1 hour"
-      }
-    ];
+  // real bids come from job.bids (each bid contains bidder info and proposedValue)
+  // helper to format bidder name
+  const bidderName = (b: unknown) => {
+    if (!b) return 'Unknown Trade';
+    const bb = b as Record<string, any>;
+    const first = bb.first_name || bb.bidder?.first_name || '';
+    const last = bb.last_name || bb.bidder?.last_name || '';
+    return `${first} ${last}`.trim() || bb.tradeName || bb.bidder?.email || 'Trade';
   };
 
   const toggleCompareMode = (jobId: number) => {
     setCompareMode(prev => ({
       ...prev,
-      [jobId]: !prev[jobId]
+      [jobId]: !prev[jobId],
     }));
+  };
+
+  const handleApprove = (job, bid) => {
+    setCurrentItem(job);
+    setCurrentBid(bid);
+    modifyBidMutation.mutate({
+      bid_id: bid.id,
+      status: 'accepted',
+      lead_id: job.id,
+      isApproved: true,
+    });
   };
 
   return (
@@ -130,22 +124,23 @@ const JobLeads = () => {
               <Filter className="w-4 h-4 text-gray-600" />
               <span className="text-sm text-gray-600">Filter</span>
             </button>
-            <Button className="flex items-center space-x-2 px-4 py-2">
+            <Button onClick={() => setQuoteOpen(true)} className="flex items-center space-x-2 px-4 py-2">
               <Plus className="w-4 h-4" />
               <span className="text-sm font-medium">Post Job</span>
             </Button>
+            <Quote open={quoteOpen} setOpen={setQuoteOpen} />
           </div>
         </div>
 
         {/* Job Leads Grid */}
         <div className="grid gap-6">
-          {jobLeads.map((job) => (
+          {leads?.map(job => (
             <div key={job.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-black mb-2">{job.title}</h3>
-                  <p className="text-gray-600 text-sm mb-3">{job.description}</p>
-                  
+                  <h3 className="text-lg font-semibold text-black mb-2">{job.name}</h3>
+                  <p className="text-gray-600 text-sm mb-3">{job.service}</p>
+
                   <div className="flex items-center space-x-4 text-sm text-gray-500">
                     <div className="flex items-center space-x-1">
                       <MapPin className="w-4 h-4" />
@@ -153,38 +148,39 @@ const JobLeads = () => {
                     </div>
                     <div className="flex items-center space-x-1">
                       <PoundSterling className="w-4 h-4" />
-                      <span>{job.budget}</span>
+                      <span>{job.value}</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="w-4 h-4" />
-                      <span>{job.postedDate}</span>
+                      <span>{new Date(job.updated_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-3">
-                  <span className={`px-3 py-1 text-xs font-medium rounded-lg border ${getStatusColor(job.status)}`}>
-                    {getStatusText(job.status)}
+                  <span className={`px-3 py-1 text-xs font-medium rounded-lg border ${getStatusColor(job?.isApproved)}`}>
+                    {job?.isApproved ? 'Approved' : job?.bids?.length < 1 ? 'Waiting for quote' : 'Quote Received'}
                   </span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+                <span></span>
+                {/* <div className="flex items-center space-x-3">
                   <button className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
                     <MessageSquare className="w-4 h-4" />
                     <span>{job.messagesCount}</span>
                   </button>
-                  <Link 
+                  <Link
                     to={`/jobs/${job.id}`}
                     className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
                   >
                     <Edit className="w-4 h-4" />
                     <span>Edit</span>
                   </Link>
-                </div>
-                
-                <Button 
+                </div> */}
+
+                <Button
                   variant="outline"
                   onClick={() => toggleCompareMode(job.id)}
                   className="text-sm bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200"
@@ -194,7 +190,7 @@ const JobLeads = () => {
               </div>
 
               {/* Quotes Section */}
-              {job.quotesCount > 0 && (
+              {(job.bids?.length > 0 || job.quotesCount > 0) && (
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   {compareMode[job.id] ? (
                     // Comparison Table View
@@ -211,79 +207,77 @@ const JobLeads = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {getQuotesForJob(job.id).map((quote) => (
-                            <tr key={quote.id} className="border-b border-gray-100">
-                              <td className="py-3 font-medium text-black">{quote.tradeName}</td>
+                          {job.bids?.map(bid => (
+                            <tr key={bid.id} className="border-b border-gray-100">
+                              <td className="py-3 font-medium text-black">{bid.bidder?.first_name || bid.bidder?.email || 'Trader'}</td>
                               <td className="py-3">
                                 <div className="flex items-center space-x-1">
                                   <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                                  <span className="text-gray-600">{quote.rating} ({quote.reviews})</span>
+                                  <span className="text-gray-600">4</span>
                                 </div>
                               </td>
-                              <td className="py-3 font-medium text-black">{quote.price}</td>
-                              <td className="py-3 text-gray-600">{quote.availability}</td>
-                              <td className="py-3 text-gray-600">{quote.responseTime}</td>
-                               <td className="py-3">
-                                 <Dialog>
-                                   <DialogTrigger asChild>
-                                     <button 
-                                       className="flex items-center space-x-1 text-primary hover:underline"
-                                       onClick={() => setSelectedQuote(quote)}
-                                     >
-                                       <ExternalLink className="w-3 h-3" />
-                                       <span>View</span>
-                                     </button>
-                                   </DialogTrigger>
-                                   <DialogContent className="sm:max-w-[500px]">
-                                     <DialogHeader>
-                                       <DialogTitle>Quote Details - {quote.tradeName}</DialogTitle>
-                                     </DialogHeader>
-                                     <div className="space-y-4 py-4">
-                                       <div className="grid grid-cols-2 gap-4">
-                                         <div>
-                                           <label className="text-sm font-medium text-gray-600">Trade</label>
-                                           <p className="text-lg font-semibold text-black">{quote.tradeName}</p>
-                                         </div>
-                                         <div>
-                                           <label className="text-sm font-medium text-gray-600">Price</label>
-                                           <p className="text-lg font-semibold text-black">{quote.price}</p>
-                                         </div>
-                                         <div>
-                                           <label className="text-sm font-medium text-gray-600">Rating</label>
-                                           <div className="flex items-center space-x-1">
-                                             <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                                             <span className="font-medium">{quote.rating}</span>
-                                             <span className="text-gray-600">({quote.reviews} reviews)</span>
-                                           </div>
-                                         </div>
-                                         <div>
-                                           <label className="text-sm font-medium text-gray-600">Availability</label>
-                                           <p className="font-medium text-black">{quote.availability}</p>
-                                         </div>
-                                         <div>
-                                           <label className="text-sm font-medium text-gray-600">Response Time</label>
-                                           <p className="font-medium text-black">{quote.responseTime}</p>
-                                         </div>
-                                       </div>
-                                       <div className="pt-4 border-t">
-                                         <h4 className="font-medium text-black mb-2">Service Details</h4>
-                                         <p className="text-gray-600 text-sm">
-                                           Professional {job.title.toLowerCase()} service including all necessary materials and labor. 
-                                           Fully insured and certified. 12-month guarantee on all work completed.
-                                         </p>
-                                       </div>
-                                       <div className="flex space-x-3 pt-4">
-                                         <Button className="flex-1">
-                                           Accept Quote
-                                         </Button>
-                                         <Button variant="outline" className="flex-1">
-                                           Message Tradesperson
-                                         </Button>
-                                       </div>
-                                     </div>
-                                   </DialogContent>
-                                 </Dialog>
-                               </td>
+                              <td className="py-3 font-medium text-black">{`£${bid.proposedValue}`}</td>
+                              <td className="py-3 text-gray-600 capitalize">{bid.Available ?? 'N/A'}</td>
+                              <td className="py-3 text-gray-600">{new Date(bid.created_at).toLocaleString()}</td>
+                              <td className="py-3">
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <button
+                                      className="flex items-center space-x-1 text-primary hover:underline"
+                                      onClick={() => setSelectedQuote(bid)}
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                      <span>View</span>
+                                    </button>
+                                  </DialogTrigger>
+                                  <DialogContent className="sm:max-w-[500px]">
+                                    <DialogHeader>
+                                      <DialogTitle>Bid Details - {bid.bidder?.first_name || bid.bidder?.email}</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="space-y-4 py-4">
+                                      <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                          <label className="text-sm font-medium text-gray-600">Bidder</label>
+                                          <p className="text-lg font-semibold text-black">
+                                            {bid.bidder?.first_name} {bid.bidder?.last_name}
+                                          </p>
+                                          <p className="text-sm text-gray-600">{bid.bidder?.email}</p>
+                                        </div>
+                                        <div>
+                                          <label className="text-sm font-medium text-gray-600">Price</label>
+                                          <p className="text-lg font-semibold text-black">{`£${bid.proposedValue}`}</p>
+                                        </div>
+                                        <div>
+                                          <label className="text-sm font-medium text-gray-600">Status</label>
+                                          <p className="text-sm text-gray-600 capitalize">{bid.status}</p>
+                                        </div>
+                                        <div>
+                                          <label className="text-sm font-medium text-gray-600">Available</label>
+                                          <p className="font-medium capitalize text-black">{bid.Available}</p>
+                                        </div>
+                                      </div>
+                                      <div className="pt-4 border-t">
+                                        <h4 className="font-medium text-black mb-2">Service Details</h4>
+                                        <p className="text-gray-600 text-sm">
+                                          Professional service. Contact via email {bid.bidder?.email} for more info.
+                                        </p>
+                                      </div>
+                                      <div className="flex space-x-3 pt-4">
+                                        <Button
+                                          disabled={bid.status == 'accepted' || job?.isApproved}
+                                          onClick={() => handleApprove(job, bid)}
+                                          className="flex-1"
+                                        >
+                                          {bid.status == 'accepted' ? 'Accepted' : 'Accept Bid'}
+                                        </Button>
+                                        <Button variant="outline" className="flex-1">
+                                          Message Bidder
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -292,82 +286,81 @@ const JobLeads = () => {
                   ) : (
                     // Card View (Default)
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {getQuotesForJob(job.id).slice(0, 3).map((quote) => (
-                        <div key={quote.id} className="bg-gray-50 rounded-lg p-4">
+                      {job.bids?.slice(0, 3).map(bid => (
+                        <div key={bid.id} className="bg-gray-50 rounded-lg p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium text-black">{quote.tradeName}</h4>
+                            <h4 className="font-medium text-black">{bid.bidder?.first_name || bid.bidder?.email}</h4>
                             <div className="flex items-center space-x-1">
                               <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                              <span className="text-sm text-gray-600">{quote.rating}</span>
+                              {/* {bid.bidder?.rating ?? '—'} */}
+                              <span className="text-sm text-gray-600">4</span>
                             </div>
                           </div>
                           <div className="space-y-1 text-sm text-gray-600">
                             <div className="flex justify-between">
                               <span>Price:</span>
-                              <span className="font-medium text-black">{quote.price}</span>
+                              <span className="font-medium text-black">{`£${bid.proposedValue}`}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Available:</span>
-                              <span>{quote.availability}</span>
+                              <span className=" capitalize">{bid.Available}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span>Response:</span>
-                              <span>{quote.responseTime}</span>
+                              <span>Placed:</span>
+                              <span>{new Date(bid.created_at).toLocaleString()}</span>
                             </div>
                           </div>
                           <Dialog>
                             <DialogTrigger asChild>
-                              <button 
+                              <button
                                 className="w-full mt-3 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm"
-                                onClick={() => setSelectedQuote(quote)}
+                                onClick={() => setSelectedQuote(bid)}
                               >
-                                View Details
+                                {bid.status == 'accepted' ? 'Accepted' : ' View Details'}
                               </button>
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-[500px]">
                               <DialogHeader>
-                                <DialogTitle>Quote Details - {quote.tradeName}</DialogTitle>
+                                <DialogTitle>Bid Details - {bid.bidder?.first_name || bid.bidder?.email}</DialogTitle>
                               </DialogHeader>
                               <div className="space-y-4 py-4">
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <label className="text-sm font-medium text-gray-600">Trade</label>
-                                    <p className="text-lg font-semibold text-black">{quote.tradeName}</p>
+                                    <label className="text-sm font-medium text-gray-600">Bidder</label>
+                                    <p className="text-lg font-semibold text-black">
+                                      {bid.bidder?.first_name} {bid.bidder?.last_name}
+                                    </p>
+                                    <p className="text-sm text-gray-600">{bid.bidder?.email}</p>
                                   </div>
                                   <div>
                                     <label className="text-sm font-medium text-gray-600">Price</label>
-                                    <p className="text-lg font-semibold text-black">{quote.price}</p>
+                                    <p className="text-lg font-semibold text-black">{`£${bid.proposedValue}`}</p>
                                   </div>
                                   <div>
-                                    <label className="text-sm font-medium text-gray-600">Rating</label>
-                                    <div className="flex items-center space-x-1">
-                                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                                      <span className="font-medium">{quote.rating}</span>
-                                      <span className="text-gray-600">({quote.reviews} reviews)</span>
-                                    </div>
+                                    <label className="text-sm font-medium text-gray-600">Status</label>
+                                    <p className="text-sm text-gray-600 capitalize">{bid.status}</p>
                                   </div>
                                   <div>
-                                    <label className="text-sm font-medium text-gray-600">Availability</label>
-                                    <p className="font-medium text-black">{quote.availability}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Response Time</label>
-                                    <p className="font-medium text-black">{quote.responseTime}</p>
+                                    <label className="text-sm font-medium text-gray-600">Available</label>
+                                    <p className="font-medium text-black capitalize">{bid.Available}</p>
                                   </div>
                                 </div>
                                 <div className="pt-4 border-t">
                                   <h4 className="font-medium text-black mb-2">Service Details</h4>
                                   <p className="text-gray-600 text-sm">
-                                    Professional {job.title.toLowerCase()} service including all necessary materials and labor. 
-                                    Fully insured and certified. 12-month guarantee on all work completed.
+                                    Professional service. Contact via email {bid.bidder?.email} for more info.
                                   </p>
                                 </div>
                                 <div className="flex space-x-3 pt-4">
-                                  <Button className="flex-1">
-                                    Accept Quote
+                                  <Button
+                                    disabled={bid.status == 'accepted' || job?.isApproved}
+                                    onClick={() => handleApprove(job, bid)}
+                                    className="flex-1"
+                                  >
+                                    {bid.status == 'accepted' ? 'Accepted' : 'Accept Bid'}
                                   </Button>
                                   <Button variant="outline" className="flex-1">
-                                    Message Tradesperson
+                                    Message Bidder
                                   </Button>
                                 </div>
                               </div>

@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { 
+import { useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import {
   Search,
   Bell,
   User,
@@ -24,115 +24,107 @@ import {
   Download,
   Eye,
   Trash2,
-  Archive
-} from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  Archive,
+} from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const JobDetail = () => {
   const { id } = useParams();
   const [isOtherQuotesOpen, setIsOtherQuotesOpen] = useState(false);
 
   const sidebarItems = [
-    { icon: Home, label: "Dashboard", path: "/dashboard" },
-    { icon: Calendar, label: "Calendar", path: "/dashboard/calendar" },
-    { icon: FileText, label: "Documents", path: "/dashboard/documents" },
-    { icon: Briefcase, label: "Job Leads", path: "/dashboard/job-leads" },
-    { icon: Settings, label: "Settings", path: "/dashboard/settings" },
+    { icon: Home, label: 'Dashboard', path: '/dashboard' },
+    { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
+    { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
+    { icon: Briefcase, label: 'Job Leads', path: '/dashboard/job-leads' },
+    { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
   ];
 
   // Mock job data - approved state
   const job = {
     id: 1,
-    title: "Fix leaking kitchen tap",
-    location: "Clapham, SW12",
-    estimateBand: "£80-£120",
-    status: "scheduled" as const,
-    description: "Kitchen tap has been dripping constantly for a week. Need urgent repair. Located under the main kitchen sink.",
-    selectedTradeId: 1
+    title: 'Fix leaking kitchen tap',
+    location: 'Clapham, SW12',
+    estimateBand: '£80-£120',
+    status: 'scheduled' as const,
+    description: 'Kitchen tap has been dripping constantly for a week. Need urgent repair. Located under the main kitchen sink.',
+    selectedTradeId: 1,
   };
 
   // Selected trade (approved quote)
   const selectedTrade = {
     tradeId: 1,
-    name: "Swift Plumbing",
+    name: 'Swift Plumbing',
     rating: 4.8,
     reviewsCount: 156,
     distanceKm: 0.8,
     verified: true,
     price: 95,
-    bookingDate: "Tomorrow",
-    bookingTime: "2:00 PM - 4:00 PM",
-    address: "123 High Street, Clapham, SW12 8QR",
-    phone: "+44 20 7123 4567",
-    email: "info@swiftplumbing.co.uk"
+    bookingDate: 'Tomorrow',
+    bookingTime: '2:00 PM - 4:00 PM',
+    address: '123 High Street, Clapham, SW12 8QR',
+    phone: '+44 20 7123 4567',
+    email: 'info@swiftplumbing.co.uk',
   };
 
   // Other quotes (not selected)
   const otherQuotes = [
     {
       tradeId: 2,
-      name: "London Fix Pro",
+      name: 'London Fix Pro',
       rating: 4.6,
       reviewsCount: 89,
       priceMin: 60,
-      priceMax: 90
+      priceMax: 90,
     },
     {
       tradeId: 3,
-      name: "Expert Plumbers Ltd",
+      name: 'Expert Plumbers Ltd',
       rating: 4.9,
       reviewsCount: 203,
       priceMin: 100,
-      priceMax: 140
-    }
+      priceMax: 140,
+    },
   ];
 
   // History timeline data
   const history = [
-    { time: "2 hours ago", icon: CheckCircle, text: "quote approved", link: null },
-    { time: "3 hours ago", icon: Calendar, text: "booking set", link: null },
-    { time: "1 day ago", icon: Clock, text: "work completed", link: null },
-    { time: "1 day ago", icon: FileText, text: "invoice uploaded #1023 (£120)", link: null },
-    { time: "2 days ago", icon: Star, text: "review posted ★★★★★", link: null }
+    { time: '2 hours ago', icon: CheckCircle, text: 'quote approved', link: null },
+    { time: '3 hours ago', icon: Calendar, text: 'booking set', link: null },
+    { time: '1 day ago', icon: Clock, text: 'work completed', link: null },
+    { time: '1 day ago', icon: FileText, text: 'invoice uploaded #1023 (£120)', link: null },
+    { time: '2 days ago', icon: Star, text: 'review posted ★★★★★', link: null },
   ];
 
   // Files data
   const files = [
-    { id: 1, name: "before.jpg", type: "image", size: "2.3 MB" },
-    { id: 2, name: "after.jpg", type: "image", size: "1.8 MB" },
-    { id: 3, name: "invoice.pdf", type: "pdf", size: "240 KB" },
-    { id: 4, name: "receipt.jpg", type: "image", size: "1.2 MB" }
+    { id: 1, name: 'before.jpg', type: 'image', size: '2.3 MB' },
+    { id: 2, name: 'after.jpg', type: 'image', size: '1.8 MB' },
+    { id: 3, name: 'invoice.pdf', type: 'pdf', size: '240 KB' },
+    { id: 4, name: 'receipt.jpg', type: 'image', size: '1.2 MB' },
   ];
 
   const isActive = (path: string) => false; // Since this is a specific job page
 
   return (
-    <div className="min-h-screen bg-gray-50 font-inter">
+    <div className="min-h-screen bg-gray-50 font-manrope">
       {/* Left Navigation */}
       <nav className="fixed left-0 top-0 h-full w-[72px] bg-white border-r border-gray-200 z-40">
         <div className="flex flex-col h-full">
           <div className="flex-1 pt-6">
             {sidebarItems.map((item, index) => {
-              const isActive = item.path === "/dashboard/job-leads"; // Highlight job leads as active
+              const isActive = item.path === '/dashboard/job-leads'; // Highlight job leads as active
               return (
                 <Tooltip key={index}>
                   <TooltipTrigger asChild>
                     <Link to={item.path} className="block relative">
-                      {isActive && (
-                        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-primary rounded-r"></div>
-                      )}
-                      <div className={`flex items-center justify-center h-12 mx-2 rounded-lg transition-colors ${
-                        isActive ? 'bg-primary/10' : 'hover:bg-gray-50'
-                      }`}>
+                      {isActive && <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-primary rounded-r"></div>}
+                      <div
+                        className={`flex items-center justify-center h-12 mx-2 rounded-lg transition-colors ${
+                          isActive ? 'bg-primary/10' : 'hover:bg-gray-50'
+                        }`}
+                      >
                         <item.icon className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-gray-600'}`} strokeWidth={1} />
                       </div>
                     </Link>
@@ -175,11 +167,11 @@ const JobDetail = () => {
         {/* Top Bar */}
         <header className="sticky top-0 bg-white h-16 border-b border-gray-200 px-6 flex items-center justify-between z-30">
           <div className="font-bold text-xl text-black">Home⁺</div>
-          
+
           <div className="flex-1 max-w-md mx-8">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" strokeWidth={1} />
-              <input 
+              <input
                 type="text"
                 placeholder="Search..."
                 className="w-full h-10 pl-10 pr-4 bg-gray-50 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
@@ -211,12 +203,17 @@ const JobDetail = () => {
                     {job.location} • {job.estimateBand}
                   </div>
                 </div>
-                <span className={`inline-flex items-center px-3 py-1 rounded-lg text-sm border ${
-                  job.status === 'scheduled' ? 'border-gray-300 text-gray-600' : 
-                  job.status === 'in progress' ? 'border-primary text-primary' : 
-                  job.status === 'completed' ? 'border-green-300 text-green-600' : 
-                  'border-gray-300 text-gray-600'
-                }`}>
+                <span
+                  className={`inline-flex items-center px-3 py-1 rounded-lg text-sm border ${
+                    job.status === 'scheduled'
+                      ? 'border-gray-300 text-gray-600'
+                      : job.status === 'in progress'
+                      ? 'border-primary text-primary'
+                      : job.status === 'completed'
+                      ? 'border-green-300 text-green-600'
+                      : 'border-gray-300 text-gray-600'
+                  }`}
+                >
                   {job.status}
                 </span>
               </div>
@@ -227,12 +224,8 @@ const JobDetail = () => {
           <div className="grid grid-cols-12 gap-6">
             <div className="col-span-12">
               <div className="bg-gray-50 rounded-2xl p-6">
-                <p className="text-gray-700 text-sm leading-relaxed line-clamp-2">
-                  {job.description}
-                </p>
-                <button className="text-xs text-gray-500 hover:text-gray-700 mt-2">
-                  read more
-                </button>
+                <p className="text-gray-700 text-sm leading-relaxed line-clamp-2">{job.description}</p>
+                <button className="text-xs text-gray-500 hover:text-gray-700 mt-2">read more</button>
               </div>
             </div>
           </div>
@@ -249,9 +242,7 @@ const JobDetail = () => {
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-1">
                       <h3 className="text-lg font-semibold text-black">{selectedTrade.name}</h3>
-                      {selectedTrade.verified && (
-                        <CheckCircle className="w-4 h-4 text-gray-600" strokeWidth={1} />
-                      )}
+                      {selectedTrade.verified && <CheckCircle className="w-4 h-4 text-gray-600" strokeWidth={1} />}
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <Star className="w-4 h-4 fill-current text-gray-600" strokeWidth={1} />
@@ -262,9 +253,7 @@ const JobDetail = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <button className="text-xs text-gray-500 hover:text-gray-700 underline">
-                      view contract & quote
-                    </button>
+                    <button className="text-xs text-gray-500 hover:text-gray-700 underline">view contract & quote</button>
                   </div>
                 </div>
 
@@ -272,7 +261,9 @@ const JobDetail = () => {
                 <div className="mb-6 space-y-4">
                   <div>
                     <div className="text-sm font-medium text-gray-700 mb-1">Booking</div>
-                    <div className="text-black">{selectedTrade.bookingDate} • {selectedTrade.bookingTime}</div>
+                    <div className="text-black">
+                      {selectedTrade.bookingDate} • {selectedTrade.bookingTime}
+                    </div>
                   </div>
                   <div>
                     <div className="text-sm font-medium text-gray-700 mb-1">Address</div>
@@ -315,13 +306,16 @@ const JobDetail = () => {
                   <div className="bg-white border border-gray-200 rounded-2xl p-4 hover:bg-gray-50 transition-colors">
                     <div className="flex items-center justify-between">
                       <h3 className="font-medium text-black">other quotes ({otherQuotes.length})</h3>
-                      <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isOtherQuotesOpen ? 'rotate-180' : ''}`} strokeWidth={1} />
+                      <ChevronDown
+                        className={`w-4 h-4 text-gray-500 transition-transform ${isOtherQuotesOpen ? 'rotate-180' : ''}`}
+                        strokeWidth={1}
+                      />
                     </div>
                   </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-4">
                   <div className="space-y-4">
-                    {otherQuotes.map((quote) => (
+                    {otherQuotes.map(quote => (
                       <div key={quote.tradeId} className="bg-white border border-gray-200 rounded-2xl p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
@@ -335,7 +329,9 @@ const JobDetail = () => {
                                 <span>{quote.rating}</span>
                                 <span className="text-gray-500">({quote.reviewsCount})</span>
                                 <span className="text-gray-400">•</span>
-                                <span>£{quote.priceMin}–£{quote.priceMax}</span>
+                                <span>
+                                  £{quote.priceMin}–£{quote.priceMax}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -386,7 +382,7 @@ const JobDetail = () => {
               <div className="bg-white border border-gray-200 rounded-2xl p-6">
                 <h3 className="font-medium text-black mb-6">files</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {files.map((file) => (
+                  {files.map(file => (
                     <div key={file.id} className="border border-gray-200 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-sm font-medium text-black truncate">{file.name}</div>
@@ -402,14 +398,15 @@ const JobDetail = () => {
                           </button>
                         </div>
                       </div>
-                      <div className="text-xs text-gray-500">{file.type} • {file.size}</div>
+                      <div className="text-xs text-gray-500">
+                        {file.type} • {file.size}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           </div>
-
 
           {/* Footer Helpers */}
           <div className="grid grid-cols-12 gap-6">
