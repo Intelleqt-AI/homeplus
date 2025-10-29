@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, getDay } from 'date-fns';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import {
@@ -26,11 +26,14 @@ import { getEvents, uploadCover } from '@/lib/Api2';
 import { listFilesWithMetadata, uploadFileWithMetadata } from '@/lib/Api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import Event from '@/components/topbar/Event';
 
 const HomePlusDashboard = () => {
   const [showSmartMatches, setShowSmartMatches] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { user } = useAuth();
+
+  const navigate = useNavigate();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const handleButtonClick = () => {
@@ -405,8 +408,8 @@ const HomePlusDashboard = () => {
         </svg>
       ),
       title: 'Tasks Due',
-      subtitle: 'Scheduled This Week',
-      value: '3',
+      subtitle: 'Scheduled This Month',
+      value: eventData?.data?.length || '0',
     },
 
     {
@@ -602,32 +605,48 @@ const HomePlusDashboard = () => {
                   <h3 className="text-[#101828] mb-1 text-[20px]">Your Active Home Tasks</h3>
                   <p className="text-[#6A7282] text-sm">We're tracking upcoming maintenance and new quote matches.</p>
                 </div>
-                <Button>
+                {/* <Button>
                   <Plus />
                   <span>Add Task</span>
-                </Button>
+                </Button> */}
+                <Event />
               </div>
 
               {/* Tasks */}
               <div className="space-y-[15px] mt-[15px]">
-                {tasks?.map((item, id) => (
+                {eventData?.data?.map((item, id) => (
                   <div className="border-[#E5E7EB80] p-[22px] border rounded-xl bg-white" key={id}>
                     <div className="flex items-start justify-between ">
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-[10px] flex items-center bg-[#F9FAFB] justify-center">{item?.icon}</div>
+                        <div className="h-9 w-9 rounded-[10px] flex items-center bg-[#F9FAFB] justify-center">{tasks[0]?.icon}</div>
                         <div>
                           <h3 className="text-[#101828] text-base font-medium">{item?.title}</h3>
-                          <p className="text-[#6A7282] text-[12px]">{item?.category}</p>
+                          <p className="text-[#6A7282] capitalize text-[12px]">{item?.eventType}</p>
                         </div>
                       </div>
                       <div className="border rounded-[26px] border-[#BBF7D0] text-[#10B981] bg-[#F0FDF4] py-1 px-2 text-[12px]">
-                        {item?.subtitle}
+                        {tasks[0]?.subtitle}
                       </div>
                     </div>
 
                     <div className="flex items-center mt-5 justify-between">
-                      <p className="text-[#6A7282] text-[13px]">{item?.due}</p>
-                      <Button className="text-sm">View Quotes</Button>
+                      <p className="text-[#6A7282] text-[13px]">
+                        {(() => {
+                          const dueDate = new Date(item?.date);
+                          const today = new Date();
+                          const diffTime = dueDate - today;
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                          if (diffDays > 1) return `Due in ${diffDays} days`;
+                          if (diffDays === 1) return 'Due tomorrow';
+                          if (diffDays === 0) return 'Due today';
+                          if (diffDays < 0) return `Overdue by ${Math.abs(diffDays)} days`;
+                        })()}
+                      </p>
+
+                      <Button onClick={() => navigate('/dashboard/calendar')} className="text-sm">
+                        View Quotes
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -718,38 +737,34 @@ const HomePlusDashboard = () => {
               {/* Urgent Task */}
 
               <div className="mt-[30px] space-y-[32px]">
-                <div className="flex gap-3">
-                  <div className="h-[28px] flex items-center justify-center w-[28px] bg-[#FEF2F2] rounded-[10px]">
-                    <Clock size={16} color="#E7000B" />
-                  </div>
-                  <div>
-                    <h4 className="text-[#101828] text-sm mb-1">Roof Inspection</h4>
-                    <p className="text-[#E7000B] text-xs">2 Days Left</p>
-                  </div>
-                </div>
+                {eventData?.data?.map((item, id) => {
+                  const dueDate = new Date(item?.date);
+                  const today = new Date();
+                  const diffTime = dueDate - today;
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                <div className="flex gap-3">
-                  <div className="h-[28px] flex items-center justify-center w-[28px] bg-[#FFFBEB] rounded-[10px]">
-                    <Clock size={16} color="#E17100" />
-                  </div>
-                  <div>
-                    <h4 className="text-[#101828] text-sm mb-1">Smoke Alarm Check</h4>
-                    <p className="text-[#E17100] text-xs">Tomorrow</p>
-                  </div>
-                </div>
+                  // let isUrgent = false;
+                  // if (diffDays > 0 && diffDays <= 2) isUrgent = true;
 
-                <div className="flex gap-3">
-                  <div className="h-[28px] flex items-center justify-center w-[28px] bg-[#F0FDF4] rounded-[10px]">
-                    <Clock size={16} color="#00A63E" />
-                  </div>
-                  <div>
-                    <h4 className="text-[#101828] text-sm mb-1">Garden Clean-up</h4>
-                    <p className="text-[#00A63E] text-xs">Next Week</p>
-                  </div>
-                </div>
+                  // if (isUrgent) return null;
+
+                  return (
+                    <div className="flex gap-3" key={id}>
+                      <div className="h-[28px] flex items-center justify-center w-[28px] bg-[#FEF2F2] rounded-[10px]">
+                        <Clock size={16} color="#E7000B" />
+                      </div>
+                      <div>
+                        <h4 className="text-[#101828] text-sm mb-1">{item?.title}</h4>
+                        <p className="text-[#E7000B] text-xs">
+                          {diffDays === 0 ? 'Due Today' : diffDays === 1 ? '1 Day Left' : `${diffDays} Days Left`}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
-              <Link className="text-[#155DFC] text-xs mt-6 block" to={'/'}>
+              <Link className="text-[#155DFC] text-xs mt-6 block" to={'/dashboard/calendar'}>
                 View Full Calendar →
               </Link>
             </div>

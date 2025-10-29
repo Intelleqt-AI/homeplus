@@ -105,7 +105,7 @@ const Quote = ({ open, setOpen }) => {
             <Button onClick={handleSubmit} className="flex-1" disabled={loading}>
               {loading ? 'Posting…' : 'Post Job'}
             </Button>
-            <Button variant="outline" className="flex-1" onClick={() => setOpen(false)}>
+            <Button variant="outline" className="flex-1 bg-black text-white hover:bg-black hover:text-white" onClick={() => setOpen(false)}>
               Cancel
             </Button>
           </div>

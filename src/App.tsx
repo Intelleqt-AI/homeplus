@@ -1,29 +1,29 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/hooks/useAuth";
-import ProtectedRoute from "@/components/ProtectedRoute";
-import Index from "./pages/Index";
-import Home2 from "./pages/Home2";
-import Features from "./pages/Features";
-import FeaturesPage from "./pages/FeaturesPage";
+import { Toaster } from '@/components/ui/toaster';
+import { Toaster as Sonner } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from '@/hooks/useAuth';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import Index from './pages/Index';
+import Home2 from './pages/Home2';
+import Features from './pages/Features';
+import FeaturesPage from './pages/FeaturesPage';
 
-import NotFound from "./pages/NotFound";
-import SignUp from "./pages/SignUp";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import HomePlusDashboard from "./pages/HomePlusDashboard";
-import Insights from "./pages/Insights";
+import NotFound from './pages/NotFound';
+import SignUp from './pages/SignUp';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import HomePlusDashboard from './pages/HomePlusDashboard';
+import Insights from './pages/Insights';
 
-import Documents from "./pages/homeplus/Documents";
-import JobLeads from "./pages/homeplus/JobLeads";
-import JobDetail from "./pages/homeplus/JobDetail";
-import Calendar from "./pages/homeplus/Calendar";
-import Settings from "./pages/homeplus/Settings";
-import Blog from "./pages/Blog";
-import BlogPost from "./pages/BlogPost";
+import Documents from './pages/homeplus/Documents';
+import JobLeads from './pages/homeplus/JobLeads';
+import JobDetail from './pages/homeplus/JobDetail';
+import Calendar from './pages/homeplus/Calendar';
+import Settings from './pages/homeplus/Settings';
+import Blog from './pages/Blog';
+import BlogPost from './pages/BlogPost';
 
 const queryClient = new QueryClient();
 
@@ -35,7 +35,14 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <HomePlusDashboard />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/home2" element={<Home2 />} />
             <Route path="/how-it-works" element={<Home2 />} />
             <Route path="/features" element={<FeaturesPage />} />
