@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Calendar, FileText, ClipboardList, Settings, Quote } from 'lucide-react';
+import { Home, Calendar, FileText, ClipboardList, Settings, Quote, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const Sidebar = () => {
@@ -54,17 +54,15 @@ const Sidebar = () => {
         </div>
 
         {/* User Info */}
-        <div className="flex gap-3 items-center">
-          <img src="/images/sidebar-img.png" alt="" className="h-9 w-9 rounded-full" />
-          <div className="flex flex-col">
-            <p className="text-sm font-regular text-[#4B4B4B]">{user?.user_metadata?.full_name}</p>
-            <p className="text-xs text-[#4B4B4B]">{user?.email}</p>
+        <div className="flex gap-3 items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/images/sidebar-img.png" alt="" className="h-9 w-9 rounded-full" />
+            <div className="flex flex-col">
+              <p className="text-sm font-regular text-[#4B4B4B]">{user?.user_metadata?.full_name}</p>
+              <p className="text-xs text-[#4B4B4B]">{user?.email}</p>
+            </div>
           </div>
-          {/* <button
-          onClick={signOut}
-          className="mt-4 w-full text-left text-sm text-red-500 hover:text-red-600 transition-colors">
-          Log Out
-        </button> */}
+          <LogOut onClick={signOut} className="w-5 h-5 cursor-pointer group-hover:text-white" size={10} />
         </div>
       </nav>
     </>
