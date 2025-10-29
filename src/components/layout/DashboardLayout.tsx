@@ -1,5 +1,5 @@
-import Sidebar from "./Sidebar";
-import TopHeader from "./TopHeader";
+import Sidebar from './Sidebar';
+import TopHeader from './TopHeader';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -7,7 +7,7 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Sidebar />
 
       {/* Main Content */}
