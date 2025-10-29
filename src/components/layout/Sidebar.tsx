@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 const Sidebar = () => {
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
 
   const sidebarItems = [
     { icon: Home, label: 'Dashboard', path: '/dashboard' },
@@ -14,6 +14,8 @@ const Sidebar = () => {
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
   ];
+
+  console.log(user);
 
   return (
     <>
@@ -55,8 +57,8 @@ const Sidebar = () => {
         <div className="flex gap-3 items-center">
           <img src="/images/sidebar-img.png" alt="" className="h-9 w-9 rounded-full" />
           <div className="flex flex-col">
-            <p className="text-sm font-regular text-[#4B4B4B]">Michael Robinson</p>
-            <p className="text-xs text-[#4B4B4B]">michael.robin@gmail.com</p>
+            <p className="text-sm font-regular text-[#4B4B4B]">{user?.user_metadata?.full_name}</p>
+            <p className="text-xs text-[#4B4B4B]">{user?.email}</p>
           </div>
           {/* <button
           onClick={signOut}

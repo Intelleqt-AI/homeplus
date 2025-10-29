@@ -105,17 +105,14 @@ const TopHeader = () => {
         </div>
       </div>
       <div className="">
-        <p className="text-2xl mb-1">Good Afternoon, Joshua 👋</p>
+        <p className="text-2xl mb-1">Good Afternoon 👋</p>
         <p className="text-sm">Here's what's happening in your home today.</p>
       </div>
 
       {/* Right Section */}
       <div className="flex items-center space-x-4">
         <div className="relative">
-          <Bell
-            className="w-5 h-5 text-[#4A5565] hover:text-[#2B7FFF] transition-colors cursor-pointer"
-            strokeWidth={1}
-          />
+          <Bell className="w-5 h-5 text-[#4A5565] hover:text-[#2B7FFF] transition-colors cursor-pointer" strokeWidth={1} />
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#2B7FFF] rounded-full"></div>
         </div>
         <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
