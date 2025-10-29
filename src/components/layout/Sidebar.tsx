@@ -1,6 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Calendar, FileText, Briefcase, Settings, HelpCircle, LogOut, Activity } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Home, Calendar, FileText, ClipboardList, Settings, Quote } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const Sidebar = () => {
@@ -9,70 +8,64 @@ const Sidebar = () => {
 
   const sidebarItems = [
     { icon: Home, label: 'Dashboard', path: '/dashboard' },
-    { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
+    { icon: ClipboardList, label: 'Tasks', path: '/dashboard/calendar' },
+    { icon: Quote, label: 'Quotes', path: '/dashboard/job-leads' },
+    // { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
-    { icon: Briefcase, label: 'Job Leads', path: '/dashboard/job-leads' },
-    { icon: Activity, label: 'Insights', path: '/dashboard/insights' },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
   ];
 
   return (
-    <nav className="fixed left-0 top-0 h-full w-[72px] bg-white border-r border-gray-200 z-40">
-      <div className="flex flex-col h-full">
-        {/* Main Navigation */}
-        <div className="flex-1 pt-6">
-          {sidebarItems.map(item => {
-            const isActive = location.pathname === item.path;
-            return (
-              <Tooltip key={item.path}>
-                <TooltipTrigger asChild>
-                  <Link to={item.path} className="block relative">
-                    {isActive && <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-primary rounded-r"></div>}
-                    <div
-                      className={`flex items-center justify-center h-12 mx-2 rounded-lg transition-colors ${
-                        isActive ? 'bg-primary' : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <item.icon className={`w-5 h-5 ${isActive ? 'text-black' : 'text-black'}`} strokeWidth={1} />
-                    </div>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>{item.label}</p>
-                </TooltipContent>
-              </Tooltip>
-            );
-          })}
+    <>
+      <nav className="fixed left-0 top-0 h-full w-[280px] bg-[#F8F8F3] border-r border-gray-200 z-40 flex-col p-4 flex">
+        {/* Header */}
+        <div className="p-3 border border-[#EDEDED] rounded-[16px] flex items-center gap-3">
+          <div className="h-9 w-9 bg-[#121212] rounded-[10px]"></div>
+          <div className="">
+            <h1 className="text-sm font-regular text-[#4B4B4B] aeonik">Home +</h1>
+            <p className="text-xs text-[#4B4B4B] aeonik">Free Plan</p>
+          </div>
         </div>
 
-        {/* Bottom Items */}
-        <div className="pb-6">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center justify-center h-12 mx-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-                <HelpCircle className="w-5 h-5 text-black" strokeWidth={1} />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Help</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                onClick={() => signOut()}
-                className="flex items-center justify-center h-12 mx-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-              >
-                <LogOut className="w-5 h-5 text-black" strokeWidth={1} />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Log Out</p>
-            </TooltipContent>
-          </Tooltip>
+        {/* Main Menu */}
+        <div className="flex-1 mt-4 overflow-y-auto">
+          <p className="text-xs font-regular text-[#8B8B8B] mb-2">MAIN MENU</p>
+
+          <ul className="space-y-1">
+            {sidebarItems.map(item => {
+              const isActive = location.pathname === item.path;
+              return (
+                <li key={item.path}>
+                  <Link
+                    to={item.path}
+                    className={`flex items-center gap-3 px-[14px] py-3 rounded-lg text-sm font-medium transition-colors group ${
+                      isActive ? 'bg-black text-white' : 'text-[#4A5565] hover:bg-black hover:text-white'
+                    }`}
+                  >
+                    <item.icon className={`w-5 h-5 group-hover:text-white ${isActive ? 'text-white' : 'text-[#4A5565]'}`} />
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
-      </div>
-    </nav>
+
+        {/* User Info */}
+        <div className="flex gap-3 items-center">
+          <img src="/images/sidebar-img.png" alt="" className="h-9 w-9 rounded-full" />
+          <div className="flex flex-col">
+            <p className="text-sm font-regular text-[#4B4B4B]">Michael Robinson</p>
+            <p className="text-xs text-[#4B4B4B]">michael.robin@gmail.com</p>
+          </div>
+          {/* <button
+          onClick={signOut}
+          className="mt-4 w-full text-left text-sm text-red-500 hover:text-red-600 transition-colors">
+          Log Out
+        </button> */}
+        </div>
+      </nav>
+    </>
   );
 };
 

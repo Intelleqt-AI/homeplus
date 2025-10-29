@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Calendar } from 'lucide-react';
+import { Calendar, Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addNewEvent } from '@/lib/Api2';
@@ -79,10 +79,10 @@ const Event = () => {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-          <Calendar className="w-4 h-4 text-gray-600" strokeWidth={1} />
-          <span className="text-sm font-medium text-gray-700">Add Task</span>
-        </button>
+        <Button>
+          <Plus />
+          <span>Add Task</span>
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
@@ -136,7 +136,7 @@ const Event = () => {
                 Create Task
               </Button>
             </DialogTrigger>
-            <Button variant="outline" className="flex-1">
+            <Button variant="outline" className="flex-1 bg-black text-white">
               Cancel
             </Button>
           </div>
