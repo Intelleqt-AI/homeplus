@@ -33,11 +33,11 @@ const TopHeader = () => {
   const [openForm, setOpenForm] = useState(false);
 
   return (
-    <header className="sticky top-0 bg-white h-16 border-b border-gray-200 px-6 flex items-center justify-between z-30">
-      <div className="font-bold text-xl text-black">Home⁺</div>
+    <header className="sticky top-0 bg-white border-b border-[#e5e7eb80] px-6 py-8 flex items-center justify-between z-30">
+      {/* <div className="font-bold text-xl text-black">Home⁺</div> */}
 
-      {/* Quick Actions */}
-      <div className="flex-1 max-w-4xl mx-8">
+      {/* Quick Actions hidden */}
+      <div className="flex-1 max-w-4xl mx-8 hidden">
         <div className="flex items-center justify-center space-x-4">
           {/* Scan Doc Modal */}
           <button
@@ -241,15 +241,19 @@ const TopHeader = () => {
           <Property />
         </div>
       </div>
+      <div className="">
+        <p className="text-2xl mb-1">Good Afternoon, Joshua 👋</p>
+        <p className="text-sm">Here's what's happening in your home today.</p>
+      </div>
 
       {/* Right Section */}
       <div className="flex items-center space-x-4">
         <div className="relative">
           <Bell
-            className="w-5 h-5 text-gray-400 hover:text-primary transition-colors cursor-pointer"
+            className="w-5 h-5 text-[#4A5565] hover:text-[#2B7FFF] transition-colors cursor-pointer"
             strokeWidth={1}
           />
-          <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full"></div>
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#2B7FFF] rounded-full"></div>
         </div>
         <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
           <User className="w-4 h-4 text-white" strokeWidth={1} />
