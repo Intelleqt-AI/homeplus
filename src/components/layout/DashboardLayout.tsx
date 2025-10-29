@@ -1,5 +1,5 @@
-import Sidebar from './Sidebar';
-import TopHeader from './TopHeader';
+import Sidebar from "./Sidebar";
+import TopHeader from "./TopHeader";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -11,7 +11,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       <Sidebar />
 
       {/* Main Content */}
-      <div className="ml-[72px]">
+      <div className="ml-[280px]">
         <TopHeader />
         <main className="p-6">{children}</main>
       </div>
