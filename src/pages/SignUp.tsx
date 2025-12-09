@@ -1,27 +1,29 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Home, ArrowRight, Check, Shield, Users, Star } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/components/ui/use-toast";
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Home, ArrowRight, Check, Shield, Users, Star } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/components/ui/use-toast';
 
 const SignUp = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    firstName: "",
-    lastName: "",
-    propertyType: "",
-    agreeToTerms: false
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+    propertyType: '',
+    agreeToTerms: false,
+    postCode: '',
+    location: '',
   });
-  
+
   const { signUp, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -39,45 +41,43 @@ const SignUp = () => {
   const handleSignUp = async () => {
     if (!formData.agreeToTerms) {
       toast({
-        title: "Terms required",
-        description: "Please agree to the terms and conditions to continue.",
-        variant: "destructive",
+        title: 'Terms required',
+        description: 'Please agree to the terms and conditions to continue.',
+        variant: 'destructive',
       });
       return;
     }
 
     setLoading(true);
-    
-    const { error } = await signUp(
-      formData.email, 
-      formData.password,
-      {
-        full_name: `${formData.firstName} ${formData.lastName}`,
-        property_type: formData.propertyType
-      }
-    );
+
+    const { error } = await signUp(formData.email, formData.password, {
+      full_name: `${formData.firstName} ${formData.lastName}`,
+      property_type: formData.propertyType,
+      postcode: +formData?.postCode,
+      location: formData?.location,
+    });
 
     if (error) {
       toast({
-        title: "Sign up failed",
+        title: 'Sign up failed',
         description: error.message,
-        variant: "destructive",
+        variant: 'destructive',
       });
       setLoading(false);
     } else {
       toast({
-        title: "Account created!",
-        description: "Please check your email to confirm your account.",
+        title: 'Account created!',
+        description: 'Please check your email to confirm your account.',
       });
       navigate('/dashboard');
     }
   };
 
   const benefits = [
-    { icon: Shield, text: "Free forever - no hidden costs" },
-    { icon: Users, text: "Connect with top-rated local trades" },
-    { icon: Star, text: "Preventive maintenance reminders" },
-    { icon: Check, text: "Complete home history tracking" }
+    { icon: Shield, text: 'Free forever - no hidden costs' },
+    { icon: Users, text: 'Connect with top-rated local trades' },
+    { icon: Star, text: 'Preventive maintenance reminders' },
+    { icon: Check, text: 'Complete home history tracking' },
   ];
 
   return (
@@ -92,7 +92,7 @@ const SignUp = () => {
             <span className="text-xl font-bold">Home+</span>
           </Link>
           <div className="text-sm text-foreground">
-            Already have an account?{" "}
+            Already have an account?{' '}
             <Link to="/login" className="text-primary hover:underline font-medium">
               Sign in
             </Link>
@@ -109,10 +109,8 @@ const SignUp = () => {
                 Step {step} of 3
               </Badge>
               <h1 className="text-4xl font-bold tracking-tight">
-                Join thousands of homeowners managing their homes{" "}
-                <span className="bg-gradient-hero bg-clip-text text-transparent">
-                  smarter
-                </span>
+                Join thousands of homeowners managing their homes{' '}
+                <span className="bg-gradient-hero bg-clip-text text-transparent">smarter</span>
               </h1>
               <p className="text-xl text-foreground leading-relaxed">
                 Get started with your digital home MOT logbook and never miss important maintenance again.
@@ -156,14 +154,14 @@ const SignUp = () => {
             <Card className="w-full max-w-md shadow-strong">
               <CardHeader className="text-center space-y-2">
                 <CardTitle className="text-2xl">
-                  {step === 1 && "Create your account"}
-                  {step === 2 && "Tell us about yourself"}
-                  {step === 3 && "Almost there!"}
+                  {step === 1 && 'Create your account'}
+                  {step === 2 && 'Tell us about yourself'}
+                  {step === 3 && 'Almost there!'}
                 </CardTitle>
                 <CardDescription>
-                  {step === 1 && "Start your home management journey"}
-                  {step === 2 && "Help us personalize your experience"}
-                  {step === 3 && "Confirm your details and get started"}
+                  {step === 1 && 'Start your home management journey'}
+                  {step === 2 && 'Help us personalize your experience'}
+                  {step === 3 && 'Confirm your details and get started'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -177,7 +175,7 @@ const SignUp = () => {
                           type="email"
                           placeholder="you@example.com"
                           value={formData.email}
-                          onChange={(e) => setFormData({...formData, email: e.target.value})}
+                          onChange={e => setFormData({ ...formData, email: e.target.value })}
                         />
                       </div>
                       <div className="space-y-2">
@@ -187,11 +185,33 @@ const SignUp = () => {
                           type="password"
                           placeholder="Create a strong password"
                           value={formData.password}
-                          onChange={(e) => setFormData({...formData, password: e.target.value})}
+                          onChange={e => setFormData({ ...formData, password: e.target.value })}
                         />
-                        <p className="text-xs text-foreground">
-                          Must be at least 8 characters with a mix of letters and numbers
-                        </p>
+                        <p className="text-xs text-foreground">Must be at least 8 characters with a mix of letters and numbers</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="location">Location</Label>
+                        <Input
+                          id="location"
+                          type="location"
+                          placeholder="Enter your location"
+                          value={formData.location}
+                          onChange={e => setFormData({ ...formData, location: e.target.value })}
+                        />
+                        <p className="text-xs text-foreground">eg. 10 Downing Street, LONDON, SW1A 2AA, UK</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="postCode">Post Code</Label>
+                        <Input
+                          id="postCode"
+                          type="postCode"
+                          placeholder="Enter your post code"
+                          value={formData.postCode}
+                          onChange={e => setFormData({ ...formData, postCode: e.target.value })}
+                        />
+                        {/* <p className="text-xs text-foreground">Must be at least 8 characters with a mix of letters and numbers</p> */}
                       </div>
                     </div>
                   </>
@@ -206,7 +226,7 @@ const SignUp = () => {
                           id="firstName"
                           placeholder="John"
                           value={formData.firstName}
-                          onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                          onChange={e => setFormData({ ...formData, firstName: e.target.value })}
                         />
                       </div>
                       <div className="space-y-2">
@@ -215,19 +235,19 @@ const SignUp = () => {
                           id="lastName"
                           placeholder="Smith"
                           value={formData.lastName}
-                          onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                          onChange={e => setFormData({ ...formData, lastName: e.target.value })}
                         />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label>Property type</Label>
                       <div className="grid grid-cols-2 gap-2">
-                        {["House", "Flat", "Bungalow", "Other"].map((type) => (
+                        {['House', 'Flat', 'Bungalow', 'Other'].map(type => (
                           <Button
                             key={type}
-                            variant={formData.propertyType === type ? "default" : "outline"}
-                            className="h-12"
-                            onClick={() => setFormData({...formData, propertyType: type})}
+                            variant={formData.propertyType === type ? 'default' : 'outline'}
+                            className="h-12 text-black"
+                            onClick={() => setFormData({ ...formData, propertyType: type })}
                           >
                             {type}
                           </Button>
@@ -242,26 +262,39 @@ const SignUp = () => {
                     <div className="bg-muted/50 rounded-lg p-4 space-y-2">
                       <h3 className="font-medium">Your details:</h3>
                       <div className="text-sm space-y-1">
-                        <p><span className="font-medium">Name:</span> {formData.firstName} {formData.lastName}</p>
-                        <p><span className="font-medium">Email:</span> {formData.email}</p>
-                        <p><span className="font-medium">Property:</span> {formData.propertyType}</p>
+                        <p>
+                          <span className="font-medium">Name:</span> {formData.firstName} {formData.lastName}
+                        </p>
+                        <p>
+                          <span className="font-medium">Email:</span> {formData.email}
+                        </p>
+                        <p>
+                          <span className="font-medium">Property:</span> {formData.propertyType}
+                        </p>
+                        <p>
+                          <span className="font-medium">Address:</span> {formData.location}
+                        </p>
+                        <p>
+                          <span className="font-medium">Post code:</span> {formData.postCode}
+                        </p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-2">
-                      <Checkbox 
+                      <Checkbox
                         id="terms"
                         checked={formData.agreeToTerms}
-                        onCheckedChange={(checked) => 
-                          setFormData({...formData, agreeToTerms: checked as boolean})
-                        }
+                        onCheckedChange={checked => setFormData({ ...formData, agreeToTerms: checked as boolean })}
                       />
-                      <label htmlFor="terms" className="text-sm text-foreground leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                        I agree to the{" "}
+                      <label
+                        htmlFor="terms"
+                        className="text-sm text-foreground leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        I agree to the{' '}
                         <Link to="/terms" className="text-primary hover:underline">
                           Terms of Service
-                        </Link>{" "}
-                        and{" "}
+                        </Link>{' '}
+                        and{' '}
                         <Link to="/privacy" className="text-primary hover:underline">
                           Privacy Policy
                         </Link>
@@ -270,21 +303,17 @@ const SignUp = () => {
                   </div>
                 )}
 
-                <Button 
+                <Button
                   onClick={step === 3 ? handleSignUp : handleNext}
                   className="w-full h-12 text-lg"
                   disabled={(step === 3 && !formData.agreeToTerms) || loading}
                 >
-                  {loading ? "Creating account..." : step === 3 ? "Complete Registration" : "Continue"}
+                  {loading ? 'Creating account...' : step === 3 ? 'Complete Registration' : 'Continue'}
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
 
                 {step > 1 && (
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => setStep(step - 1)}
-                    className="w-full"
-                  >
+                  <Button variant="ghost" onClick={() => setStep(step - 1)} className="w-full text-black">
                     Back
                   </Button>
                 )}
