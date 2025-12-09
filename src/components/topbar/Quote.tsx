@@ -70,22 +70,29 @@ const Quote = ({ open, setOpen }) => {
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-600">Location</label>
+            <label className="text-sm font-medium text-gray-600">
+              Post Code <span className="text-red-600">*</span>
+            </label>
             <input
               value={location}
               onChange={e => setLocation(e.target.value)}
-              placeholder="Enter your location..."
+              placeholder="Enter your location postal code . eg: 3436"
+              type="number"
               className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              required
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-gray-600">Budget Range</label>
+              <label className="text-sm font-medium text-gray-600">
+                Budget Range <span className="text-red-600">*</span>
+              </label>
               <input
                 value={budget}
                 onChange={e => setBudget(e.target.value)}
                 placeholder="e.g. 200 or £100-250"
                 className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                required
               />
             </div>
             <div>
