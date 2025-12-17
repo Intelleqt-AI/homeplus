@@ -30,7 +30,7 @@ const Header = () => {
             </Link>
           </Button>
           <Button variant="cta" size="sm" className="hidden sm:inline-flex" asChild>
-            <Link to="/signup">Sign up free</Link>
+            <Link to="">Sign up free</Link>
           </Button>
           <Button 
             variant="ghost" 
