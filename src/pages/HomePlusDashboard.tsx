@@ -18,6 +18,12 @@ import {
   Flame,
   TreePine,
   Plus,
+  ClipboardList,
+  Star,
+  FileText,
+  Bell,
+  FolderOpen,
+  Activity,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -26,7 +32,6 @@ import { getEvents, uploadCover } from '@/lib/Api2';
 import { listFilesWithMetadata, uploadFileWithMetadata } from '@/lib/Api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import Event from '@/components/topbar/Event';
 
 const HomePlusDashboard = () => {
   const [showSmartMatches, setShowSmartMatches] = useState(false);
@@ -142,7 +147,49 @@ const HomePlusDashboard = () => {
       description: r.description || '',
     }));
 
-  const dashEvents: DashEvent[] = Array.isArray(rawEvents) ? mapToDashEvents(rawEvents) : [];
+  // Sample events for calendar display when no API data exists - dates from Jan 27, 2026
+  const sampleCalendarEvents: DashEvent[] = [
+    {
+      id: 'sample-1',
+      title: 'Car tax',
+      date: new Date(2026, 1, 3), // Tuesday 3rd February 2026 (1 week)
+      type: 'Vehicle',
+    },
+    {
+      id: 'sample-2',
+      title: 'Car MOT',
+      date: new Date(2026, 1, 6), // Friday 6th February 2026 (10 days)
+      type: 'Vehicle',
+    },
+    {
+      id: 'sample-3',
+      title: 'Black bin day',
+      date: new Date(2026, 1, 10), // Tuesday 10th February 2026 (2 weeks)
+      type: 'Household',
+    },
+    {
+      id: 'sample-4',
+      title: 'Boiler servicing',
+      date: new Date(2026, 1, 19), // Thursday 19th February 2026 (3 weeks)
+      type: 'Maintenance',
+    },
+    {
+      id: 'sample-5',
+      title: "Sarah's Birthday",
+      date: new Date(2026, 1, 27), // Friday 27th February 2026 (1 month)
+      type: 'Personal',
+    },
+    {
+      id: 'sample-6',
+      title: 'Garden maintenance',
+      date: new Date(2026, 2, 10), // Tuesday 10th March 2026 (6 weeks)
+      type: 'Maintenance',
+    },
+  ];
+
+  const dashEvents: DashEvent[] = Array.isArray(rawEvents) && rawEvents.length > 0
+    ? mapToDashEvents(rawEvents)
+    : sampleCalendarEvents;
 
   const getDotColor = status => {
     switch (status) {
@@ -437,6 +484,37 @@ const HomePlusDashboard = () => {
     },
   ];
 
+  // Sample tasks for when no events exist - dates in next 2-3 weeks from Jan 27, 2026
+  const sampleTasks = [
+    {
+      id: 'sample-1',
+      title: 'Car tax',
+      date: new Date(2026, 1, 3), // Tuesday 3rd February 2026 (1 week)
+      eventType: 'Vehicle',
+    },
+    {
+      id: 'sample-2',
+      title: 'Car MOT',
+      date: new Date(2026, 1, 6), // Friday 6th February 2026 (10 days)
+      eventType: 'Vehicle',
+    },
+    {
+      id: 'sample-3',
+      title: 'Black bin day',
+      date: new Date(2026, 1, 10), // Tuesday 10th February 2026 (2 weeks)
+      eventType: 'Household',
+    },
+    {
+      id: 'sample-4',
+      title: 'Boiler servicing',
+      date: new Date(2026, 1, 17), // Tuesday 17th February 2026 (3 weeks)
+      eventType: 'Maintenance',
+    },
+  ];
+
+  // Use API data if available, otherwise show sample tasks
+  const displayTasks = eventData?.data?.length > 0 ? eventData.data : sampleTasks;
+
   const tasks = [
     {
       title: 'Boiler Service',
@@ -513,305 +591,327 @@ const HomePlusDashboard = () => {
       <div className=" ">
         {/* Dashboard Content */}
         <main className=" space-y-6">
-          {/* Property Header Section */}
-          {/* <div className="grid grid-cols-3 gap-6">
-            <div className="col-span-1">
-              <div className="relative h-64 rounded-lg overflow-hidden group">
-                <img
-                  src={(!coverLoading && cover[0]?.publicUrl) || '/lovable-uploads/326dc7e2-73e1-4176-b502-1deaed02919b.png'}
-                  alt="Property at 23 Oakfield Road"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <input
-                    ref={fileInputRef}
-                    id="file-upload2"
-                    type="file"
-                    className="hidden"
-                    onChange={handleFileChange}
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  />
-                  <label htmlFor="file-upload2">
-                    <button
-                      onClick={handleButtonClick}
-                      type="button"
-                      className="bg-white/90 backdrop-blur-sm text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white transition-colors flex items-center space-x-2"
-                    >
-                      <Camera className="w-4 h-4" strokeWidth={1} />
-                      <span>Upload New Photo</span>
+          {/* Combined Welcome + Stats Block */}
+          <div className="bg-white rounded-[20px] p-6 border border-[#E8E8E3]">
+            {/* Top row: Property Info and Quick Actions */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                  <Home className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+                </div>
+                <div>
+                  <p className="text-[#6B6B6B] text-sm mb-0.5">Welcome back</p>
+                  <h1 className="text-[#1A1A1A] text-2xl font-semibold">
+                    {user?.user_metadata?.full_name ? user.user_metadata.full_name.split(' ')[0] : 'there'}
+                  </h1>
+                </div>
+              </div>
+
+              {/* Quick Actions - Cleaner button style */}
+              <div className="flex items-center gap-3">
+                <Link to="/dashboard/calendar">
+                  <Button variant="outline" className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white transition-all text-sm font-medium h-10 px-4 rounded-full">
+                    Get started
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {/* Stats Row - Inside the welcome block */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#6B6B6B] text-sm">Saved Documents</span>
+                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                    <FolderOpen className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                  </div>
+                </div>
+                <p className="text-[#1A1A1A] text-2xl font-semibold">12</p>
+                <p className="text-[#8B8B8B] text-xs mt-1">Stored safely</p>
+              </div>
+
+              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#6B6B6B] text-sm">Next two weeks</span>
+                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                    <CheckCircle className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                  </div>
+                </div>
+                <p className="text-[#1A1A1A] text-2xl font-semibold">5</p>
+                <p className="text-[#8B8B8B] text-xs mt-1">Tasks and reminders</p>
+              </div>
+
+              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#6B6B6B] text-sm">Next 6 weeks</span>
+                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                  </div>
+                </div>
+                <p className="text-[#1A1A1A] text-2xl font-semibold">{eventData?.data?.length || 0}</p>
+                <p className="text-[#8B8B8B] text-xs mt-1">Tasks and reminders</p>
+              </div>
+
+              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[#6B6B6B] text-sm">Quick Actions</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Link to="/dashboard/documents">
+                    <button className="flex items-center gap-3 px-4 py-3 text-[#4A4A4A] text-sm font-medium rounded-full hover:bg-[#E8E8E3] hover:text-[#1A1A1A] transition-all duration-200">
+                      <FileText className="w-[18px] h-[18px]" strokeWidth={1.5} />
+                      Add Document
                     </button>
-                  </label>
+                  </Link>
+                  <button
+                    onClick={() => navigate('/dashboard/calendar')}
+                    className="flex items-center gap-3 px-4 py-3 text-[#4A4A4A] text-sm font-medium rounded-full hover:bg-[#E8E8E3] hover:text-[#1A1A1A] transition-all duration-200"
+                  >
+                    <ClipboardList className="w-[18px] h-[18px]" strokeWidth={1.5} />
+                    Add Task
+                  </button>
+                  <button
+                    onClick={() => navigate('/dashboard/calendar')}
+                    className="flex items-center gap-3 px-4 py-3 text-[#4A4A4A] text-sm font-medium rounded-full hover:bg-[#E8E8E3] hover:text-[#1A1A1A] transition-all duration-200"
+                  >
+                    <Bell className="w-[18px] h-[18px]" strokeWidth={1.5} />
+                    Add Reminder
+                  </button>
                 </div>
               </div>
             </div>
-            <div className="col-span-1">
-              <div className="bg-white border border-gray-200 rounded-lg p-6 h-64 flex flex-col justify-center">
-                <div>
-                  <h1 className="text-2xl font-semibold text-black mb-3">{propertyDetails.address}</h1>
-                  <div className="mt-6">
-                    <h3 className="text-sm font-medium text-gray-600 mb-4">Property Details:</h3>
-                    <div className="space-y-2 text-sm text-black">
-                      <div>• {propertyDetails.type}</div>
-                      <div>• {propertyDetails.bedrooms} bed</div>
-                      <div>• Moved in: {propertyDetails.moveInDate}</div>
-                      <div>• Previous: {propertyDetails.previousAddress}</div>
-                      <div>• Role: {propertyDetails.role}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-span-1">
-              <div className="bg-white border border-gray-200 rounded-lg p-6 h-64 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-semibold text-black">Property value</h3>
-                    <TrendingUp className="w-4 h-4 text-gray-400" strokeWidth={1} />
-                  </div>
-
-                  <div className="text-2xl font-semibold text-black mb-4">£{propertyDetails.currentValue.toLocaleString()}</div>
-                  <div className="text-sm text-green-600 mb-1 font-medium">+{propertyDetails.yearOnYearChange} YoY</div>
-                  <div className="text-sm text-gray-600"></div>
-                </div>
-
-                <button className="w-full bg-gray-50 text-black font-medium py-2 px-4 rounded-lg hover:bg-gray-100 transition-colors text-sm">
-                  Track Value
-                </button>
-              </div>
-            </div>
-          </div> */}
-
-          {/* Stats grid */}
-          <div className="grid grid-cols-3 gap-5">
-            {stats.map((item, id) => (
-              <div className="bg-[#F8F8F391] px-5 py-4 rounded-[9px] border border-[#DEDEDE63]" key={id}>
-                <div className="flex items-start justify-between">
-                  <span className="h-10 w-10 rounded-[14px] bg-white flex items-center justify-center">{item?.icon}</span>
-                  <span className="border-[#BBF7D0] border bg-[#F0FDF4] text-[#10B981] text-[13px] px-4 py-[2px] rounded-[26px]">
-                    {item?.subtitle}
-                  </span>
-                </div>
-                <h3 className="text-sm text-[#6A7282] my-4">{item?.title}</h3>
-                <h4 className="font-semibold text-[#101828] text-[41px]">{item?.value}</h4>
-              </div>
-            ))}
           </div>
-          {/* Task and calander */}
-          <div className="grid grid-cols-3 gap-5">
-            {/* task */}
-            <div className="bg-[#F8F8F391] col-span-2 rounded-[9px] p-[25px] border border-[#DEDEDE63]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-[#101828] mb-1 text-[20px]">Your Active Home Tasks</h3>
-                  <p className="text-[#6A7282] text-sm">We're tracking upcoming maintenance and new quote matches.</p>
+          {/* Calendar Front and Center + Tasks Side Panel */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Calendar - Now Front and Center (2 columns on desktop) */}
+            <div className="bg-white lg:col-span-2 rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+              <div className="flex items-center mb-6 justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <h3 className="text-[#1A1A1A] text-lg font-semibold">Your Schedule</h3>
+                    <p className="text-[#6B6B6B] text-sm">Plan ahead and stay organized</p>
+                  </div>
                 </div>
-                {/* <Button>
-                  <Plus />
-                  <span>Add Task</span>
-                </Button> */}
-                <Event />
+                <Link to="/dashboard/calendar">
+                  <Button variant="outline" className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] text-sm font-medium h-10 px-4 rounded-full">
+                    View Calendar
+                  </Button>
+                </Link>
               </div>
 
-              {/* Tasks */}
-              <div className="space-y-[15px] mt-[15px]">
-                {eventData?.data?.map((item, id) => (
-                  <div className="border-[#E5E7EB80] p-[22px] border rounded-xl bg-white" key={id}>
-                    <div className="flex items-start justify-between ">
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-[10px] flex items-center bg-[#F9FAFB] justify-center">{tasks[0]?.icon}</div>
-                        <div>
-                          <h3 className="text-[#101828] text-base font-medium">{item?.title}</h3>
-                          <p className="text-[#6A7282] capitalize text-[12px]">{item?.eventType}</p>
-                        </div>
-                      </div>
-                      <div className="border rounded-[26px] border-[#BBF7D0] text-[#10B981] bg-[#F0FDF4] py-1 px-2 text-[12px]">
-                        {tasks[0]?.subtitle}
-                      </div>
+              <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] p-6">
+                {/* Month Header */}
+                <div className="flex items-center justify-center mb-5">
+                  <h3 className="text-[18px] font-semibold text-[#1F2937]">{format(currentDate, 'MMMM yyyy')}</h3>
+                </div>
+
+                {/* Calendar Grid */}
+                <div className="grid grid-cols-7 gap-2 mb-3">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                    <div key={day} className="text-center text-[13px] font-medium text-[#9CA3AF] py-2">
+                      {day}
                     </div>
+                  ))}
+                </div>
 
-                    <div className="flex items-center mt-5 justify-between">
-                      <p className="text-[#6A7282] text-[13px]">
-                        {(() => {
-                          const dueDate = new Date(item?.date);
-                          const today = new Date();
-                          const diffTime = dueDate - today;
-                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                <div className="grid grid-cols-7 gap-2">
+                  {Array.from({ length: (getDay(monthStart) + 6) % 7 }, (_, i) => (
+                    <div key={`empty-${i}`} className="h-14"></div>
+                  ))}
 
-                          if (diffDays > 1) return `Due in ${diffDays} days`;
-                          if (diffDays === 1) return 'Due tomorrow';
-                          if (diffDays === 0) return 'Due today';
-                          if (diffDays < 0) return `Overdue by ${Math.abs(diffDays)} days`;
-                        })()}
-                      </p>
+                  {monthDays.map(day => {
+                    const dayNumber = day.getDate();
+                    const isCurrentDay = isToday(day);
+                    const eventsForDay = dashEvents.filter(ev => ev.date && ev.date.toDateString() === day.toDateString());
+                    let dotStatus = null;
+                    if (eventsForDay.some(e => computeStatus(e.date) === 'overdue')) dotStatus = 'overdue';
+                    else if (eventsForDay.some(e => computeStatus(e.date) === 'due-week')) dotStatus = 'due-week';
+                    else if (eventsForDay.some(e => computeStatus(e.date) === 'confirmed')) dotStatus = 'confirmed';
+                    else if (eventsForDay.length) dotStatus = 'future';
 
-                      <Button onClick={() => navigate('/dashboard/calendar')} className="text-sm">
-                        View Quotes
-                      </Button>
-                    </div>
+                    return (
+                      <div
+                        key={dayNumber}
+                        className={`relative h-12 flex flex-col items-center justify-center text-[13px] cursor-pointer rounded-[10px] transition-all ${
+                          isCurrentDay
+                            ? 'bg-[#FBBF24] text-[#1A1A1A] font-semibold'
+                            : eventsForDay.length > 0
+                            ? 'bg-[#FEF9E7] text-[#1A1A1A] hover:bg-[#FEF3C7]'
+                            : 'text-[#4B5563] hover:bg-[#F5F5F0]'
+                        }`}
+                      >
+                        <span>{dayNumber}</span>
+                        {dotStatus && (
+                          <div className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full ${getDotColor(dotStatus)}`}></div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Legend */}
+                <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mt-6 pt-4 border-t border-[#E5E7EB]">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 bg-[#F87171] rounded-full"></div>
+                    <span className="text-xs text-[#9CA3AF]">Overdue</span>
                   </div>
-                ))}
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 bg-[#FBBF24] rounded-full"></div>
+                    <span className="text-xs text-[#9CA3AF]">Due Soon</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 bg-[#34D399] rounded-full"></div>
+                    <span className="text-xs text-[#9CA3AF]">Scheduled</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 bg-[#D1D5DB] rounded-full"></div>
+                    <span className="text-xs text-[#9CA3AF]">Future</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Calaner */}
-            <div className="bg-[#F8F8F391] col-span-1 rounded-[9px] p-[25px] border border-[#DEDEDE63]">
-              <div className="flex items-center mb-5 justify-between">
-                <h3 className="text-[#101828] text-[20px]">Upcoming Schedule</h3>
-                <Calendar />
-              </div>
-
-              <div className="bg-white border border-[#E5E7EB80] rounded-[12px] p-5 flex flex-col">
-                <div className="flex items-center justify-center mb-3">
-                  <h3 className="text-[13px] text-[#6A7282]">{format(currentDate, 'MMMM yyyy').toUpperCase()}</h3>
-                </div>
-
-                <div className="flex-1">
-                  <div className="grid grid-cols-7 gap-1 mb-2">
-                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(day => (
-                      <div key={day} className="text-center text-[11px] font-medium text-[#99A1AF] p-2">
-                        {day}
-                      </div>
-                    ))}
+            {/* Tasks - Side Panel (max 3 per spec) */}
+            <div className="bg-white lg:col-span-1 rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                    <ClipboardList className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
                   </div>
-
-                  <div className="grid grid-cols-7 gap-1 place-items-center mb-8">
-                    {Array.from({ length: (getDay(monthStart) + 6) % 7 }, (_, i) => (
-                      <div key={`empty-${i}`} className="h-10"></div>
-                    ))}
-
-                    {monthDays.map(day => {
-                      const dayNumber = day.getDate();
-                      const isCurrentDay = isToday(day);
-                      // find events for this day
-                      const eventsForDay = dashEvents.filter(ev => ev.date && ev.date.toDateString() === day.toDateString());
-                      // compute a status for the dot (priority: overdue > due-week > confirmed > future)
-                      let dotStatus = null;
-                      if (eventsForDay.some(e => computeStatus(e.date) === 'overdue')) dotStatus = 'overdue';
-                      else if (eventsForDay.some(e => computeStatus(e.date) === 'due-week')) dotStatus = 'due-week';
-                      else if (eventsForDay.some(e => computeStatus(e.date) === 'confirmed')) dotStatus = 'confirmed';
-                      else if (eventsForDay.length) dotStatus = 'future';
-
-                      return (
-                        <div
-                          key={dayNumber}
-                          className={`relative h-[26px] w-full flex items-center justify-center text-[12px] cursor-pointer hover:bg-gray-50 rounded ${
-                            isCurrentDay ? 'bg-black text-white font-semibold hover:bg-black' : 'text-[#4A5565]'
-                          }`}
-                        >
-                          {dayNumber}
-                          {dotStatus && <div className={`absolute top-1 right-1 w-1 h-1 rounded-full ${getDotColor(dotStatus)}`}></div>}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Legend */}
-                  {/* <div className="space-y-2 mb-4">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Overdue/urgent</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Scheduled/confirmed</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Due this week</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Future task</span>
-                    </div>
-                  </div> */}
-
-                  {/* View Full Calendar Button */}
-                  {/* <Link to="/dashboard/calendar" className="block w-full">
-                    <button className="w-full bg-gray-50 text-black font-medium py-2 px-4 rounded-lg hover:bg-gray-100 transition-colors text-sm">
-                      View Full Calendar
-                    </button>
-                  </Link> */}
+                  <h3 className="text-[#1A1A1A] text-lg font-semibold">Upcoming tasks and reminders</h3>
                 </div>
               </div>
+              <p className="text-[#6B6B6B] text-sm mb-4">Next 3 items</p>
 
-              {/* Urgent Task */}
-
-              <div className="mt-[30px] space-y-[32px]">
-                {eventData?.data?.map((item, id) => {
+              {/* Task List - Max 3 items per spec */}
+              <div className="space-y-3">
+                {displayTasks.slice(0, 3).map((item, id) => {
                   const dueDate = new Date(item?.date);
                   const today = new Date();
                   const diffTime = dueDate - today;
                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                  // let isUrgent = false;
-                  // if (diffDays > 0 && diffDays <= 2) isUrgent = true;
-
-                  // if (isUrgent) return null;
+                  let urgencyColor = 'text-[#6B7280]';
+                  let urgencyBg = 'bg-[#F9FAFB]';
+                  let urgencyBorder = 'border-[#E5E7EB]';
+                  if (diffDays < 0) {
+                    urgencyColor = 'text-[#DC2626]';
+                    urgencyBg = 'bg-[#FEF2F2]';
+                    urgencyBorder = 'border-[#FECACA]';
+                  } else if (diffDays <= 3) {
+                    urgencyColor = 'text-[#D97706]';
+                    urgencyBg = 'bg-[#FFFBEB]';
+                    urgencyBorder = 'border-[#FDE68A]';
+                  } else if (diffDays <= 7) {
+                    urgencyColor = 'text-[#1F2937]';
+                    urgencyBg = 'bg-[#FEF3C7]/50';
+                    urgencyBorder = 'border-[#FDE68A]/50';
+                  }
 
                   return (
-                    <div className="flex gap-3" key={id}>
-                      <div className="h-[28px] flex items-center justify-center w-[28px] bg-[#FEF2F2] rounded-[10px]">
-                        <Clock size={16} color="#E7000B" />
-                      </div>
-                      <div>
-                        <h4 className="text-[#101828] text-sm mb-1">{item?.title}</h4>
-                        <p className="text-[#E7000B] text-xs">
-                          {diffDays === 0 ? 'Due Today' : diffDays === 1 ? '1 Day Left' : `${diffDays} Days Left`}
-                        </p>
+                    <div
+                      className={`${urgencyBg} border ${urgencyBorder} rounded-[12px] p-4 hover:shadow-sm transition-all cursor-pointer`}
+                      key={item?.id || id}
+                      onClick={() => navigate('/dashboard/calendar')}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`h-8 w-8 rounded-[8px] flex items-center justify-center bg-white border border-[#E5E7EB]`}>
+                          <Clock size={14} className={urgencyColor} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-[#1F2937] text-sm font-medium truncate">{item?.title}</h4>
+                          <p className="text-[#9CA3AF] capitalize text-[11px] mt-0.5">{item?.eventType}</p>
+                          <p className={`text-xs mt-2 font-medium ${urgencyColor}`}>
+                            {diffDays < 0
+                              ? `Overdue by ${Math.abs(diffDays)} days`
+                              : diffDays === 0
+                              ? 'Due today'
+                              : diffDays === 1
+                              ? 'Due tomorrow'
+                              : `${diffDays} days left`}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              <Link className="text-[#155DFC] text-xs mt-6 block" to={'/dashboard/calendar'}>
-                View Full Calendar →
-              </Link>
+              {eventData?.data?.length > 3 && (
+                <Link
+                  to="/dashboard/calendar"
+                  className="text-[#FBBF24] text-sm mt-4 block text-center hover:text-[#D4A017] transition-colors font-medium"
+                >
+                  View all {eventData.data.length} tasks →
+                </Link>
+              )}
             </div>
           </div>
 
-          {/* Corousel */}
-          <div className="bg-[#F8F8F391] col-span-1 rounded-[9px] p-[25px] border border-[#DEDEDE63]">
-            <div className="mb-5">
-              <h3 className="text-[#101828] mb-1 text-[20px]">Matched Quotes Ready</h3>
-              <p className="text-[#6A7282] text-sm">Compare verified local trades instantly and book in seconds.</p>
+          {/* Recent Activity Feed - Per Spec (max 3 items) */}
+          <div className="bg-white rounded-[20px] p-6 border border-[#E8E8E3]">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+                </div>
+                <div>
+                  <h3 className="text-[#1A1A1A] text-lg font-semibold">Recent Activity</h3>
+                  <p className="text-[#6B6B6B] text-sm">Your latest home updates</p>
+                </div>
+              </div>
             </div>
 
-            <Swiper
-              spaceBetween={20}
-              slidesPerView="auto"
-              loop={true}
-              autoplay={{ delay: 3000 }}
-              // breakpoints={{
-              //   320: { slidesPerView: 'auto' },
-              //   768: { slidesPerView: 'auto' },
-              //   1024: { slidesPerView: 'auto' },
-              // }}
-            >
-              {[1, 2, 3, 4, 5, 6, 7].map((item, id) => (
-                <SwiperSlide className="!w-auto" key={id}>
-                  <div className="p-[17px] bg-white text-center flex items-center flex-col border-[#E5E7EB80] border w-[215px] rounded-[12px]">
-                    <div className="h-12 w-12 rounded-full bg-gray-300"></div>
-                    <p className="text-[#101828] text-sm my-3">PlumbPro Ltd</p>
-                    <p className="flex items-center gap-1">
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                          d="M6.72295 1.33877C6.74851 1.28712 6.788 1.24365 6.83696 1.21325C6.88592 1.18285 6.9424 1.16675 7.00003 1.16675C7.05766 1.16675 7.11414 1.18285 7.1631 1.21325C7.21206 1.24365 7.25155 1.28712 7.27712 1.33877L8.62462 4.06819C8.71339 4.24783 8.84442 4.40326 9.00648 4.52112C9.16854 4.63898 9.35677 4.71575 9.55503 4.74485L12.5685 5.18585C12.6256 5.19413 12.6793 5.21821 12.7234 5.25539C12.7675 5.29256 12.8004 5.34134 12.8182 5.39621C12.8361 5.45107 12.8382 5.50984 12.8244 5.56586C12.8106 5.62187 12.7813 5.67291 12.74 5.71319L10.5607 7.83535C10.417 7.97541 10.3094 8.1483 10.2474 8.33914C10.1853 8.52997 10.1705 8.73304 10.2043 8.93085L10.7188 11.9292C10.7289 11.9863 10.7227 12.045 10.701 12.0988C10.6793 12.1525 10.6429 12.199 10.596 12.2331C10.5491 12.2672 10.4936 12.2874 10.4358 12.2914C10.378 12.2954 10.3202 12.2831 10.269 12.2559L7.5752 10.8395C7.3977 10.7463 7.20022 10.6976 6.99974 10.6976C6.79926 10.6976 6.60178 10.7463 6.42428 10.8395L3.73103 12.2559C3.67989 12.2829 3.62218 12.2951 3.56446 12.291C3.50674 12.2869 3.45133 12.2667 3.40454 12.2326C3.35774 12.1986 3.32143 12.1521 3.29975 12.0985C3.27806 12.0448 3.27187 11.9862 3.28187 11.9292L3.79578 8.93144C3.82973 8.73353 3.81502 8.53033 3.75293 8.33938C3.69084 8.14842 3.58322 7.97544 3.43937 7.83535L1.26003 5.71377C1.21838 5.67354 1.18886 5.62242 1.17484 5.56623C1.16083 5.51004 1.16287 5.45105 1.18075 5.39596C1.19862 5.34088 1.23161 5.29193 1.27594 5.25468C1.32028 5.21743 1.37419 5.19338 1.43153 5.18527L4.44445 4.74485C4.64293 4.71598 4.83143 4.6393 4.99371 4.52143C5.15599 4.40355 5.28719 4.24801 5.37603 4.06819L6.72295 1.33877Z"
-                          fill="#FCC800"
-                          stroke="#FCC800"
-                          stroke-width="1.16667"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        />
-                      </svg>
-                      <span className="text-[#4A5565] text-xs">4.8</span>
-                    </p>
-                    <h4 className="text-[#101828] font-semibold text-[20px] my-3">£210</h4>
-                    <Button className="w-full">Compare</Button>
+            {/* Activity List - Max 3 items per spec */}
+            <div className="grid grid-cols-3 gap-4">
+              {/* Sample activity items - would come from API in production */}
+              <div className="bg-[#F5F5F0] rounded-[16px] p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-[#1A1A1A]" strokeWidth={1.5} />
                   </div>
-                </SwiperSlide>
-              ))}
-            </Swiper>
+                  <span className="text-[#8B8B8B] text-xs">2 hours ago</span>
+                </div>
+                <p className="text-[#1A1A1A] text-sm font-medium">Document uploaded</p>
+                <p className="text-[#6B6B6B] text-xs mt-1">Boiler service certificate added</p>
+              </div>
+
+              <div className="bg-[#F5F5F0] rounded-[16px] p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center">
+                    <CheckCircle className="w-4 h-4 text-[#1A1A1A]" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[#8B8B8B] text-xs">Yesterday</span>
+                </div>
+                <p className="text-[#1A1A1A] text-sm font-medium">Task completed</p>
+                <p className="text-[#6B6B6B] text-xs mt-1">Smoke alarm test marked done</p>
+              </div>
+
+              <div className="bg-[#F5F5F0] rounded-[16px] p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center">
+                    <Bell className="w-4 h-4 text-[#1A1A1A]" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[#8B8B8B] text-xs">3 days ago</span>
+                </div>
+                <p className="text-[#1A1A1A] text-sm font-medium">Reminder set</p>
+                <p className="text-[#6B6B6B] text-xs mt-1">Gutter cleaning scheduled</p>
+              </div>
+            </div>
+
+            {/* Empty state for activity */}
+            {false && (
+              <div className="text-center py-6">
+                <div className="h-10 w-10 rounded-full bg-[#FEF9E7] flex items-center justify-center mx-auto mb-3">
+                  <Activity className="w-4 h-4 text-[#FBBF24]" />
+                </div>
+                <p className="text-[#1A1A1A] text-sm font-medium">No recent activity</p>
+                <p className="text-[#6B6B6B] text-xs mt-1">Start by uploading a document or setting a reminder</p>
+              </div>
+            )}
           </div>
         </main>
       </div>
