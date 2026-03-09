@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, Edit, Filter, Plus, MapPin, Clock, PoundSterling, Star, ExternalLink, X } from 'lucide-react';
+import { MessageSquare, Edit, Filter, Plus, MapPin, Clock, PoundSterling, Star, ExternalLink, X, Search, Briefcase, CheckCircle, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -117,263 +117,293 @@ const JobLeads = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-black">Job Leads</h1>
-          <div className="flex items-center space-x-3">
-            <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
-              <Filter className="w-4 h-4 text-gray-600" />
-              <span className="text-sm text-gray-600">Filter</span>
-            </button>
-            <Button onClick={() => setQuoteOpen(true)} className="flex items-center space-x-2 px-4 py-2">
-              <Plus className="w-4 h-4" />
-              <span className="text-sm font-medium">Post Job</span>
-            </Button>
-            <Quote open={quoteOpen} setOpen={setQuoteOpen} />
+        {/* Header Section - Dashboard Style */}
+        <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                <Search className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+              </div>
+              <div>
+                <p className="text-[#6B6B6B] text-sm mb-0.5">Find tradespeople</p>
+                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Find a Trade</h1>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => setQuoteOpen(true)}
+                className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
+              >
+                <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
+                Post Job
+              </Button>
+              <Quote open={quoteOpen} setOpen={setQuoteOpen} />
+            </div>
+          </div>
+
+          {/* Stats Row */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#6B6B6B] text-sm">Total Jobs</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                  <Briefcase className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-[#1A1A1A] text-2xl font-semibold">{leads?.length || 0}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">All posted jobs</p>
+            </div>
+
+            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#6B6B6B] text-sm">Active</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-[#1A1A1A] text-2xl font-semibold">{leads?.filter(l => !l.isApproved)?.length || 0}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">Awaiting quotes</p>
+            </div>
+
+            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#6B6B6B] text-sm">Quotes Received</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                  <MessageSquare className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-[#FBBF24] text-2xl font-semibold">{leads?.reduce((acc, l) => acc + (l.bids?.length || 0), 0) || 0}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">From tradespeople</p>
+            </div>
+
+            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#6B6B6B] text-sm">Completed</span>
+                <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-[#10B981] text-2xl font-semibold">{leads?.filter(l => l.isApproved)?.length || 0}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">Jobs completed</p>
+            </div>
           </div>
         </div>
 
-        {/* Job Leads Grid */}
-        <div className="grid gap-6">
-          {leads?.map(job => (
-            <div key={job.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-black mb-2">{job.name}</h3>
-                  <p className="text-gray-600 text-sm mb-3">{job.service}</p>
-
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <div className="flex items-center space-x-1">
-                      <MapPin className="w-4 h-4" />
-                      <span>{job.location}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <PoundSterling className="w-4 h-4" />
-                      <span>{job.value}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{new Date(job.updated_at).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <span className={`px-3 py-1 text-xs font-medium rounded-lg border ${getStatusColor(job?.isApproved)}`}>
-                    {job?.isApproved ? 'Approved' : job?.bids?.length < 1 ? 'Waiting for quote' : 'Quote Received'}
-                  </span>
-                </div>
+        {/* Main Content - 2 Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left Column - Job Leads (3 columns wide) */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-[#1A1A1A] text-lg font-semibold">Your Jobs</h2>
+                <button className="px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F5F0] rounded-full transition-colors flex items-center gap-2 border border-[#E8E8E3]">
+                  <Filter className="w-3 h-3" />
+                  Filter
+                </button>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span></span>
-                {/* <div className="flex items-center space-x-3">
-                  <button className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
-                    <MessageSquare className="w-4 h-4" />
-                    <span>{job.messagesCount}</span>
-                  </button>
-                  <Link
-                    to={`/jobs/${job.id}`}
-                    className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span>Edit</span>
-                  </Link>
-                </div> */}
+              <div className="space-y-3">
+                {leads?.map(job => (
+                  <div key={job.id} className="bg-[#F5F5F0] rounded-[12px] px-5 py-4 hover:shadow-sm transition-all">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-start gap-4 flex-1">
+                        <div className="h-10 w-10 rounded-[10px] bg-white border border-[#E5E7EB] flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-[#1A1A1A] text-sm font-medium">{job.name}</h3>
+                          <p className="text-[#6B6B6B] text-xs mt-0.5">{job.service}</p>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-[#6B6B6B]">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              <span>{job.location}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <PoundSterling className="w-3 h-3" />
+                              <span>{job.value}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>{new Date(job.updated_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                <Button
-                  variant="outline"
-                  onClick={() => toggleCompareMode(job.id)}
-                  className="text-sm bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200"
-                >
-                  {compareMode[job.id] ? 'Hide quotes' : 'Compare quotes'}
-                </Button>
-              </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                          job?.isApproved
+                            ? 'bg-green-50 text-green-600'
+                            : job?.bids?.length < 1
+                            ? 'bg-gray-50 text-gray-600'
+                            : 'bg-yellow-50 text-yellow-600'
+                        }`}>
+                          {job?.isApproved ? 'Approved' : job?.bids?.length < 1 ? 'Waiting for quote' : `${job?.bids?.length} Quote${job?.bids?.length > 1 ? 's' : ''}`}
+                        </span>
+                        <button
+                          onClick={() => toggleCompareMode(job.id)}
+                          className="px-3 py-1.5 text-xs font-medium text-[#4A4A4A] bg-white border border-[#E8E8E3] rounded-full hover:bg-[#E8E8E3] transition-colors"
+                        >
+                          {compareMode[job.id] ? 'Hide quotes' : 'View quotes'}
+                        </button>
+                      </div>
+                    </div>
 
-              {/* Quotes Section */}
-              {(job.bids?.length > 0 || job.quotesCount > 0) && (
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  {compareMode[job.id] ? (
-                    // Comparison Table View
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-2 text-gray-600 font-medium">Trade</th>
-                            <th className="text-left py-2 text-gray-600 font-medium">Rating</th>
-                            <th className="text-left py-2 text-gray-600 font-medium">Price</th>
-                            <th className="text-left py-2 text-gray-600 font-medium">Availability</th>
-                            <th className="text-left py-2 text-gray-600 font-medium">Response</th>
-                            <th className="text-left py-2 text-gray-600 font-medium">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                    {/* Quotes Section */}
+                    {(job.bids?.length > 0) && compareMode[job.id] && (
+                      <div className="mt-4 pt-4 border-t border-[#E8E8E3]">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           {job.bids?.map(bid => (
-                            <tr key={bid.id} className="border-b border-gray-100">
-                              <td className="py-3 font-medium text-black">{bid.bidder?.first_name || bid.bidder?.email || 'Trader'}</td>
-                              <td className="py-3">
-                                <div className="flex items-center space-x-1">
-                                  <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                                  <span className="text-gray-600">4</span>
-                                </div>
-                              </td>
-                              <td className="py-3 font-medium text-black">{`£${bid.proposedValue}`}</td>
-                              <td className="py-3 text-gray-600 capitalize">{bid.Available ?? 'N/A'}</td>
-                              <td className="py-3 text-gray-600">{new Date(bid.created_at).toLocaleString()}</td>
-                              <td className="py-3">
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <button
-                                      className="flex items-center space-x-1 text-primary hover:underline"
-                                      onClick={() => setSelectedQuote(bid)}
-                                    >
-                                      <ExternalLink className="w-3 h-3" />
-                                      <span>View</span>
-                                    </button>
-                                  </DialogTrigger>
-                                  <DialogContent className="sm:max-w-[500px]">
-                                    <DialogHeader>
-                                      <DialogTitle>Bid Details - {bid.bidder?.first_name || bid.bidder?.email}</DialogTitle>
-                                    </DialogHeader>
-                                    <div className="space-y-4 py-4">
-                                      <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                          <label className="text-sm font-medium text-gray-600">Bidder</label>
-                                          <p className="text-lg font-semibold text-black">
-                                            {bid.bidder?.first_name} {bid.bidder?.last_name}
-                                          </p>
-                                          <p className="text-sm text-gray-600">{bid.bidder?.email}</p>
-                                        </div>
-                                        <div>
-                                          <label className="text-sm font-medium text-gray-600">Price</label>
-                                          <p className="text-lg font-semibold text-black">{`£${bid.proposedValue}`}</p>
-                                        </div>
-                                        <div>
-                                          <label className="text-sm font-medium text-gray-600">Status</label>
-                                          <p className="text-sm text-gray-600 capitalize">{bid.status}</p>
-                                        </div>
-                                        <div>
-                                          <label className="text-sm font-medium text-gray-600">Available</label>
-                                          <p className="font-medium capitalize text-black">{bid.Available}</p>
-                                        </div>
-                                      </div>
-                                      <div className="pt-4 border-t">
-                                        <h4 className="font-medium text-black mb-2">Service Details</h4>
-                                        <p className="text-gray-600 text-sm">
-                                          Professional service. Contact via email {bid.bidder?.email} for more info.
-                                        </p>
-                                      </div>
-                                      <div className="flex space-x-3 pt-4">
-                                        <Button
-                                          disabled={bid.status == 'accepted' || job?.isApproved}
-                                          onClick={() => handleApprove(job, bid)}
-                                          className="flex-1"
-                                        >
-                                          {bid.status == 'accepted' ? 'Accepted' : 'Accept Bid'}
-                                        </Button>
-                                        <Button variant="outline" className="flex-1">
-                                          Message Bidder
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    // Card View (Default)
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {job.bids?.slice(0, 3).map(bid => (
-                        <div key={bid.id} className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium text-black">{bid.bidder?.first_name || bid.bidder?.email}</h4>
-                            <div className="flex items-center space-x-1">
-                              <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                              {/* {bid.bidder?.rating ?? '—'} */}
-                              <span className="text-sm text-gray-600">4</span>
-                            </div>
-                          </div>
-                          <div className="space-y-1 text-sm text-gray-600">
-                            <div className="flex justify-between">
-                              <span>Price:</span>
-                              <span className="font-medium text-black">{`£${bid.proposedValue}`}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Available:</span>
-                              <span className=" capitalize">{bid.Available}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Placed:</span>
-                              <span>{new Date(bid.created_at).toLocaleString()}</span>
-                            </div>
-                          </div>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <button
-                                className="w-full mt-3 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm"
-                                onClick={() => setSelectedQuote(bid)}
-                              >
-                                {bid.status == 'accepted' ? 'Accepted' : ' View Details'}
-                              </button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[500px]">
-                              <DialogHeader>
-                                <DialogTitle>Bid Details - {bid.bidder?.first_name || bid.bidder?.email}</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4 py-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Bidder</label>
-                                    <p className="text-lg font-semibold text-black">
-                                      {bid.bidder?.first_name} {bid.bidder?.last_name}
-                                    </p>
-                                    <p className="text-sm text-gray-600">{bid.bidder?.email}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Price</label>
-                                    <p className="text-lg font-semibold text-black">{`£${bid.proposedValue}`}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Status</label>
-                                    <p className="text-sm text-gray-600 capitalize">{bid.status}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-600">Available</label>
-                                    <p className="font-medium text-black capitalize">{bid.Available}</p>
-                                  </div>
-                                </div>
-                                <div className="pt-4 border-t">
-                                  <h4 className="font-medium text-black mb-2">Service Details</h4>
-                                  <p className="text-gray-600 text-sm">
-                                    Professional service. Contact via email {bid.bidder?.email} for more info.
-                                  </p>
-                                </div>
-                                <div className="flex space-x-3 pt-4">
-                                  <Button
-                                    disabled={bid.status == 'accepted' || job?.isApproved}
-                                    onClick={() => handleApprove(job, bid)}
-                                    className="flex-1"
-                                  >
-                                    {bid.status == 'accepted' ? 'Accepted' : 'Accept Bid'}
-                                  </Button>
-                                  <Button variant="outline" className="flex-1">
-                                    Message Bidder
-                                  </Button>
+                            <div key={bid.id} className="bg-white rounded-[10px] p-4 border border-[#E8E8E3]">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-sm font-medium text-[#1A1A1A]">{bid.bidder?.first_name || bid.bidder?.email}</h4>
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                                  <span className="text-xs text-[#6B6B6B]">4.0</span>
                                 </div>
                               </div>
-                            </DialogContent>
-                          </Dialog>
+                              <div className="space-y-1 text-xs text-[#6B6B6B]">
+                                <div className="flex justify-between">
+                                  <span>Price:</span>
+                                  <span className="font-medium text-[#1A1A1A]">{`£${bid.proposedValue}`}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Available:</span>
+                                  <span className="capitalize">{bid.Available}</span>
+                                </div>
+                              </div>
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <button
+                                    className="w-full mt-3 px-3 py-2 text-xs font-medium text-[#4A4A4A] bg-[#F5F5F0] rounded-full hover:bg-[#E8E8E3] transition-colors"
+                                    onClick={() => setSelectedQuote(bid)}
+                                  >
+                                    {bid.status == 'accepted' ? 'Accepted' : 'View Details'}
+                                  </button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[500px]">
+                                  <DialogHeader>
+                                    <DialogTitle>Bid Details - {bid.bidder?.first_name || bid.bidder?.email}</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="space-y-4 py-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <label className="text-sm font-medium text-gray-600">Bidder</label>
+                                        <p className="text-lg font-semibold text-black">
+                                          {bid.bidder?.first_name} {bid.bidder?.last_name}
+                                        </p>
+                                        <p className="text-sm text-gray-600">{bid.bidder?.email}</p>
+                                      </div>
+                                      <div>
+                                        <label className="text-sm font-medium text-gray-600">Price</label>
+                                        <p className="text-lg font-semibold text-black">{`£${bid.proposedValue}`}</p>
+                                      </div>
+                                      <div>
+                                        <label className="text-sm font-medium text-gray-600">Status</label>
+                                        <p className="text-sm text-gray-600 capitalize">{bid.status}</p>
+                                      </div>
+                                      <div>
+                                        <label className="text-sm font-medium text-gray-600">Available</label>
+                                        <p className="font-medium text-black capitalize">{bid.Available}</p>
+                                      </div>
+                                    </div>
+                                    <div className="pt-4 border-t">
+                                      <h4 className="font-medium text-black mb-2">Service Details</h4>
+                                      <p className="text-gray-600 text-sm">
+                                        Professional service. Contact via email {bid.bidder?.email} for more info.
+                                      </p>
+                                    </div>
+                                    <div className="flex space-x-3 pt-4">
+                                      <Button
+                                        disabled={bid.status == 'accepted' || job?.isApproved}
+                                        onClick={() => handleApprove(job, bid)}
+                                        className="flex-1"
+                                      >
+                                        {bid.status == 'accepted' ? 'Accepted' : 'Accept Bid'}
+                                      </Button>
+                                      <Button variant="outline" className="flex-1">
+                                        Message Bidder
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Post Job Row */}
+                <div
+                  className="bg-white rounded-[12px] px-5 py-4 border-2 border-dashed border-[#E8E8E3] cursor-pointer hover:bg-[#F5F5F0] hover:border-[#FBBF24] transition-all flex items-center gap-4"
+                  onClick={() => setQuoteOpen(true)}
+                >
+                  <div className="h-10 w-10 rounded-[10px] bg-[#FEF9E7] flex items-center justify-center flex-shrink-0">
+                    <Plus className="w-5 h-5 text-[#FBBF24]" strokeWidth={1.5} />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-[#1A1A1A] text-sm font-medium">Post a New Job</h4>
+                    <p className="text-[#6B6B6B] text-xs">Click to get quotes from local tradespeople</p>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
-          ))}
+          </div>
+
+          {/* Right Column - Quick Info Panel */}
+          <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+                </div>
+                <h3 className="text-[#1A1A1A] text-lg font-semibold">How It Works</h3>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-[#F5F5F0] rounded-[12px] p-4">
+                <div className="flex items-start gap-3">
+                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">1</div>
+                  <div>
+                    <h4 className="text-[#1A1A1A] text-sm font-medium">Post Your Job</h4>
+                    <p className="text-[#6B6B6B] text-xs mt-1">Describe what you need done with all the details</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#F5F5F0] rounded-[12px] p-4">
+                <div className="flex items-start gap-3">
+                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">2</div>
+                  <div>
+                    <h4 className="text-[#1A1A1A] text-sm font-medium">Receive Quotes</h4>
+                    <p className="text-[#6B6B6B] text-xs mt-1">Get quotes from verified local tradespeople</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#F5F5F0] rounded-[12px] p-4">
+                <div className="flex items-start gap-3">
+                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">3</div>
+                  <div>
+                    <h4 className="text-[#1A1A1A] text-sm font-medium">Choose & Book</h4>
+                    <p className="text-[#6B6B6B] text-xs mt-1">Compare quotes and select the best option</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setQuoteOpen(true)}
+              className="w-full mt-4 py-3 bg-[#1A1A1A] text-white text-sm font-medium rounded-full hover:bg-[#333333] transition-colors"
+            >
+              Post a Job
+            </button>
+          </div>
         </div>
       </div>
     </DashboardLayout>
