@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X } from 'lucide-react';
+import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X, Shield } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const Sidebar = () => {
@@ -12,6 +12,7 @@ const Sidebar = () => {
     { icon: Home, label: 'My Home', path: '/dashboard' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
     { icon: ClipboardList, label: 'Tasks', path: '/dashboard/calendar' },
+    { icon: Shield, label: 'Compliance', path: '/dashboard/compliance' },
     { icon: Search, label: 'Find a Trade', path: '/dashboard/job-leads' },
     { icon: HelpCircle, label: 'How it Works', path: '/dashboard/how-it-works' },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },

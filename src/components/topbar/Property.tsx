@@ -14,8 +14,7 @@ const Property = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['property'] });
     },
-    onError: error => {
-      console.log(error);
+    onError: () => {
       toast.error('Error! Try again');
     },
   });

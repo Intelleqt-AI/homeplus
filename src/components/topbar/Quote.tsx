@@ -4,6 +4,7 @@ import { Wrench } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { callEdgeFunction } from '@/lib/supabaseFunctions';
 
 const Quote = ({ open, setOpen }) => {
   const { user } = useAuth();
@@ -1124,13 +1125,9 @@ const Quote = ({ open, setOpen }) => {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const res = await fetch('https://bozuxpzratqjsjqgjchq.supabase.co/functions/v1/receive-job', {
+      const data = await callEdgeFunction('receive-job', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvenV4cHpyYXRxanNqcWdqY2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwNzY3ODMsImV4cCI6MjA3MjY1Mjc4M30.X25eruOvP6dZlxRwrzJdIB_nRoms_vH2ZOCNaA_a76E`, // keep existing auth header
-        },
-        body: JSON.stringify({
+        body: {
           name: user?.user_metadata?.full_name,
           email: user?.email,
           phone: user?.phone,
@@ -1140,11 +1137,9 @@ const Quote = ({ open, setOpen }) => {
           value: budget,
           priority,
           homeID: user?.id,
-          answers: answers, // Include all question answers
-        }),
+          answers: answers,
+        },
       });
-
-      const data = await res.json();
       if (data.success) {
         toast.success('Job posted successfully!');
         setOpen(false);

@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import SetupWizard from "@/components/SetupWizard";
 import Profile from "@/components/settings/profile";
 import Security from "@/components/settings/security";
+import PropertyProfile from "@/components/settings/PropertyProfile";
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState<
@@ -47,8 +48,7 @@ const Settings = () => {
   ];
 
   const handleSetupComplete = (data: any) => {
-    console.log("Setup completed with data:", data);
-    // Here you would typically save the setup data and generate tasks
+    // TODO: save setup data and generate tasks
   };
 
   const renderTaskTemplates = () => (
@@ -626,21 +626,7 @@ const Settings = () => {
 
             {activeTab === "security" && <Security />}
 
-            {activeTab === "properties" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Property Management</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 mb-4">
-                    Manage your properties and their settings
-                  </p>
-                  <Button onClick={() => setIsSetupWizardOpen(true)}>
-                    Add New Property
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            {activeTab === "properties" && <PropertyProfile />}
 
             {activeTab === "tasks" && renderTaskTemplates()}
           </div>

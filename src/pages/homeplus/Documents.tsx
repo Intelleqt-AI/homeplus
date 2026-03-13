@@ -200,7 +200,6 @@ const Documents = () => {
 
   const handleGeneratePack = () => {
     const selectedDocs = allDocs?.filter(doc => selectedForExport.includes(doc.id));
-    console.log('Generating home pack with:', selectedDocs);
     toast.success(`Exporting ${selectedForExport.length} documents`);
     setIsExportModalOpen(false);
   };

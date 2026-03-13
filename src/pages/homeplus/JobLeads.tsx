@@ -9,6 +9,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import Quote from '@/components/topbar/Quote';
 import { toast } from 'sonner';
+import JobStatusPipeline, { getJobPipelineStage } from '@/components/trades/JobStatusPipeline';
+import TradeReview from '@/components/trades/TradeReview';
 
 const JobLeads = () => {
   const [compareMode, setCompareMode] = useState<Record<number, boolean>>({});
@@ -27,7 +29,9 @@ const JobLeads = () => {
       setCurrentItem(null);
       setCurrentBid(null);
     },
-    onError: err => {},
+    onError: () => {
+      toast.error('Failed to create job. Please try again.');
+    },
   });
 
   const modifyBidMutation = useMutation({
@@ -249,6 +253,24 @@ const JobLeads = () => {
                         </button>
                       </div>
                     </div>
+
+                    {/* Job Status Pipeline */}
+                    <div className="mt-3 pt-3 border-t border-[#E8E8E3]">
+                      <JobStatusPipeline currentStage={getJobPipelineStage(job)} />
+                    </div>
+
+                    {/* Review Prompt for Completed Jobs */}
+                    {job.isApproved && job.bids?.some((b: any) => b.status === 'accepted') && (
+                      <div className="mt-3">
+                        <TradeReview
+                          tradeName={job.bids.find((b: any) => b.status === 'accepted')?.bidder?.first_name || 'Tradesperson'}
+                          jobTitle={job.service || job.name}
+                          onSubmit={(review) => {
+                            // In production, this would save to the database
+                          }}
+                        />
+                      </div>
+                    )}
 
                     {/* Quotes Section */}
                     {(job.bids?.length > 0) && compareMode[job.id] && (

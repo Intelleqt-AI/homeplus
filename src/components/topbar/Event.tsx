@@ -33,8 +33,7 @@ const Event = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event'] });
     },
-    onError: error => {
-      console.log(error);
+    onError: () => {
       toast.error('Error! Try again');
     },
   });

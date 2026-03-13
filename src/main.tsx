@@ -3,8 +3,10 @@ import App from './App.tsx';
 import './index.css';
 import { UserbackProvider } from '@userback/react';
 
+const userbackToken = import.meta.env.VITE_USERBACK_TOKEN;
+
 createRoot(document.getElementById('root')!).render(
-  <UserbackProvider token="A-toB4qf6TlycGzt55mrEgeMRHe">
+  <UserbackProvider token={userbackToken}>
     <App />
   </UserbackProvider>
 );

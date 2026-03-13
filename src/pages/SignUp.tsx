@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,9 +24,40 @@ const SignUp = () => {
     location: '',
   });
 
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [postcodeArea, setPostcodeArea] = useState('');
+
   const { signUp, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const lookupPostcode = useCallback(async (postcode: string) => {
+    const cleaned = postcode.replace(/\s/g, '').toUpperCase();
+    if (cleaned.length < 5) {
+      toast({ title: 'Invalid postcode', description: 'Please enter a valid UK postcode (e.g. SW1A 2AA).', variant: 'destructive' });
+      return;
+    }
+    setAddressLoading(true);
+    try {
+      const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(cleaned)}`);
+      const data = await res.json();
+      if (data.status === 200 && data.result) {
+        const { admin_ward, admin_district, postcode: fullPostcode } = data.result;
+        const area = [admin_ward, admin_district].filter(Boolean).join(', ');
+        setPostcodeArea(area);
+        setFormData(prev => ({ ...prev, postCode: fullPostcode }));
+        toast({ title: 'Postcode found', description: area });
+      } else {
+        setPostcodeArea('');
+        toast({ title: 'Postcode not found', description: 'Please check and try again.', variant: 'destructive' });
+      }
+    } catch {
+      setPostcodeArea('');
+      toast({ title: 'Lookup failed', description: 'Could not reach postcode service. Please type your address manually.', variant: 'destructive' });
+    } finally {
+      setAddressLoading(false);
+    }
+  }, [toast]);
 
   // Redirect if already logged in
   if (user) {
@@ -50,26 +81,41 @@ const SignUp = () => {
 
     setLoading(true);
 
-    const { error } = await signUp(formData.email, formData.password, {
-      full_name: `${formData.firstName} ${formData.lastName}`,
-      property_type: formData.propertyType,
-      postcode: +formData?.postCode,
-      location: formData?.location,
-    });
+    try {
+      const { error } = await signUp(formData.email, formData.password, {
+        full_name: `${formData.firstName} ${formData.lastName}`,
+        property_type: formData.propertyType,
+        postcode: formData.postCode,
+        location: formData.location,
+      });
 
-    if (error) {
+      if (error) {
+        const msg = error.message?.toLowerCase().includes('fetch')
+          ? 'Unable to reach the server. Please check your connection and try again.'
+          : error.message;
+        toast({
+          title: 'Sign up failed',
+          description: msg,
+          variant: 'destructive',
+        });
+        setLoading(false);
+      } else {
+        toast({
+          title: 'Account created!',
+          description: 'Please check your email to confirm your account.',
+        });
+        navigate('/dashboard');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong';
       toast({
-        title: 'Sign up failed',
-        description: error.message,
+        title: 'Connection error',
+        description: message.toLowerCase().includes('fetch')
+          ? 'Unable to reach the server. Please check your connection and try again.'
+          : message,
         variant: 'destructive',
       });
       setLoading(false);
-    } else {
-      toast({
-        title: 'Account created!',
-        description: 'Please check your email to confirm your account.',
-      });
-      navigate('/dashboard');
     }
   };
 
@@ -191,27 +237,43 @@ const SignUp = () => {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="location">Location</Label>
+                        <Label htmlFor="postCode">Post Code</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="postCode"
+                            placeholder="e.g. SW1A 2AA"
+                            value={formData.postCode}
+                            onChange={e => setFormData({ ...formData, postCode: e.target.value })}
+                            className="flex-1"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => lookupPostcode(formData.postCode)}
+                            disabled={addressLoading || formData.postCode.length < 5}
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                          >
+                            {addressLoading ? 'Looking up...' : 'Find Address'}
+                          </button>
+                        </div>
+                        <p className="text-xs text-foreground">Enter your postcode and click Find Address</p>
+                      </div>
+
+                      {postcodeArea && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                          <p className="text-sm text-green-800 font-medium">{postcodeArea}</p>
+                          <p className="text-xs text-green-600 mt-0.5">Postcode verified — now enter your street address below</p>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <Label htmlFor="location">Street Address</Label>
                         <Input
                           id="location"
-                          type="location"
-                          placeholder="Enter your location"
+                          placeholder="e.g. 10 Downing Street"
                           value={formData.location}
                           onChange={e => setFormData({ ...formData, location: e.target.value })}
                         />
-                        <p className="text-xs text-foreground">eg. 10 Downing Street, LONDON, SW1A 2AA, UK</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="postCode">Post Code</Label>
-                        <Input
-                          id="postCode"
-                          type="postCode"
-                          placeholder="Enter your post code"
-                          value={formData.postCode}
-                          onChange={e => setFormData({ ...formData, postCode: e.target.value })}
-                        />
-                        {/* <p className="text-xs text-foreground">Must be at least 8 characters with a mix of letters and numbers</p> */}
+                        <p className="text-xs text-foreground">House number and street name</p>
                       </div>
                     </div>
                   </>

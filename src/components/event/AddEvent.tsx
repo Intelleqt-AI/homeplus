@@ -63,8 +63,7 @@ const AddEvent = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["event"] });
     },
-    onError: (error) => {
-      console.log(error);
+    onError: () => {
       toast.error("Error! Try again");
     },
   });
@@ -410,7 +409,7 @@ const AddEvent = () => {
   };
 
   const handleBulkAction = (action: string) => {
-    console.log(`Bulk ${action} for events:`, selectedEvents);
+    // TODO: implement bulk action logic
     setSelectedEvents([]);
   };
 
