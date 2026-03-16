@@ -17,8 +17,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CalendarIcon, FileText, Upload } from "lucide-react";
+import { CalendarIcon, FileText, Upload, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { suggestDocumentCategory } from "@/lib/documentIntelligence";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { uploadFileWithMetadata } from "@/lib/Api";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,11 +43,33 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  const [autoSuggested, setAutoSuggested] = useState(false);
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
       toast.success(`File "${file.name}" selected`);
+
+      // Auto-suggest document type from filename
+      const suggestion = suggestDocumentCategory(file.name);
+      if (suggestion.confidence !== 'low') {
+        const typeMap: Record<string, string> = {
+          Certificate: 'certificate',
+          Insurance: 'insurance',
+          Compliance: 'certificate',
+          Report: 'inspection',
+          Warranty: 'maintenance',
+          Contract: 'other',
+          Receipt: 'other',
+        };
+        const mapped = typeMap[suggestion.type] || '';
+        if (mapped && !documentType) {
+          setDocumentType(mapped);
+          setAutoSuggested(true);
+          toast.info(`Auto-detected as "${suggestion.type}" from filename`);
+        }
+      }
     }
   };
 
@@ -62,8 +85,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
       setSelectedDate("");
       queryClient.invalidateQueries(["GetAllDocs"]);
     },
-    onError: (e) => {
-      console.log(e);
+    onError: () => {
       toast.dismiss("upload-toast");
       toast.error("Failed to upload document.");
     },
@@ -132,8 +154,16 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="document-type">Document Type</Label>
-              <Select value={documentType} onValueChange={setDocumentType}>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="document-type">Document Type</Label>
+                {autoSuggested && (
+                  <span className="inline-flex items-center gap-1 text-[10px] bg-[#FEF3C7] text-[#92400E] px-2 py-0.5 rounded-full font-medium">
+                    <Sparkles className="w-3 h-3" />
+                    Auto-detected
+                  </span>
+                )}
+              </div>
+              <Select value={documentType} onValueChange={(val) => { setDocumentType(val); setAutoSuggested(false); }}>
                 <SelectTrigger id="document-type">
                   <SelectValue placeholder="Select document type" />
                 </SelectTrigger>
@@ -142,9 +172,8 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
                   <SelectItem value="insurance">Insurance</SelectItem>
                   <SelectItem value="maintenance">Maintenance</SelectItem>
                   <SelectItem value="inspection">Inspection</SelectItem>
-                  {/* <SelectItem value="contract">Contract</SelectItem>
-                      <SelectItem value="manual">Manual</SelectItem>
-                      <SelectItem value="other">Other</SelectItem> */}
+                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -33,7 +33,7 @@ const Security = () => {
     );
   };
 
-  const handlePasswordChange = async (e) => {
+  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(e.currentTarget);
@@ -82,10 +82,9 @@ const Security = () => {
 
       toast.success("Password updated successfully!");
       form.reset();
-    } catch (err: any) {
-      toast.error(
-        err.message || "Something went wrong while updating password."
-      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong while updating password.';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
