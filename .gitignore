@@ -1,20 +1,20 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
+# Dependencies
 node_modules
-dist
-dist-ssr
-*.local
-.env
-env
+.npm-cache
 
-# Editor directories and files
+# Next.js
+.next
+out
+
+# Build
+dist
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -24,3 +24,17 @@ env
 *.njsproj
 *.sln
 *.sw?
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Drizzle
+drizzle/meta
+
+# Debug
+*.local
+
+# Claude
+.claude/
