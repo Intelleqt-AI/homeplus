@@ -526,38 +526,58 @@ const Settings = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-black">Settings</h1>
-          <p className="text-gray-600">
-            Manage your account preferences and property settings
-          </p>
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Sidebar Navigation */}
-          <div className="lg:w-64">
-            <nav className="space-y-1">
-              {tabs.map((tab) => {
-                const IconComponent = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      activeTab === tab.id
-                        ? "bg-primary text-white"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}>
-                    <IconComponent className="w-4 h-4 mr-3" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
+        {/* Header Section - Dashboard Style */}
+        <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                <SettingsIcon className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+              </div>
+              <div>
+                <p className="text-[#6B6B6B] text-sm mb-0.5">Manage your account</p>
+                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Settings</h1>
+              </div>
+            </div>
           </div>
 
-          {/* Main Content */}
-          <div className="flex-1">
+          {/* Stats Row */}
+          <div className="grid grid-cols-5 gap-4">
+            {tabs.map((tab) => {
+              const IconComponent = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-[16px] px-5 py-4 text-left transition-all ${
+                    isActive ? 'bg-[#1A1A1A]' : 'bg-[#F5F5F0] hover:bg-[#E8E8E3]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-sm ${isActive ? 'text-white' : 'text-[#6B6B6B]'}`}>{tab.label}</span>
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                      isActive ? 'bg-white/10' : 'bg-[#FEF9E7]'
+                    }`}>
+                      <IconComponent className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#FBBF24]'}`} strokeWidth={1.5} />
+                    </div>
+                  </div>
+                  <p className={`text-xs ${isActive ? 'text-white/70' : 'text-[#8B8B8B]'}`}>
+                    {tab.id === 'profile' && 'Your details'}
+                    {tab.id === 'notifications' && 'Alerts & emails'}
+                    {tab.id === 'security' && 'Password & 2FA'}
+                    {tab.id === 'properties' && 'Your homes'}
+                    {tab.id === 'tasks' && 'Task settings'}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left Column - Main Settings Content (3 columns wide) */}
+          <div className="lg:col-span-3">
             {activeTab === "profile" && <Profile />}
 
             {activeTab === "notifications" && (
@@ -623,6 +643,37 @@ const Settings = () => {
             )}
 
             {activeTab === "tasks" && renderTaskTemplates()}
+          </div>
+
+          {/* Right Column - Settings Navigation */}
+          <div className="lg:col-span-1 space-y-4">
+            {/* Navigation Panel */}
+            <div className="bg-white rounded-[16px] p-5 border border-[#E0E0DB]">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-9 w-9 bg-[#FEF9E7] rounded-full flex items-center justify-center">
+                  <SettingsIcon className="w-4 h-4 text-[#FBBF24]" />
+                </div>
+                <h3 className="text-[#1A1A1A] text-base font-semibold">Settings Menu</h3>
+              </div>
+              <nav className="space-y-1">
+                {tabs.map((tab) => {
+                  const IconComponent = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        activeTab === tab.id
+                          ? "bg-[#1A1A1A] text-white"
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}>
+                      <IconComponent className="w-4 h-4 mr-3" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
           </div>
         </div>
       </div>

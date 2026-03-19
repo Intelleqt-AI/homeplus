@@ -17,6 +17,8 @@ import {
   MessageSquare,
   Home,
   Flame,
+  ClipboardList,
+  Bell,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -450,96 +452,117 @@ const Calendar = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Simplified Top Controls Bar */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-center gap-6">
-              <h1 className="text-xl font-semibold text-black">
-                Property Calendar
-              </h1>
-
-              {/* View Mode Toggle */}
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-                <Button
-                  variant={viewMode === "month" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("month")}
-                  className="px-3 py-1 text-xs text-black hover:bg-black hover:text-white">
-                  Calendar
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("list")}
-                  className="px-3 py-1 text-xs text-black hover:bg-black hover:text-white">
-                  List
-                </Button>
-                <Button
-                  variant={viewMode === "board" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("board")}
-                  className="px-3 py-1 text-xs text-black hover:bg-black hover:text-white">
-                  Board
-                </Button>
+        {/* Header Section - Dashboard Style */}
+        <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                <ClipboardList className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
               </div>
-
-              {/* Enhanced Filter Pills */}
-              <div className="flex items-center gap-2">
-                {[
-                  { value: "all", label: "All", color: "default" },
-                  { value: "safety", label: "Safety", color: "destructive" },
-                  {
-                    value: "maintenance",
-                    label: "Maintenance",
-                    color: "secondary",
-                  },
-                  { value: "financial", label: "Financial", color: "default" },
-                  { value: "household", label: "Household", color: "default" },
-                  { value: "custom", label: "Custom", color: "outline" },
-                ].map((filter) => (
-                  <Button
-                    key={filter.value}
-                    variant={
-                      filterType === filter.value ? "default" : "outline"
-                    }
-                    size="sm"
-                    onClick={() => setFilterType(filter.value as FilterType)}
-                    className={`px-3 py-1 text-xs text-black ${
-                      filterType === filter.value
-                        ? filter.value === "safety"
-                          ? "bg-red-500 text-white"
-                          : filter.value === "maintenance"
-                          ? "bg-orange-500 text-white"
-                          : filter.value === "financial"
-                          ? "bg-blue-500 text-white"
-                          : filter.value === "household"
-                          ? "bg-green-500 text-white"
-                          : "bg-gray-800 text-white"
-                        : "hover:bg-gray-100"
-                    }`}>
-                    {filter.label}
-                  </Button>
-                ))}
+              <div>
+                <p className="text-[#6B6B6B] text-sm mb-0.5">Your schedule</p>
+                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Tasks</h1>
               </div>
             </div>
 
-            {/* Status Indicators & Actions */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-1 text-red-600">
-                  <AlertTriangle className="w-4 h-4" />{" "}
-                  <span className="font-medium">
-                    {overdueEvents.length} Overdue
-                  </span>
+            <div className="flex items-center gap-3">
+              <AddEvent />
+            </div>
+          </div>
+
+          {/* Stats Row */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#6B6B6B] text-sm">Total Tasks</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                  <ClipboardList className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
-                <div className="flex items-center gap-1 text-orange-600">
-                  <Clock className="w-4 h-4" />{" "}
-                  <span className="font-medium">
-                    {thisWeekEvents.length} This Week
-                  </span>
-                </div>
-                <AddEvent />
               </div>
+              <p className="text-[#1A1A1A] text-2xl font-semibold">{filteredEvents.length}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">All tasks</p>
+            </div>
+
+            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#6B6B6B] text-sm">This Week</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-[#1A1A1A] text-2xl font-semibold">{thisWeekEvents.length}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">Due this week</p>
+            </div>
+
+            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#6B6B6B] text-sm">Confirmed</span>
+                <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-[#10B981] text-2xl font-semibold">{filteredEvents.filter(e => e.status === 'confirmed').length}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">Tasks confirmed</p>
+            </div>
+
+            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#6B6B6B] text-sm">Action Required</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF2F2] flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4 text-[#DC2626]" strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-[#DC2626] text-2xl font-semibold">{overdueEvents.length}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">Need attention</p>
+            </div>
+          </div>
+        </div>
+
+        {/* View Mode & Filters */}
+        <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+          <div className="flex items-center justify-between">
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-2">
+              {[
+                { value: "month", label: "Calendar" },
+                { value: "list", label: "List" },
+                { value: "board", label: "Board" },
+              ].map((mode) => (
+                <button
+                  key={mode.value}
+                  onClick={() => setViewMode(mode.value as "month" | "list" | "board")}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-all duration-200 ${
+                    viewMode === mode.value
+                      ? 'bg-[#1A1A1A] text-white'
+                      : 'text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A]'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex items-center gap-2">
+              {[
+                { value: "all", label: "All" },
+                { value: "safety", label: "Safety" },
+                { value: "maintenance", label: "Maintenance" },
+                { value: "financial", label: "Financial" },
+                { value: "household", label: "Household" },
+              ].map((filter) => (
+                <button
+                  key={filter.value}
+                  onClick={() => setFilterType(filter.value as FilterType)}
+                  className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
+                    filterType === filter.value
+                      ? 'bg-[#1A1A1A] text-white'
+                      : 'text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A] border border-[#E8E8E3]'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -547,21 +570,21 @@ const Calendar = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">
             {viewMode === "month" ? (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-black">
+                  <h2 className="text-[#1A1A1A] text-lg font-semibold">
                     {monthYear}
                   </h2>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={previousMonth}
-                      className="p-2 hover:bg-gray-100 rounded-lg">
-                      <ChevronLeft className="w-4 h-4 text-gray-600" />
+                      className="p-2 hover:bg-[#F5F5F0] rounded-full transition-colors">
+                      <ChevronLeft className="w-4 h-4 text-[#4A4A4A]" />
                     </button>
                     <button
                       onClick={nextMonth}
-                      className="p-2 hover:bg-gray-100 rounded-lg">
-                      <ChevronRight className="w-4 h-4 text-gray-600" />
+                      className="p-2 hover:bg-[#F5F5F0] rounded-full transition-colors">
+                      <ChevronRight className="w-4 h-4 text-[#4A4A4A]" />
                     </button>
                   </div>
                 </div>
@@ -637,28 +660,17 @@ const Calendar = () => {
                 </>
               </div>
             ) : viewMode === "list" ? (
-              <Card>
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Events List</CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs px-3 py-1.5 h-8">
-                        <Filter className="w-3 h-3 mr-1" />
-                        Filter
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs px-3 py-1.5 h-8">
-                        Sort by date
-                      </Button>
-                    </div>
+              <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-[#1A1A1A] text-lg font-semibold">Tasks List</h2>
+                  <div className="flex items-center gap-2">
+                    <button className="px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F5F0] rounded-full transition-colors flex items-center gap-2 border border-[#E8E8E3]">
+                      <Filter className="w-3 h-3" />
+                      Filter
+                    </button>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
+                </div>
+                <div className="space-y-3">
                   {filteredEvents.map((event) => (
                     <Card
                       key={event.id}
@@ -739,15 +751,12 @@ const Calendar = () => {
                       </CardContent>
                     </Card>
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ) : (
-              <Card>
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Board View</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+                <h2 className="text-[#1A1A1A] text-lg font-semibold mb-6">Board View</h2>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     {/* Overdue Column */}
                     <Card className="bg-white border border-gray-200">
                       <CardHeader className="pb-3 border-b border-gray-100">
@@ -912,181 +921,78 @@ const Calendar = () => {
                       </CardContent>
                     </Card>
                   </div>
-                </CardContent>
-              </Card>
+              </div>
             )}
           </div>
 
-          {/* Enhanced Right Sidebar - Structured Action Panel */}
-          <div className="space-y-4">
-            {/* Requires Action Panel */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col">
-              <div className="flex items-center space-x-2 mb-6">
-                <AlertTriangle
-                  className="w-5 h-5 text-yellow-600"
-                  strokeWidth={1}
-                />
-                <h3 className="font-semibold text-black">
-                  Requires Action ({actionRequiredEvents.length})
-                </h3>
-              </div>
-              <div className="space-y-1">
-                {[
-                  ...overdueEvents.slice(0, 2),
-                  ...thisWeekEvents.slice(0, 2),
-                  ...upcomingEvents.slice(0, 2),
-                ].map((event) => (
-                  <div
-                    key={event.id}
-                    className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
-                    <div className="flex items-center gap-2">
-                      {getServiceIcon(event.title, event.type)}
-                      <span className="text-sm font-medium text-black">
-                        {event.title}
-                      </span>
-                    </div>
-                    <button className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 border-0">
-                      {event.status === "quotes_ready"
-                        ? "View quotes"
-                        : "Get quotes"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">This month</span>
-                  <span className="font-medium">
-                    £{thisMonthCost.toLocaleString()}
-                  </span>
+          {/* Right Sidebar - Upcoming Tasks and Reminders */}
+          <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                  <ClipboardList className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">This year</span>
-                  <span className="font-medium">
-                    £{yearlySpent.toLocaleString()}
-                  </span>
-                </div>
-                <button className="text-xs text-gray-600 hover:text-gray-800 mt-2 w-full text-left">
-                  View breakdown
-                </button>
+                <h3 className="text-[#1A1A1A] text-lg font-semibold">Upcoming tasks and reminders</h3>
               </div>
             </div>
+            <p className="text-[#6B6B6B] text-sm mb-4">Next 3 items</p>
 
-            {/* This Week Panel */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col">
-              <div className="flex items-center space-x-2 mb-6">
-                <Clock className="w-5 h-5 text-gray-600" strokeWidth={1} />
-                <h3 className="font-semibold text-black">This Week</h3>
-              </div>
-              <div className="space-y-1">
-                {thisWeekEvents.slice(0, 3).map((event) => (
+            {/* Task List */}
+            <div className="space-y-3">
+              {[...overdueEvents, ...thisWeekEvents, ...upcomingEvents].slice(0, 3).map((item, idx) => {
+                const dueDate = item?.date ? new Date(item.date) : null;
+                const diffDays = dueDate ? Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+
+                let urgencyColor = 'text-[#6B7280]';
+                let urgencyBg = 'bg-[#F9FAFB]';
+                let urgencyBorder = 'border-[#E5E7EB]';
+                if (diffDays < 0) {
+                  urgencyColor = 'text-[#DC2626]';
+                  urgencyBg = 'bg-[#FEF2F2]';
+                  urgencyBorder = 'border-[#FECACA]';
+                } else if (diffDays <= 3) {
+                  urgencyColor = 'text-[#D97706]';
+                  urgencyBg = 'bg-[#FFFBEB]';
+                  urgencyBorder = 'border-[#FDE68A]';
+                } else if (diffDays <= 7) {
+                  urgencyColor = 'text-[#1F2937]';
+                  urgencyBg = 'bg-[#FEF3C7]/50';
+                  urgencyBorder = 'border-[#FDE68A]/50';
+                }
+
+                return (
                   <div
-                    key={event.id}
-                    className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
-                    <div className="flex items-center gap-2">
-                      {getServiceIcon(event.title, event.type)}
-                      <span className="text-sm font-medium text-black">
-                        {event?.date?.toLocaleDateString("en-GB", {
-                          weekday: "short",
-                        })}
-                        : {event.title}
-                      </span>
-                    </div>
-                    <button className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 border-0">
-                      {event.status === "quotes_ready"
-                        ? "View quotes"
-                        : "Book now"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Week total:</span>
-                  <span className="font-semibold text-green-600">
-                    £
-                    {thisWeekEvents.reduce((total, event) => {
-                      const cost = event.cost.replace(/[£,-]/g, "");
-                      return total + (parseInt(cost) || 0);
-                    }, 0)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Compliance Timeline */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col">
-              <div className="flex items-center space-x-2 mb-6">
-                <Shield className="w-5 h-5 text-gray-600" strokeWidth={1} />
-                <h3 className="font-semibold text-black">
-                  Compliance Timeline
-                </h3>
-              </div>
-              <div className="space-y-1">
-                {[
-                  {
-                    cert: "EICR Testing",
-                    status: "due",
-                    desc: "Electrical Installation Condition Report",
-                    deadline: "15 Jan 2024",
-                  },
-                  {
-                    cert: "Gas Safety",
-                    status: "ok",
-                    desc: "Annual gas safety inspection",
-                    deadline: "20 Apr 2024",
-                  },
-                  {
-                    cert: "Boiler Service",
-                    status: "ok",
-                    desc: "Annual boiler maintenance",
-                    deadline: "10 Jul 2024",
-                  },
-                  {
-                    cert: "Insurance Renewal",
-                    status: "expiring",
-                    desc: "Home insurance policy renewal",
-                    deadline: "31 Oct 2024",
-                  },
-                ].map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-3 h-3 rounded-full ${
-                          item.status === "due"
-                            ? "bg-red-500"
-                            : item.status === "expiring"
-                            ? "bg-yellow-500"
-                            : "bg-green-500"
-                        }`}></div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-black">
-                          {item.cert}
-                        </span>
-                        <span className="text-xs text-gray-600">
-                          Due: {item.deadline}
-                        </span>
+                    className={`${urgencyBg} border ${urgencyBorder} rounded-[12px] p-4 hover:shadow-sm transition-all cursor-pointer`}
+                    key={item?.id || idx}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`h-8 w-8 rounded-[8px] flex items-center justify-center bg-white border border-[#E5E7EB]`}>
+                        <Clock size={14} className={urgencyColor} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-[#1F2937] text-sm font-medium truncate">{item?.title}</h4>
+                        <p className="text-[#9CA3AF] capitalize text-[11px] mt-0.5">{item?.type}</p>
+                        <p className={`text-xs mt-2 font-medium ${urgencyColor}`}>
+                          {diffDays < 0
+                            ? `Overdue by ${Math.abs(diffDays)} days`
+                            : diffDays === 0
+                            ? 'Due today'
+                            : diffDays === 1
+                            ? 'Due tomorrow'
+                            : `${diffDays} days left`}
+                        </p>
                       </div>
                     </div>
-                    <Badge
-                      variant="secondary"
-                      className={`text-xs px-2 py-1 ${
-                        item.status === "due"
-                          ? "bg-red-100 text-red-800"
-                          : item.status === "expiring"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-green-100 text-green-800"
-                      }`}>
-                      {item.status}
-                    </Badge>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
+
+            {filteredEvents.length > 3 && (
+              <button className="text-[#FBBF24] text-sm mt-4 block text-center hover:text-[#D4A017] transition-colors font-medium w-full">
+                View all {filteredEvents.length} tasks
+              </button>
+            )}
           </div>
         </div>
       </div>

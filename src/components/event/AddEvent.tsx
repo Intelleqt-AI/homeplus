@@ -420,9 +420,10 @@ const AddEvent = () => {
       <div className="relative">
         <Button
           onClick={() => setQuickAddType("property")}
-          className="flex items-center space-x-2 px-4 py-2">
-          <Plus className="w-4 h-4" />
-          <span className="text-sm font-medium">Add Task</span>
+          className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
+        >
+          <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
+          Add Task
         </Button>
 
         {/* Quick Add Popover */}
