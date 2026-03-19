@@ -7,15 +7,25 @@ import { Home } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
+import { isDemoMode, DEMO_CREDENTIALS } from "@/lib/mockData";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  
+
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Check if demo mode is enabled
+  const demoMode = isDemoMode();
+
+  // Function to fill demo credentials
+  const fillDemoCredentials = () => {
+    setEmail(DEMO_CREDENTIALS.email);
+    setPassword(DEMO_CREDENTIALS.password);
+  };
 
   // Redirect if already logged in
   if (user) {
@@ -62,13 +72,39 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Demo Mode Banner */}
+            {demoMode && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <div className="h-5 w-5 rounded-full bg-amber-400 flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">!</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-amber-800">Demo Mode Active</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Use demo credentials or any email/password to explore the app.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={fillDemoCredentials}
+                      className="mt-2 text-xs font-medium text-amber-900 bg-amber-200 hover:bg-amber-300 px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      Fill Demo Credentials
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSignIn} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email address</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder={demoMode ? DEMO_CREDENTIALS.email : "you@example.com"}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -84,14 +120,14 @@ const Login = () => {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Enter your password"
+                  placeholder={demoMode ? "demo123" : "Enter your password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
               </div>
-              
-              <Button 
+
+              <Button
                 type="submit"
                 className="w-full h-12 text-lg"
                 disabled={loading}

@@ -1,7 +1,13 @@
 import { supabase } from '@/integrations/supabase/client';
+import { isDemoMode, mockDocuments, mockLeads, mockCover } from '@/lib/mockData';
 
 // add new property
 export const addNewProperty = async property => {
+  if (isDemoMode()) {
+    // In demo mode, just return success
+    return { data: { id: 'demo-property-new', ...property } };
+  }
+
   const { data, error } = await supabase.from('property').insert(property);
   if (error) {
     console.log(error);
@@ -12,6 +18,14 @@ export const addNewProperty = async property => {
 
 // Upload files
 export const uploadFileWithMetadata = async ({ file, id, metadata }) => {
+  if (isDemoMode()) {
+    // In demo mode, simulate upload success
+    return {
+      path: `${id}/${file.name}`,
+      id: `demo-upload-${Date.now()}`,
+    };
+  }
+
   const filePath = `${id}/${file.name}`; // path in the bucket
 
   const { data, error } = await supabase.storage.from('user-docs').upload(filePath, file, {
@@ -26,6 +40,15 @@ export const uploadFileWithMetadata = async ({ file, id, metadata }) => {
 
 // Fetch files with metadata
 export const listFilesWithMetadata = async id => {
+  if (isDemoMode()) {
+    // Check if this is a cover image request
+    if (id.includes('/cover')) {
+      return mockCover;
+    }
+    // Return mock documents
+    return mockDocuments;
+  }
+
   // 1️⃣ List all files inside the user's folder
   const { data: files, error } = await supabase.storage.from('user-docs').list(id);
 
@@ -59,6 +82,11 @@ export const listFilesWithMetadata = async id => {
 };
 
 export const deleteFile = async ({ id, fileName }) => {
+  if (isDemoMode()) {
+    // In demo mode, simulate delete success
+    return true;
+  }
+
   const filePath = `${id}/${fileName}`;
   console.log(filePath);
 
@@ -73,6 +101,11 @@ export const deleteFile = async ({ id, fileName }) => {
 };
 
 export const updateUserInfo = async ({ userData }) => {
+  if (isDemoMode()) {
+    // In demo mode, simulate update success
+    return { user: userData };
+  }
+
   console.log('Payload to Supabase:', userData);
   const { data, error } = await supabase.auth.updateUser(userData);
 
@@ -82,6 +115,11 @@ export const updateUserInfo = async ({ userData }) => {
 
 // src/api/getLeads.ts
 export const fetchLeads = async () => {
+  if (isDemoMode()) {
+    // Return mock leads data
+    return mockLeads;
+  }
+
   const res = await fetch('https://bozuxpzratqjsjqgjchq.supabase.co/functions/v1/get-services', {
     headers: {
       'Content-Type': 'application/json',
@@ -98,6 +136,11 @@ export const fetchLeads = async () => {
 };
 
 export const modifyBid = async ({ bid_id, status, lead_id, isApproved }) => {
+  if (isDemoMode()) {
+    // In demo mode, simulate bid modification success
+    return { success: true, bid_id, status, lead_id, isApproved };
+  }
+
   const res = await fetch('https://bozuxpzratqjsjqgjchq.supabase.co/functions/v1/modify-bid', {
     method: 'POST',
     headers: {
@@ -113,6 +156,11 @@ export const modifyBid = async ({ bid_id, status, lead_id, isApproved }) => {
 };
 
 export const createJob = async job => {
+  if (isDemoMode()) {
+    // In demo mode, simulate job creation success
+    return { success: true, id: `demo-job-${Date.now()}`, ...job };
+  }
+
   const res = await fetch('https://bozuxpzratqjsjqgjchq.supabase.co/functions/v1/create-job', {
     method: 'POST',
     headers: {
