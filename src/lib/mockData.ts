@@ -12,11 +12,11 @@ export const DEMO_CREDENTIALS = {
 // Mock user object
 export const mockUser = {
   id: 'demo-user-123',
-  email: 'demo@homeplus.com',
+  email: 'risalat@homeplus.com',
   user_metadata: {
-    full_name: 'John Smith',
-    first_name: 'John',
-    last_name: 'Smith',
+    full_name: 'Risalat Shahriar',
+    first_name: 'Risalat',
+    last_name: 'Shahriar',
     location: 'London',
     postcode: 'SW1A 1AA',
     property_type: 'Detached House',

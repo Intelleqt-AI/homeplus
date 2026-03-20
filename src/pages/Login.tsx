@@ -73,7 +73,7 @@ const Login = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Demo Mode Banner */}
-            {demoMode && (
+            {/* {demoMode && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0 mt-0.5">
@@ -96,7 +96,7 @@ const Login = () => {
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
 
             <form onSubmit={handleSignIn} className="space-y-4">
               <div className="space-y-2">
@@ -104,7 +104,7 @@ const Login = () => {
                 <Input
                   id="email"
                   type="email"
-                  placeholder={demoMode ? DEMO_CREDENTIALS.email : "you@example.com"}
+                  placeholder={"you@example.com"}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -120,7 +120,7 @@ const Login = () => {
                 <Input
                   id="password"
                   type="password"
-                  placeholder={demoMode ? "demo123" : "Enter your password"}
+                  placeholder={"Enter your password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
