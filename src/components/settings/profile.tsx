@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabaseClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateUserInfo } from "@/lib/Api";
 import { toast } from "sonner";
@@ -43,23 +42,21 @@ const Profile = () => {
   const handleSave = () => {
     setMessage("");
 
-    // ✅ Supabase client expects metadata under the "data" key
     const payload = {
       data: { full_name: form.full_name },
     };
 
-    // console.log("Update payload:", payload);
     mutation.mutate({ userData: payload });
   };
 
   useEffect(() => {
     if (!user) return;
 
-    const { full_name, phone, email } = user.user_metadata || {};
+    const meta = user.user_metadata || {};
     setForm({
-      full_name: full_name || "",
-      phone: phone || "",
-      email: email || "",
+      full_name: meta.full_name || "",
+      phone: meta.phone || "",
+      email: user.email || meta.email || "",
     });
   }, [user]);
 

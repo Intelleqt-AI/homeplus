@@ -33,7 +33,9 @@ import { format, isPast } from "date-fns";
 
 const DocsUploadDialog = ({ openForm, setOpenForm }) => {
   const [documentType, setDocumentType] = useState("");
+  const [documentCategory, setDocumentCategory] = useState("home");
   const [documentStatus, setDocumentStatus] = useState("");
+  const [documentName, setDocumentName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -59,6 +61,8 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
       setOpenForm(false);
       setSelectedFile(null);
       setDocumentType("");
+      setDocumentCategory("home");
+      setDocumentName("");
       setSelectedDate("");
       queryClient.invalidateQueries(["GetAllDocs"]);
     },
@@ -71,7 +75,9 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
 
   const handleSubmit = () => {
     const data = {
+      name: documentName || selectedFile?.name || "Document",
       type: documentType,
+      category: documentCategory,
       status: selectedDate,
     };
 
@@ -105,6 +111,16 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
           </div>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="doc-name">Document Name</Label>
+              <Input
+                id="doc-name"
+                placeholder="e.g. Home Insurance Certificate 2026"
+                value={documentName}
+                onChange={e => setDocumentName(e.target.value)}
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="file-upload">Document File</Label>
               <div className="relative">
@@ -140,11 +156,26 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
                 <SelectContent>
                   <SelectItem value="certificate">Certificate</SelectItem>
                   <SelectItem value="insurance">Insurance</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
-                  <SelectItem value="inspection">Inspection</SelectItem>
-                  {/* <SelectItem value="contract">Contract</SelectItem>
-                      <SelectItem value="manual">Manual</SelectItem>
-                      <SelectItem value="other">Other</SelectItem> */}
+                  <SelectItem value="warranty">Warranty</SelectItem>
+                  <SelectItem value="compliance">Compliance</SelectItem>
+                  <SelectItem value="receipt">Receipt</SelectItem>
+                  <SelectItem value="id">ID Document</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="document-category">Category</Label>
+              <Select value={documentCategory} onValueChange={setDocumentCategory}>
+                <SelectTrigger id="document-category">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="car">Car</SelectItem>
+                  <SelectItem value="warranties">Warranties</SelectItem>
+                  <SelectItem value="miscellaneous">Miscellaneous</SelectItem>
                 </SelectContent>
               </Select>
             </div>

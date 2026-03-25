@@ -26,6 +26,7 @@ import { format, isPast } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   deleteFile,
+  getDocumentDownloadUrl,
   listFilesWithMetadata,
 } from "@/lib/Api";
 import { useAuth } from "@/hooks/useAuth";
@@ -222,12 +223,14 @@ const Documents = () => {
     },
   });
 
-  function downloadFile(url: string, fileName: string) {
-    fetch(url)
-      .then(r => {
-        if (!r.ok) throw new Error('Network response was not ok');
-        return r.blob();
-      })
+  function downloadFile(docId: string, fileName: string) {
+    getDocumentDownloadUrl(docId)
+      .then(url =>
+        fetch(url).then(r => {
+          if (!r.ok) throw new Error('Network response was not ok');
+          return r.blob();
+        })
+      )
       .then(blob => {
         const objectUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -606,12 +609,9 @@ const Documents = () => {
     }
   }
 
-  // Delete files or folders
-  const handleDeleteTask = name => {
-    deleteMutation.mutate({
-      fileName: name,
-      id: user?.id,
-    });
+  // Delete files — pass doc UUID (not filename)
+  const handleDeleteTask = (docId: string) => {
+    deleteMutation.mutate({ id: docId });
   };
 
   return (
@@ -828,14 +828,14 @@ const Documents = () => {
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => downloadFile(publicUrl, name)}
+                          onClick={() => downloadFile(id, name)}
                           className="p-2 text-[#4A4A4A] hover:bg-[#E8E8E3] rounded-full transition-colors"
                           title="Download"
                         >
                           <Download className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteTask(name)}
+                          onClick={() => handleDeleteTask(id)}
                           className="p-2 text-[#6B6B6B] hover:text-[#DC2626] hover:bg-[#FEF2F2] rounded-full transition-colors"
                           title="Delete"
                         >

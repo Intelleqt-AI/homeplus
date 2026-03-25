@@ -28,8 +28,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getEvents, uploadCover } from '@/lib/Api2';
-import { listFilesWithMetadata, uploadFileWithMetadata } from '@/lib/Api';
+import { getEvents, uploadCover, getCoverImage } from '@/lib/Api2';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
@@ -45,14 +44,19 @@ const HomePlusDashboard = () => {
     fileInputRef.current?.click(); // manually open file picker
   };
 
-  // Fetch files/folders
+  // Fetch property cover image
   const {
     data: cover,
     isLoading: coverLoading,
     refetch,
   } = useQuery({
     queryKey: ['GetCover', user.id],
-    queryFn: () => listFilesWithMetadata(`${user.id}/cover`),
+    queryFn: async () => {
+      // Get the first property id, then fetch its cover
+      const { data: prop } = await import('@/lib/Api2').then(m => m.getProperty());
+      if (!prop?.id) return [];
+      return getCoverImage(prop.id);
+    },
     enabled: !!user.id,
   });
 
