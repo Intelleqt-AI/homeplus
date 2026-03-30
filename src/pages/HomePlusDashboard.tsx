@@ -31,6 +31,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { getEvents, uploadCover, getCoverImage } from '@/lib/Api2';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { listFilesWithMetadata } from '@/lib/Api';
 
 const HomePlusDashboard = () => {
   const [showSmartMatches, setShowSmartMatches] = useState(false);
@@ -59,6 +60,15 @@ const HomePlusDashboard = () => {
     },
     enabled: !!user.id,
   });
+  
+    const {
+      data: apiDocs,
+    } = useQuery({
+      queryKey: ['GetAllDocs', user.id],
+      queryFn: () => listFilesWithMetadata(user.id),
+      enabled: !!user.id,
+    });
+
 
   const { data, isLoading } = useQuery({
     queryKey: ['property'],
@@ -152,48 +162,25 @@ const HomePlusDashboard = () => {
     }));
 
   // Sample events for calendar display when no API data exists - dates from Jan 27, 2026
-  const sampleCalendarEvents: DashEvent[] = [
-    {
-      id: 'sample-1',
-      title: 'Car tax',
-      date: new Date(2026, 1, 3), // Tuesday 3rd February 2026 (1 week)
-      type: 'Vehicle',
-    },
-    {
-      id: 'sample-2',
-      title: 'Car MOT',
-      date: new Date(2026, 1, 6), // Friday 6th February 2026 (10 days)
-      type: 'Vehicle',
-    },
-    {
-      id: 'sample-3',
-      title: 'Black bin day',
-      date: new Date(2026, 1, 10), // Tuesday 10th February 2026 (2 weeks)
-      type: 'Household',
-    },
-    {
-      id: 'sample-4',
-      title: 'Boiler servicing',
-      date: new Date(2026, 1, 19), // Thursday 19th February 2026 (3 weeks)
-      type: 'Maintenance',
-    },
-    {
-      id: 'sample-5',
-      title: "Sarah's Birthday",
-      date: new Date(2026, 1, 27), // Friday 27th February 2026 (1 month)
-      type: 'Personal',
-    },
-    {
-      id: 'sample-6',
-      title: 'Garden maintenance',
-      date: new Date(2026, 2, 10), // Tuesday 10th March 2026 (6 weeks)
-      type: 'Maintenance',
-    },
-  ];
 
   const dashEvents: DashEvent[] = Array.isArray(rawEvents) && rawEvents.length > 0
     ? mapToDashEvents(rawEvents)
-    : sampleCalendarEvents;
+    : [];
+
+  // Calculate event counts for next 2 weeks and next 6 weeks
+  const now = new Date();
+  const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const sixWeeksFromNow = new Date(now.getTime() + 42 * 24 * 60 * 60 * 1000);
+
+  const eventsNextTwoWeeks = dashEvents.filter(event => {
+    if (!event.date) return false;
+    return event.date >= now && event.date <= twoWeeksFromNow;
+  }).length;
+
+  const eventsNextSixWeeks = dashEvents.filter(event => {
+    if (!event.date) return false;
+    return event.date >= now && event.date <= sixWeeksFromNow;
+  }).length;
 
   const getDotColor = status => {
     switch (status) {
@@ -415,180 +402,10 @@ const HomePlusDashboard = () => {
     },
   ];
 
-  const stats = [
-    {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M1.15808 10C1.15808 7.65498 2.08964 5.40599 3.74783 3.74781C5.40601 2.08962 7.655 1.15806 10 1.15806C12.3451 1.15806 14.594 2.08962 16.2522 3.74781C17.9104 5.40599 18.842 7.65498 18.842 10C18.842 12.345 17.9104 14.594 16.2522 16.2522C14.594 17.9104 12.3451 18.8419 10 18.8419C7.655 18.8419 5.40601 17.9104 3.74783 16.2522C2.08964 14.594 1.15808 12.345 1.15808 10Z"
-            stroke="#E8EFF5"
-            stroke-width="1.66667"
-          />
-
-          <path
-            d="M1.15808 10C1.15808 7.65498 2.08964 5.40599 3.74783 3.74781C5.40601 2.08962 7.655 1.15806 10 1.15806C12.3451 1.15806 14.594 2.08962 16.2522 3.74781C17.9104 5.40599 18.842 7.65498 18.842 10C18.842 12.345 17.9104 14.594 16.2522 16.2522C14.594 17.9104 12.3451 18.8419 10 18.8419C7.655 18.8419 5.40601 17.9104 3.74783 16.2522C2.08964 14.594 1.15808 12.345 1.15808 10Z"
-            stroke="black"
-            stroke-width="1.66667"
-            stroke-dasharray="5 3"
-            stroke-linecap="butt"
-          />
-        </svg>
-      ),
-      title: 'Home Health',
-      subtitle: 'In Good Condition',
-      value: '87%',
-    },
-
-    {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M17.5 8.88V15.8333C17.5 16.2754 17.3244 16.6993 17.0118 17.0118C16.6993 17.3244 16.2754 17.5 15.8333 17.5H4.16667C3.72464 17.5 3.30072 17.3244 2.98816 17.0118C2.67559 16.6993 2.5 16.2754 2.5 15.8333V4.16667C2.5 3.72464 2.67559 3.30072 2.98816 2.98816C3.30072 2.67559 3.72464 2.5 4.16667 2.5H14.4533"
-            stroke="black"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M7.5 9.16666L10 11.6667L18.3333 3.33333"
-            stroke="black"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      ),
-      title: 'Tasks Due',
-      subtitle: 'Scheduled This Month',
-      value: eventData?.data?.length || '0',
-    },
-
-    {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M15.8333 5.83333V3.33333C15.8333 3.11232 15.7455 2.90036 15.5893 2.74408C15.433 2.5878 15.221 2.5 15 2.5H4.16667C3.72464 2.5 3.30072 2.67559 2.98816 2.98816C2.67559 3.30072 2.5 3.72464 2.5 4.16667C2.5 4.60869 2.67559 5.03262 2.98816 5.34518C3.30072 5.65774 3.72464 5.83333 4.16667 5.83333H16.6667C16.8877 5.83333 17.0996 5.92113 17.2559 6.07741C17.4122 6.23369 17.5 6.44565 17.5 6.66667V10M17.5 10H15C14.558 10 14.134 10.1756 13.8215 10.4882C13.5089 10.8007 13.3333 11.2246 13.3333 11.6667C13.3333 12.1087 13.5089 12.5326 13.8215 12.8452C14.134 13.1577 14.558 13.3333 15 13.3333H17.5C17.721 13.3333 17.933 13.2455 18.0893 13.0893C18.2455 12.933 18.3333 12.721 18.3333 12.5V10.8333C18.3333 10.6123 18.2455 10.4004 18.0893 10.2441C17.933 10.0878 17.721 10 17.5 10Z"
-            stroke="black"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M2.5 4.16667V15.8333C2.5 16.2754 2.67559 16.6993 2.98816 17.0118C3.30072 17.3244 3.72464 17.5 4.16667 17.5H16.6667C16.8877 17.5 17.0996 17.4122 17.2559 17.2559C17.4122 17.0996 17.5 16.8877 17.5 16.6667V13.3333"
-            stroke="black"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      ),
-      title: 'This Months Spend',
-      subtitle: 'In Completed Jobs',
-      value: '£420',
-    },
-  ];
-
-  // Sample tasks for when no events exist - dates in next 2-3 weeks from Jan 27, 2026
-  const sampleTasks = [
-    {
-      id: 'sample-1',
-      title: 'Car tax',
-      date: new Date(2026, 1, 3), // Tuesday 3rd February 2026 (1 week)
-      eventType: 'Vehicle',
-    },
-    {
-      id: 'sample-2',
-      title: 'Car MOT',
-      date: new Date(2026, 1, 6), // Friday 6th February 2026 (10 days)
-      eventType: 'Vehicle',
-    },
-    {
-      id: 'sample-3',
-      title: 'Black bin day',
-      date: new Date(2026, 1, 10), // Tuesday 10th February 2026 (2 weeks)
-      eventType: 'Household',
-    },
-    {
-      id: 'sample-4',
-      title: 'Boiler servicing',
-      date: new Date(2026, 1, 17), // Tuesday 17th February 2026 (3 weeks)
-      eventType: 'Maintenance',
-    },
-  ];
 
   // Use API data if available, otherwise show sample tasks
-  const displayTasks = eventData?.data?.length > 0 ? eventData.data : sampleTasks;
+  const displayTasks = eventData?.data?.length > 0 ? eventData.data : [];
 
-  const tasks = [
-    {
-      title: 'Boiler Service',
-      category: 'Plumbing',
-      subtitle: 'Quote Available',
-      due: 'Due in 3 days',
-      icon: (
-        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="36" height="36" rx="10" fill="#F9FAFB" />
-          <path
-            d="M20.25 13.25C20.0973 13.4058 20.0118 13.6152 20.0118 13.8333C20.0118 14.0515 20.0973 14.2609 20.25 14.4167L21.5833 15.75C21.7391 15.9027 21.9485 15.9882 22.1667 15.9882C22.3848 15.9882 22.5942 15.9027 22.75 15.75L25.8917 12.6083C26.3107 13.5343 26.4376 14.566 26.2554 15.566C26.0732 16.5659 25.5906 17.4865 24.8719 18.2052C24.1532 18.9239 23.2325 19.4065 22.2326 19.5887C21.2327 19.7709 20.201 19.644 19.275 19.225L13.5167 24.9833C13.1851 25.3149 12.7355 25.5011 12.2667 25.5011C11.7978 25.5011 11.3482 25.3149 11.0167 24.9833C10.6851 24.6518 10.4989 24.2022 10.4989 23.7333C10.4989 23.2645 10.6851 22.8149 11.0167 22.4833L16.775 16.725C16.356 15.799 16.2291 14.7673 16.4113 13.7674C16.5935 12.7675 17.0761 11.8468 17.7948 11.1281C18.5135 10.4094 19.4341 9.92681 20.434 9.74462C21.434 9.56243 22.4657 9.68931 23.3917 10.1083L20.2583 13.2417L20.25 13.25Z"
-            stroke="#4A5565"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      ),
-    },
-
-    {
-      title: 'Electrical Safety Check',
-      category: 'Electrical',
-      subtitle: 'In Progress',
-      due: 'Due in 5 days',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M3.33337 11.6667C3.17567 11.6672 3.02106 11.623 2.8875 11.5391C2.75393 11.4553 2.6469 11.3353 2.57883 11.193C2.51076 11.0508 2.48445 10.8921 2.50295 10.7355C2.52146 10.5789 2.58402 10.4308 2.68337 10.3083L10.9334 1.80833C10.9953 1.73689 11.0796 1.68862 11.1725 1.67144C11.2655 1.65425 11.3615 1.66917 11.4448 1.71375C11.5281 1.75832 11.5939 1.82991 11.6311 1.91675C11.6684 2.00359 11.6751 2.10053 11.65 2.19166L10.05 7.20833C10.0029 7.3346 9.98701 7.47043 10.0039 7.60417C10.0207 7.7379 10.0698 7.86556 10.1468 7.97618C10.2238 8.0868 10.3265 8.17709 10.4461 8.23929C10.5657 8.3015 10.6986 8.33377 10.8334 8.33333H16.6667C16.8244 8.33279 16.979 8.37701 17.1126 8.46084C17.2461 8.54468 17.3532 8.6647 17.4212 8.80695C17.4893 8.94919 17.5156 9.10784 17.4971 9.26444C17.4786 9.42105 17.4161 9.56919 17.3167 9.69166L9.0667 18.1917C9.00482 18.2631 8.92048 18.3114 8.82755 18.3285C8.73461 18.3457 8.6386 18.3308 8.55526 18.2862C8.47192 18.2417 8.40621 18.1701 8.36892 18.0832C8.33163 17.9964 8.32497 17.8995 8.35003 17.8083L9.95003 12.7917C9.99721 12.6654 10.0131 12.5296 9.99621 12.3958C9.97936 12.2621 9.93032 12.1344 9.85329 12.0238C9.77627 11.9132 9.67356 11.8229 9.55397 11.7607C9.43439 11.6985 9.3015 11.6662 9.1667 11.6667H3.33337Z"
-            stroke="#4A5565"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      ),
-    },
-
-    {
-      title: 'HVAC System Maintenance',
-      category: 'HVAC',
-      subtitle: 'Due Soon',
-      due: 'Due in 7 days',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M10.6666 16.3333C10.8779 16.4918 11.1238 16.5977 11.3841 16.6425C11.6443 16.6873 11.9115 16.6696 12.1636 16.5908C12.4156 16.5121 12.6454 16.3746 12.8339 16.1896C13.0224 16.0047 13.1643 15.7776 13.2478 15.527C13.3313 15.2765 13.3541 15.0097 13.3142 14.7486C13.2744 14.4876 13.1731 14.2397 13.0187 14.0255C12.8643 13.8112 12.6612 13.6367 12.4261 13.5164C12.191 13.3961 11.9307 13.3333 11.6666 13.3333H1.66663"
-            stroke="#4A5565"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M14.5833 6.66665C14.7964 6.38255 15.0785 6.15764 15.403 6.01326C15.7274 5.86889 16.0834 5.80984 16.4371 5.84173C16.7907 5.87362 17.1304 5.99539 17.4238 6.19548C17.7172 6.39557 17.9545 6.66732 18.1133 6.98495C18.2722 7.30258 18.3471 7.65553 18.3312 8.01029C18.3152 8.36505 18.2088 8.70984 18.0221 9.01192C17.8355 9.314 17.5746 9.56335 17.2645 9.73628C16.9543 9.90921 16.6051 9.99998 16.25 9.99998H1.66663"
-            stroke="#4A5565"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M8.16663 3.66665C8.37789 3.50819 8.62379 3.40222 8.88406 3.35744C9.14432 3.31267 9.4115 3.33038 9.66357 3.40912C9.91565 3.48787 10.1454 3.62538 10.3339 3.81034C10.5224 3.9953 10.6643 4.2224 10.7478 4.47293C10.8313 4.72347 10.8541 4.99026 10.8142 5.25133C10.7744 5.51239 10.6731 5.76026 10.5187 5.9745C10.3643 6.18873 10.1612 6.36321 9.92609 6.48355C9.69102 6.60389 9.43071 6.66665 9.16663 6.66665H1.66663"
-            stroke="#4A5565"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      ),
-    },
-  ];
 
   return (
     <DashboardLayout>
@@ -630,7 +447,7 @@ const HomePlusDashboard = () => {
                     <FolderOpen className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                   </div>
                 </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">12</p>
+                <p className="text-[#1A1A1A] text-2xl font-semibold">{apiDocs?.length}</p>
                 <p className="text-[#8B8B8B] text-xs mt-1">Stored safely</p>
               </div>
 
@@ -641,7 +458,7 @@ const HomePlusDashboard = () => {
                     <CheckCircle className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                   </div>
                 </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">5</p>
+                <p className="text-[#1A1A1A] text-2xl font-semibold">{eventsNextTwoWeeks}</p>
                 <p className="text-[#8B8B8B] text-xs mt-1">Tasks and reminders</p>
               </div>
 
@@ -652,7 +469,7 @@ const HomePlusDashboard = () => {
                     <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                   </div>
                 </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">{eventData?.data?.length || 0}</p>
+                <p className="text-[#1A1A1A] text-2xl font-semibold">{eventsNextSixWeeks}</p>
                 <p className="text-[#8B8B8B] text-xs mt-1">Tasks and reminders</p>
               </div>
 

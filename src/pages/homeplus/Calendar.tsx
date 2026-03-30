@@ -140,7 +140,7 @@ const Calendar = () => {
 
   const events = mappedRemoteEvents.length
     ? mappedRemoteEvents
-    : fallbackEvents;
+    : [];
 
   // Enhanced filtering and data processing
   const filteredEvents = events.filter((event) => {

@@ -96,7 +96,7 @@ const Profile = () => {
             className="bg-gray-100 text-gray-600 cursor-not-allowed border border-gray-300"
           />
         </div>
-        <div>
+        {/* <div>
           <Label htmlFor="phone">Phone</Label>
           <Input
             id="phone"
@@ -104,7 +104,7 @@ const Profile = () => {
             value={form.phone}
             onChange={handleChange}
           />
-        </div>
+        </div> */}
         <Button onClick={handleSave}>Save Changes</Button>
         {message && <p className="mt-2 text-sm">{message}</p>}
       </CardContent>

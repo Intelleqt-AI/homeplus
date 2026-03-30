@@ -55,114 +55,6 @@ const Documents = () => {
 
   const { user } = useAuth();
 
-  // Sample documents for demo purposes with categories
-  const sampleDocuments = [
-    {
-      id: 'sample-1',
-      name: 'Home Insurance Certificate 2024',
-      metadata: {
-        createdAt: '2024-03-15T10:30:00Z',
-        metadata: {
-          type: 'Insurance',
-          category: 'home',
-          status: '2025-03-15',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-2',
-      name: 'Building Regulations Certificate',
-      metadata: {
-        createdAt: '2023-08-22T14:15:00Z',
-        metadata: {
-          type: 'Compliance',
-          category: 'home',
-          status: null,
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-3',
-      name: 'Car Insurance Policy',
-      metadata: {
-        createdAt: '2024-01-10T09:00:00Z',
-        metadata: {
-          type: 'Insurance',
-          category: 'car',
-          status: '2025-01-10',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-4',
-      name: 'Fridge Freezer Warranty',
-      metadata: {
-        createdAt: '2022-11-05T16:45:00Z',
-        metadata: {
-          type: 'Warranty',
-          category: 'warranties',
-          status: '2024-11-05',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-5',
-      name: 'Washing Machine Receipt',
-      metadata: {
-        createdAt: '2023-06-18T11:20:00Z',
-        metadata: {
-          type: 'Receipt',
-          category: 'miscellaneous',
-          status: null,
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-6',
-      name: 'MOT Certificate',
-      metadata: {
-        createdAt: '2024-02-20T10:00:00Z',
-        metadata: {
-          type: 'Certificate',
-          category: 'car',
-          status: '2025-02-20',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-7',
-      name: 'Boiler Warranty',
-      metadata: {
-        createdAt: '2023-01-15T09:30:00Z',
-        metadata: {
-          type: 'Warranty',
-          category: 'warranties',
-          status: '2028-01-15',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-8',
-      name: 'EPC Certificate',
-      metadata: {
-        createdAt: '2023-05-10T14:00:00Z',
-        metadata: {
-          type: 'Certificate',
-          category: 'home',
-          status: '2033-05-10',
-        },
-      },
-      publicUrl: '#',
-    },
-  ];
-
   // Fetch files/folders
   const {
     data: apiDocs,
@@ -175,7 +67,7 @@ const Documents = () => {
   });
 
   // Combine API docs with sample documents (sample docs shown when no API data)
-  const allDocs = apiDocs && apiDocs.length > 0 ? apiDocs : sampleDocuments;
+  const allDocs = apiDocs ;
 
   // Filter documents by active tab
   const docs = activeTab === 'all'

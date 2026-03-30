@@ -63,8 +63,8 @@ export const uploadFileWithMetadata = async ({
   const form = new FormData();
   form.append('file', file);
   form.append('name', metadata?.name || file.name);
-  form.append('doc_type', (metadata?.type || 'other').toLowerCase());
-  form.append('category', (metadata?.category || 'home').toLowerCase());
+  // form.append('doc_type', (metadata?.type || 'other').toLowerCase());
+  // form.append('category', (metadata?.category || 'home').toLowerCase());
   if (metadata?.status) {
     // status holds the expiry date (Date object or date string)
     const d = metadata.status instanceof Date ? metadata.status : new Date(metadata.status);
