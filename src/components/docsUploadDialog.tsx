@@ -38,8 +38,17 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
   const [documentName, setDocumentName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [currentDoc, setCurrentDoc] = useState<any>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      toast.success(`File "${file.name}" selected`);
+    }
+  };
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -90,7 +99,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
 
   return (
     <Dialog open={openForm} onOpenChange={setOpenForm}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Scan Document</DialogTitle>
         </DialogHeader>
@@ -132,11 +141,19 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
                   accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                 />
                 <label htmlFor="file-upload">
-                  <div className="flex items-center justify-center p-6 border-2 border-dashed border-border rounded-lg hover:bg-secondary cursor-pointer transition-colors">
+                  <div
+                    className={cn(
+                      "flex items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
+                      isDragging ? "border-primary bg-primary/10" : "border-border hover:bg-secondary"
+                    )}
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                  >
                     <div className="text-center">
                       <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm font-medium text-foreground">
-                        {selectedFile ? selectedFile.name : "Click to upload"}
+                        {selectedFile ? selectedFile.name : "Click or drag & drop to upload"}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         PDF, JPG, PNG, DOC up to 10MB
