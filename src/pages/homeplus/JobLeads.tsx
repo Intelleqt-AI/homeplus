@@ -1,6 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, Edit, Filter, Plus, MapPin, Clock, PoundSterling, Star, ExternalLink, X, Search, Briefcase, CheckCircle, AlertTriangle } from 'lucide-react';
+import {
+  MessageSquare,
+  Edit,
+  Filter,
+  Plus,
+  MapPin,
+  Clock,
+  PoundSterling,
+  Star,
+  ExternalLink,
+  X,
+  Search,
+  Briefcase,
+  CheckCircle,
+  AlertTriangle,
+} from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -48,7 +63,7 @@ const JobLeads = () => {
       addJob.mutate(newJob);
     },
     onError: error => {
-      toast.error(error.message || 'Failed to update bid ');
+      toast.error('No trades found');
     },
   });
 
@@ -232,14 +247,20 @@ const JobLeads = () => {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                          job?.isApproved
-                            ? 'bg-green-50 text-green-600'
+                        <span
+                          className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                            job?.isApproved
+                              ? 'bg-green-50 text-green-600'
+                              : job?.bids?.length < 1
+                                ? 'bg-gray-50 text-gray-600'
+                                : 'bg-yellow-50 text-yellow-600'
+                          }`}
+                        >
+                          {job?.isApproved
+                            ? 'Approved'
                             : job?.bids?.length < 1
-                            ? 'bg-gray-50 text-gray-600'
-                            : 'bg-yellow-50 text-yellow-600'
-                        }`}>
-                          {job?.isApproved ? 'Approved' : job?.bids?.length < 1 ? 'Waiting for quote' : `${job?.bids?.length} Quote${job?.bids?.length > 1 ? 's' : ''}`}
+                              ? 'Waiting for quote'
+                              : `${job?.bids?.length} Quote${job?.bids?.length > 1 ? 's' : ''}`}
                         </span>
                         <button
                           onClick={() => toggleCompareMode(job.id)}
@@ -251,7 +272,7 @@ const JobLeads = () => {
                     </div>
 
                     {/* Quotes Section */}
-                    {(job.bids?.length > 0) && compareMode[job.id] && (
+                    {job.bids?.length > 0 && compareMode[job.id] && (
                       <div className="mt-4 pt-4 border-t border-[#E8E8E3]">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           {job.bids?.map(bid => (
@@ -368,7 +389,9 @@ const JobLeads = () => {
             <div className="space-y-4">
               <div className="bg-[#F5F5F0] rounded-[12px] p-4">
                 <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">1</div>
+                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">
+                    1
+                  </div>
                   <div>
                     <h4 className="text-[#1A1A1A] text-sm font-medium">Post Your Job</h4>
                     <p className="text-[#6B6B6B] text-xs mt-1">Describe what you need done with all the details</p>
@@ -378,7 +401,9 @@ const JobLeads = () => {
 
               <div className="bg-[#F5F5F0] rounded-[12px] p-4">
                 <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">2</div>
+                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">
+                    2
+                  </div>
                   <div>
                     <h4 className="text-[#1A1A1A] text-sm font-medium">Receive Quotes</h4>
                     <p className="text-[#6B6B6B] text-xs mt-1">Get quotes from verified local tradespeople</p>
@@ -388,7 +413,9 @@ const JobLeads = () => {
 
               <div className="bg-[#F5F5F0] rounded-[12px] p-4">
                 <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">3</div>
+                  <div className="h-8 w-8 bg-[#FEF9E7] rounded-full flex items-center justify-center text-sm font-semibold text-[#FBBF24]">
+                    3
+                  </div>
                   <div>
                     <h4 className="text-[#1A1A1A] text-sm font-medium">Choose & Book</h4>
                     <p className="text-[#6B6B6B] text-xs mt-1">Compare quotes and select the best option</p>

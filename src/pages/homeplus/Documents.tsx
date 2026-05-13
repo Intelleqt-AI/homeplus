@@ -26,6 +26,7 @@ import { format, isPast } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   deleteFile,
+  getDocumentDownloadUrl,
   listFilesWithMetadata,
 } from "@/lib/Api";
 import { useAuth } from "@/hooks/useAuth";
@@ -54,114 +55,6 @@ const Documents = () => {
 
   const { user } = useAuth();
 
-  // Sample documents for demo purposes with categories
-  const sampleDocuments = [
-    {
-      id: 'sample-1',
-      name: 'Home Insurance Certificate 2024',
-      metadata: {
-        createdAt: '2024-03-15T10:30:00Z',
-        metadata: {
-          type: 'Insurance',
-          category: 'home',
-          status: '2025-03-15',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-2',
-      name: 'Building Regulations Certificate',
-      metadata: {
-        createdAt: '2023-08-22T14:15:00Z',
-        metadata: {
-          type: 'Compliance',
-          category: 'home',
-          status: null,
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-3',
-      name: 'Car Insurance Policy',
-      metadata: {
-        createdAt: '2024-01-10T09:00:00Z',
-        metadata: {
-          type: 'Insurance',
-          category: 'car',
-          status: '2025-01-10',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-4',
-      name: 'Fridge Freezer Warranty',
-      metadata: {
-        createdAt: '2022-11-05T16:45:00Z',
-        metadata: {
-          type: 'Warranty',
-          category: 'warranties',
-          status: '2024-11-05',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-5',
-      name: 'Washing Machine Receipt',
-      metadata: {
-        createdAt: '2023-06-18T11:20:00Z',
-        metadata: {
-          type: 'Receipt',
-          category: 'miscellaneous',
-          status: null,
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-6',
-      name: 'MOT Certificate',
-      metadata: {
-        createdAt: '2024-02-20T10:00:00Z',
-        metadata: {
-          type: 'Certificate',
-          category: 'car',
-          status: '2025-02-20',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-7',
-      name: 'Boiler Warranty',
-      metadata: {
-        createdAt: '2023-01-15T09:30:00Z',
-        metadata: {
-          type: 'Warranty',
-          category: 'warranties',
-          status: '2028-01-15',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-8',
-      name: 'EPC Certificate',
-      metadata: {
-        createdAt: '2023-05-10T14:00:00Z',
-        metadata: {
-          type: 'Certificate',
-          category: 'home',
-          status: '2033-05-10',
-        },
-      },
-      publicUrl: '#',
-    },
-  ];
-
   // Fetch files/folders
   const {
     data: apiDocs,
@@ -174,7 +67,7 @@ const Documents = () => {
   });
 
   // Combine API docs with sample documents (sample docs shown when no API data)
-  const allDocs = apiDocs && apiDocs.length > 0 ? apiDocs : sampleDocuments;
+  const allDocs = apiDocs ;
 
   // Filter documents by active tab
   const docs = activeTab === 'all'
@@ -222,12 +115,14 @@ const Documents = () => {
     },
   });
 
-  function downloadFile(url: string, fileName: string) {
-    fetch(url)
-      .then(r => {
-        if (!r.ok) throw new Error('Network response was not ok');
-        return r.blob();
-      })
+  function downloadFile(docId: string, fileName: string) {
+    getDocumentDownloadUrl(docId)
+      .then(url =>
+        fetch(url).then(r => {
+          if (!r.ok) throw new Error('Network response was not ok');
+          return r.blob();
+        })
+      )
       .then(blob => {
         const objectUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -606,12 +501,9 @@ const Documents = () => {
     }
   }
 
-  // Delete files or folders
-  const handleDeleteTask = name => {
-    deleteMutation.mutate({
-      fileName: name,
-      id: user?.id,
-    });
+  // Delete files — pass doc UUID (not filename)
+  const handleDeleteTask = (docId: string) => {
+    deleteMutation.mutate({ id: docId });
   };
 
   return (
@@ -828,14 +720,14 @@ const Documents = () => {
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => downloadFile(publicUrl, name)}
+                          onClick={() => downloadFile(id, name)}
                           className="p-2 text-[#4A4A4A] hover:bg-[#E8E8E3] rounded-full transition-colors"
                           title="Download"
                         >
                           <Download className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteTask(name)}
+                          onClick={() => handleDeleteTask(id)}
                           className="p-2 text-[#6B6B6B] hover:text-[#DC2626] hover:bg-[#FEF2F2] rounded-full transition-colors"
                           title="Delete"
                         >

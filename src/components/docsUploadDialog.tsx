@@ -33,11 +33,22 @@ import { format, isPast } from "date-fns";
 
 const DocsUploadDialog = ({ openForm, setOpenForm }) => {
   const [documentType, setDocumentType] = useState("");
+  const [documentCategory, setDocumentCategory] = useState("home");
   const [documentStatus, setDocumentStatus] = useState("");
+  const [documentName, setDocumentName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [currentDoc, setCurrentDoc] = useState<any>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      toast.success(`File "${file.name}" selected`);
+    }
+  };
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -59,6 +70,8 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
       setOpenForm(false);
       setSelectedFile(null);
       setDocumentType("");
+      setDocumentCategory("home");
+      setDocumentName("");
       setSelectedDate("");
       queryClient.invalidateQueries(["GetAllDocs"]);
     },
@@ -71,7 +84,9 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
 
   const handleSubmit = () => {
     const data = {
+      name: documentName || selectedFile?.name || "Document",
       type: documentType,
+      category: documentCategory,
       status: selectedDate,
     };
 
@@ -84,7 +99,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
 
   return (
     <Dialog open={openForm} onOpenChange={setOpenForm}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Scan Document</DialogTitle>
         </DialogHeader>
@@ -106,6 +121,16 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
 
           <div className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="doc-name">Document Name</Label>
+              <Input
+                id="doc-name"
+                placeholder="e.g. Home Insurance Certificate 2026"
+                value={documentName}
+                onChange={e => setDocumentName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="file-upload">Document File</Label>
               <div className="relative">
                 <input
@@ -116,11 +141,19 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
                   accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                 />
                 <label htmlFor="file-upload">
-                  <div className="flex items-center justify-center p-6 border-2 border-dashed border-border rounded-lg hover:bg-secondary cursor-pointer transition-colors">
+                  <div
+                    className={cn(
+                      "flex items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
+                      isDragging ? "border-primary bg-primary/10" : "border-border hover:bg-secondary"
+                    )}
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                  >
                     <div className="text-center">
                       <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm font-medium text-foreground">
-                        {selectedFile ? selectedFile.name : "Click to upload"}
+                        {selectedFile ? selectedFile.name : "Click or drag & drop to upload"}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         PDF, JPG, PNG, DOC up to 10MB
@@ -140,11 +173,26 @@ const DocsUploadDialog = ({ openForm, setOpenForm }) => {
                 <SelectContent>
                   <SelectItem value="certificate">Certificate</SelectItem>
                   <SelectItem value="insurance">Insurance</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
-                  <SelectItem value="inspection">Inspection</SelectItem>
-                  {/* <SelectItem value="contract">Contract</SelectItem>
-                      <SelectItem value="manual">Manual</SelectItem>
-                      <SelectItem value="other">Other</SelectItem> */}
+                  <SelectItem value="warranty">Warranty</SelectItem>
+                  <SelectItem value="compliance">Compliance</SelectItem>
+                  <SelectItem value="receipt">Receipt</SelectItem>
+                  <SelectItem value="id">ID Document</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="document-category">Category</Label>
+              <Select value={documentCategory} onValueChange={setDocumentCategory}>
+                <SelectTrigger id="document-category">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="car">Car</SelectItem>
+                  <SelectItem value="warranties">Warranties</SelectItem>
+                  <SelectItem value="miscellaneous">Miscellaneous</SelectItem>
                 </SelectContent>
               </Select>
             </div>
