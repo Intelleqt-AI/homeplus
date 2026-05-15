@@ -1,16 +1,14 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import apiClient from '@/lib/apiClient';
 
-// Normalize Django user → shape matching what the rest of the app expects
-// (user.user_metadata.full_name, user.user_metadata.property_type, etc.)
+export const PENDING_TOKEN_KEY = 'hp_pending_token';
+
 const normalizeUser = (djangoUser: any) => {
   if (!djangoUser) return null;
   return {
     id: djangoUser.id,
     email: djangoUser.email,
     created_at: djangoUser.date_joined,
-    // Map Django profile fields onto user_metadata so existing components
-    // that read user.user_metadata.* continue to work without changes
     user_metadata: {
       full_name: djangoUser.full_name || `${djangoUser.first_name} ${djangoUser.last_name}`.trim(),
       first_name: djangoUser.first_name,
@@ -20,7 +18,6 @@ const normalizeUser = (djangoUser: any) => {
       property_type: djangoUser.profile?.property_type ?? '',
       avatar_url: djangoUser.profile?.avatar_url ?? '',
     },
-    // Keep raw Django fields accessible too
     _raw: djangoUser,
   };
 };
@@ -29,7 +26,10 @@ interface AuthContextType {
   user: any | null;
   session: any | null;
   loading: boolean;
-  signUp: (email: string, password: string, metadata?: any) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, metadata?: any) => Promise<{ error: any; pendingToken?: string; email?: string }>;
+  verifyEmail: (pendingToken: string, otp: string) => Promise<{ error: any; user?: any }>;
+  resendOTP: (pendingToken: string) => Promise<{ error: any }>;
+  cancelRegistration: (pendingToken: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<{ error: any }>;
   refreshUser: () => Promise<void>;
@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchMe = async () => {
     try {
-      const { data: res } = await apiClient.get('/api/v1/auth/me/');
+      const { data: res } = await apiClient.get('/api/v1/auth/me/', { _skipRefresh: true } as any);
       const normalized = normalizeUser(res.data);
       setUser(normalized);
       return normalized;
@@ -54,11 +54,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    if (user) { setLoading(false); return; }
     fetchMe().finally(() => setLoading(false));
   }, []);
 
@@ -70,30 +66,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         password_confirm: password,
         first_name: metadata?.first_name || metadata?.full_name?.split(' ')[0] || '',
         last_name: metadata?.last_name || metadata?.full_name?.split(' ').slice(1).join(' ') || '',
-      });
+        property_type: metadata?.property_type || '',
+        postcode: String(metadata?.postcode || ''),
+        location: metadata?.location || '',
+      }, { _skipRefresh: true } as any);
 
-      const { access, refresh, user: djangoUser } = res.data;
-      localStorage.setItem('access_token', access);
-      localStorage.setItem('refresh_token', refresh);
-
-      // Save profile fields right after registration
-      if (metadata) {
-        try {
-          await apiClient.patch('/api/v1/auth/me/', {
-            profile: {
-              location: metadata.location || '',
-              postcode: String(metadata.postcode || ''),
-              property_type: metadata.property_type || '',
-            },
-          });
-        } catch {
-          // Non-fatal — user is registered, profile update can be retried
-        }
-      }
-
-      const normalized = normalizeUser(djangoUser);
-      setUser(normalized);
-      return { error: null };
+      const { pending_token, email: userEmail } = res.data;
+      localStorage.setItem(PENDING_TOKEN_KEY, pending_token);
+      return { error: null, pendingToken: pending_token, email: userEmail };
     } catch (err: any) {
       const errors = err.response?.data?.errors || {};
       const msg =
@@ -106,13 +86,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const verifyEmail = async (pendingToken: string, otp: string) => {
+    try {
+      const { data: res } = await apiClient.post('/api/v1/auth/verify-email/', {
+        pending_token: pendingToken,
+        otp,
+      }, { _skipRefresh: true } as any);
+
+      localStorage.removeItem(PENDING_TOKEN_KEY);
+      const normalized = normalizeUser(res.data.user);
+      setUser(normalized);
+      return { error: null, user: normalized };
+    } catch (err: any) {
+      const errors = err.response?.data?.errors || {};
+      const msg =
+        errors.otp?.[0] ||
+        errors.pending_token?.[0] ||
+        errors.detail?.[0] ||
+        err.response?.data?.message ||
+        'Verification failed.';
+      return { error: { message: msg } };
+    }
+  };
+
+  const resendOTP = async (pendingToken: string) => {
+    try {
+      await apiClient.post('/api/v1/auth/resend-otp/', { pending_token: pendingToken }, { _skipRefresh: true } as any);
+      return { error: null };
+    } catch (err: any) {
+      return { error: { message: err.response?.data?.message || 'Failed to resend code.' } };
+    }
+  };
+
+  const cancelRegistration = async (pendingToken: string) => {
+    try {
+      await apiClient.post('/api/v1/auth/cancel-registration/', { pending_token: pendingToken }, { _skipRefresh: true } as any);
+    } catch {
+      // best effort
+    } finally {
+      localStorage.removeItem(PENDING_TOKEN_KEY);
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
-      const { data: res } = await apiClient.post('/api/v1/auth/login/', { email, password });
-      const { access, refresh, user: djangoUser } = res.data;
-      localStorage.setItem('access_token', access);
-      localStorage.setItem('refresh_token', refresh);
-      const normalized = normalizeUser(djangoUser);
+      const { data: res } = await apiClient.post('/api/v1/auth/login/', { email, password }, { _skipRefresh: true } as any);
+      const normalized = normalizeUser(res.data.user);
       setUser(normalized);
       return { error: null };
     } catch (err: any) {
@@ -127,36 +146,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      const refresh = localStorage.getItem('refresh_token');
-      if (refresh) {
-        await apiClient.post('/api/v1/auth/logout/', { refresh });
-      }
+      await apiClient.post('/api/v1/auth/logout/', {}, { _skipRefresh: true } as any);
     } catch {
-      // Ignore logout errors — clear local state regardless
+      // backend clears cookies regardless
     } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
       setUser(null);
     }
     return { error: null };
   };
 
-  const refreshUser = async () => {
-    await fetchMe();
-  };
+  const refreshUser = async () => { await fetchMe(); };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session: user ? { user } : null,
-        loading,
-        signUp,
-        signIn,
-        signOut,
-        refreshUser,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, session: user ? { user } : null, loading,
+      signUp, verifyEmail, resendOTP, cancelRegistration,
+      signIn, signOut, refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -164,8 +170,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

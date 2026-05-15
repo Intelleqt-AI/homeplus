@@ -20,6 +20,10 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <Navigate to="/login" replace />;
   }
 
+  if (user._raw?.profile?.onboarding_completed === false) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return <>{children}</>;
 };
 

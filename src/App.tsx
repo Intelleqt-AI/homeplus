@@ -1,5 +1,4 @@
-import { Toaster } from '@/components/ui/toaster';
-import { Toaster as Sonner } from '@/components/ui/sonner';
+import { GooeyToaster } from 'goey-toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
@@ -13,6 +12,10 @@ import FeaturesPage from './pages/FeaturesPage';
 import NotFound from './pages/NotFound';
 import SignUp from './pages/SignUp';
 import Login from './pages/Login';
+import VerifyEmail from './pages/VerifyEmail';
+import Onboarding from './pages/Onboarding';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import HomePlusDashboard from './pages/HomePlusDashboard';
 import Insights from './pages/Insights';
@@ -26,14 +29,22 @@ import HowItWorks from './pages/homeplus/HowItWorks';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      gcTime:    10 * 60 * 1000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
+        <GooeyToaster preset="subtle" position="bottom-right" />
         <BrowserRouter>
           <Routes>
             <Route
@@ -49,6 +60,10 @@ const App = () => (
             <Route path="/features" element={<FeaturesPage />} />
             <Route path="/homeowners/features" element={<Features />} />
             <Route path="/signup" element={<SignUp />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/login" element={<Login />} />
             <Route
               path="/dashboard"

@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import 'goey-toast/styles.css';
 import { UserbackProvider } from '@userback/react';
 
 createRoot(document.getElementById('root')!).render(

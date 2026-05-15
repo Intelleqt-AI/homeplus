@@ -1,5 +1,65 @@
 import apiClient, { BASE_URL } from '@/lib/apiClient';
 
+// ─── Generic CRUD ─────────────────────────────────────────────────────────────
+
+const handleError = (error: any): never => {
+  const err: any = new Error(
+    error.response ? `HTTP error! status: ${error.response.status}` : error.message
+  );
+  if (error.response) err.response = error.response;
+  throw err;
+};
+
+export const fetchData = async <T = any>(url: string): Promise<T> => {
+  if (!url) throw new Error('No URL provided');
+  try {
+    const { data: res } = await apiClient.get<T>(url);
+    return res;
+  } catch (error) { handleError(error); }
+};
+
+export const postData = async <T = any>({ url, data, config = {} }: { url: string; data?: any; config?: any }): Promise<T> => {
+  if (!url) throw new Error('No post URL provided');
+  try {
+    const { data: res } = await apiClient.post<T>(url, data, config);
+    return res;
+  } catch (error) { handleError(error); }
+};
+
+export const deleteData = async <T = any>({ url, data }: { url: string; data?: any }): Promise<T> => {
+  if (!url) throw new Error('No URL provided');
+  try {
+    const { data: res } = await apiClient.delete<T>(url, data ? { data } : undefined);
+    return res;
+  } catch (error) { handleError(error); }
+};
+
+export const putData = async <T = any>({ url, data }: { url: string; data?: any }): Promise<T> => {
+  if (!url) throw new Error('No put URL provided');
+  try {
+    const { data: res } = await apiClient.put<T>(url, data);
+    return res;
+  } catch (error) { handleError(error); }
+};
+
+export const patchData = async <T = any>({ url, data }: { url: string; data?: any }): Promise<T> => {
+  if (!url) throw new Error('No patch URL provided');
+  try {
+    const { data: res } = await apiClient.patch<T>(url, data);
+    return res;
+  } catch (error) { handleError(error); }
+};
+
+export const patchFormData = async <T = any>({ url, data }: { url: string; data: FormData }): Promise<T> => {
+  if (!url) throw new Error('No patch URL provided');
+  try {
+    const { data: res } = await apiClient.patch<T>(url, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res;
+  } catch (error) { handleError(error); }
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Capitalize first letter of a string (e.g. 'insurance' → 'Insurance') */
@@ -14,22 +74,55 @@ const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
  *
  * publicUrl is set to the presigned download endpoint URL so Downloads work.
  */
-const normDoc = (doc: any) => ({
+export type NormDoc = {
+  id: string;
+  name: string;
+  category: string;
+  doc_type: string;
+  expires_at: string | null;
+  is_expired: boolean;
+  notes: string;
+  file_size: number;
+  content_type: string;
+  file_name: string;
+  uploaded_at: string;
+  updated_at: string;
+  property: string | null;
+  property_address: string | null;
+  _docId: string;
+  // Legacy compat — homePack.tsx and HomePlusDashboard.tsx use these
+  publicUrl: null;
+  metadata: {
+    createdAt: string;
+    metadata: { type: string; category: string; status: string | null };
+  };
+};
+
+const normDoc = (doc: any): NormDoc => ({
   id: doc.id,
   name: doc.name,
+  category: doc.category ?? 'other',
+  doc_type: doc.doc_type ?? 'other',
+  expires_at: doc.expires_at ?? null,
+  is_expired: doc.is_expired ?? false,
+  notes: doc.notes ?? '',
+  file_size: doc.file_size ?? 0,
+  content_type: doc.content_type ?? '',
+  file_name: doc.file_name ?? '',
+  uploaded_at: doc.uploaded_at,
+  updated_at: doc.updated_at,
+  property: doc.property ?? null,
+  property_address: doc.property_address ?? null,
+  _docId: doc.id,
+  publicUrl: null,
   metadata: {
     createdAt: doc.uploaded_at,
     metadata: {
       type: cap(doc.doc_type),
       category: doc.category,
-      status: doc.expires_at ?? null,   // expiry date string or null
+      status: doc.expires_at ?? null,
     },
   },
-  // Presigned URL is fetched lazily via GET /documents/{id}/download/
-  // Store the doc id here so consumers can request the URL when needed.
-  publicUrl: null,
-  // Extra field used by Documents.tsx download button (see updated page)
-  _docId: doc.id,
 });
 
 // ─── Properties ──────────────────────────────────────────────────────────────
@@ -50,7 +143,49 @@ export const addNewProperty = async (property: any) => {
 
 // ─── Documents ───────────────────────────────────────────────────────────────
 
-/** Upload a document (multipart) — replaces uploadFileWithMetadata */
+export type DocumentFilters = {
+  category?: string;
+  doc_type?: string;
+  search?: string;
+  ordering?: string;
+};
+
+export type DocumentUpdatePayload = {
+  name?: string;
+  category?: string;
+  doc_type?: string;
+  expires_at?: string | null;
+  notes?: string;
+  property?: string | null;
+};
+
+/** Fetch documents with optional server-side filters */
+export const fetchDocuments = async (filters: DocumentFilters = {}): Promise<NormDoc[]> => {
+  const params = new URLSearchParams();
+  if (filters.category) params.set('category', filters.category);
+  if (filters.doc_type)  params.set('doc_type', filters.doc_type);
+  if (filters.search)    params.set('search', filters.search);
+  if (filters.ordering)  params.set('ordering', filters.ordering);
+  const qs = params.toString();
+  const { data: res } = await apiClient.get(`/api/v1/documents/${qs ? `?${qs}` : ''}`);
+  const docs = (res.data ?? res.results ?? []) as unknown[];
+  return docs.map(normDoc);
+};
+
+/** Update doc metadata (PATCH — file cannot be replaced) */
+export const updateDocument = async (id: string, data: DocumentUpdatePayload): Promise<NormDoc> => {
+  const { data: res } = await apiClient.patch(`/api/v1/documents/${id}/`, data);
+  return normDoc(res.data);
+};
+
+/** Docs expiring within 30 days */
+export const fetchExpiringDocuments = async (): Promise<NormDoc[]> => {
+  const { data: res } = await apiClient.get('/api/v1/documents/expiring/');
+  const docs = (res.data ?? res.results ?? []) as unknown[];
+  return docs.map(normDoc);
+};
+
+/** Upload a document (multipart/form-data) */
 export const uploadFileWithMetadata = async ({
   file,
   id: _userId,
@@ -58,47 +193,38 @@ export const uploadFileWithMetadata = async ({
 }: {
   file: File;
   id: string;
-  metadata: { type?: string; status?: any; category?: string; name?: string };
-}) => {
+  metadata: { type?: string; status?: Date | string | null; category?: string; name?: string; notes?: string };
+}): Promise<NormDoc> => {
   const form = new FormData();
   form.append('file', file);
   form.append('name', metadata?.name || file.name);
-  // form.append('doc_type', (metadata?.type || 'other').toLowerCase());
-  // form.append('category', (metadata?.category || 'home').toLowerCase());
+  form.append('doc_type', (metadata?.type || 'other').toLowerCase());
+  form.append('category', (metadata?.category || 'other').toLowerCase());
+  if (metadata?.notes?.trim()) form.append('notes', metadata.notes.trim());
   if (metadata?.status) {
-    // status holds the expiry date (Date object or date string)
     const d = metadata.status instanceof Date ? metadata.status : new Date(metadata.status);
-    if (!isNaN(d.getTime())) {
-      form.append('expires_at', d.toISOString().split('T')[0]);
-    }
+    if (!isNaN(d.getTime())) form.append('expires_at', d.toISOString().split('T')[0]);
   }
-
   const { data: res } = await apiClient.post('/api/v1/documents/', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
-
   return normDoc(res.data);
 };
 
-/** List documents — replaces listFilesWithMetadata.
- *  The `id` param is ignored (backend scopes to the authenticated user).
- *  When called with a path containing '/cover' it returns the property cover — handled in Api2.ts.
- */
-export const listFilesWithMetadata = async (_id: string) => {
+/** List documents — legacy wrapper used by homePack.tsx / HomePlusDashboard.tsx */
+export const listFilesWithMetadata = async (_id?: string): Promise<NormDoc[]> => {
   const { data: res } = await apiClient.get('/api/v1/documents/');
-  const docs: any[] = res.data ?? res.results ?? [];
+  const docs = (res.data ?? res.results ?? []) as unknown[];
   return docs.map(normDoc);
 };
 
-/** Delete a document by its UUID — replaces deleteFile */
-export const deleteFile = async ({ id, fileName }: { id: string; fileName?: string }) => {
-  // `id` is now the document UUID (not the user id).
-  // fileName is accepted for backwards-compat but not used.
+/** Delete a document by UUID */
+export const deleteFile = async ({ id }: { id: string; fileName?: string }): Promise<boolean> => {
   await apiClient.delete(`/api/v1/documents/${id}/`);
   return true;
 };
 
-/** Get a presigned download URL for a document */
+/** Get presigned download URL (TTL 1 hour) */
 export const getDocumentDownloadUrl = async (docId: string): Promise<string> => {
   const { data: res } = await apiClient.get(`/api/v1/documents/${docId}/download/`);
   return res.data.url as string;
@@ -145,28 +271,49 @@ export const updateUserInfo = async ({ userData }: { userData: any }) => {
 const normLead = (job: any) => ({
   id: job.id,
   name: job.title,
-  service: cap(job.service),
-  location: job.location,
+  service: cap(job.trade),
+  trade: job.trade || 'other',
+  category: job.category || '',
+  location: job.location || '',
+  postcode: job.postcode || '',
+  description: job.description || '',
+  priority: job.priority || 'medium',
+  urgency: job.urgency || 'normal',
+  budget_min: job.budget_min ?? null,
+  budget_max: job.budget_max ?? null,
+  preferred_date: job.preferred_date ?? null,
+  property: job.property ?? null,
   value: job.budget_min && job.budget_max
-    ? `£${job.budget_min}-${job.budget_max}`
+    ? `£${parseFloat(job.budget_min).toFixed(0)}–£${parseFloat(job.budget_max).toFixed(0)}`
     : job.budget_min
-    ? `£${job.budget_min}+`
+    ? `£${parseFloat(job.budget_min).toFixed(0)}+`
     : 'POA',
-  homeID: null,           // scoped by auth — filter handled server-side
+  homeID: null,
   isApproved: job.is_approved,
   status: job.status,
+  answers: job.answers || {},
+  created_by: job.created_by || null,
+  created_at: job.created_at,
   updated_at: job.updated_at,
   bids: (job.bids || []).map((b: any) => ({
     id: b.id,
-    proposedValue: parseFloat(b.proposed_value),
+    proposedValue: parseFloat(b.amount ?? 0),
     status: b.status,
     Available: b.availability,
-    bid_by: b.id,
+    bid_by: b.tradepilot_bidder || b.id,
+    description: b.description || '',
+    contractor_phone: b.contractor_phone || '',
+    company_name: b.company_name || '',
+    rating: b.rating ?? null,
+    rating_comment: b.rating_comment || '',
+    rating_is_anonymous: b.rating_is_anonymous ?? false,
+    rated_at: b.rated_at ?? null,
     bidder: {
-      first_name: b.bidder_name?.split(' ')[0] || '',
-      last_name: b.bidder_name?.split(' ').slice(1).join(' ') || '',
-      email: b.bidder_email,
+      first_name: b.contractor_name?.split(' ')[0] || '',
+      last_name: b.contractor_name?.split(' ').slice(1).join(' ') || '',
+      email: b.contractor_email || '',
     },
+    tradepilot_profile: b.tradepilot_profile || null,
   })),
 });
 
@@ -194,15 +341,55 @@ export const modifyBid = async ({
 };
 
 export const createJob = async (job: any) => {
-  const payload = {
-    title: job.title || job.trade || job.name || 'New Job',
-    service: (job.service || job.trade || 'general').toLowerCase(),
+  const payload: Record<string, any> = {
+    service: (job.service || job.trade || 'other').toLowerCase(),
+    category: job.category || '',
     description: job.description || '',
     location: job.location || '',
-    budget_min: job.budget_min || job.rate || null,
-    budget_max: job.budget_max || null,
+    postcode: job.postcode || '',
+    priority: job.priority || 'medium',
+    urgency: job.urgency || 'normal',
+    answers: job.answers || {},
   };
+  if (job.property) payload.property = job.property;
+  if (job.title) payload.title = job.title;
+  if (job.budget_min) payload.budget_min = job.budget_min;
+  if (job.budget_max) payload.budget_max = job.budget_max;
+  if (job.budget) payload.budget = job.budget;
+  if (job.preferred_date) payload.preferred_date = job.preferred_date;
+  if (job.budget_min || job.rate) payload.budget_min = payload.budget_min ?? job.rate;
 
   const { data: res } = await apiClient.post('/api/v1/jobs/', payload);
-  return { success: true, ...res.data };
+  return { success: true, ...(res.data ?? {}) };
+};
+
+export const updateJob = async (id: string, data: Record<string, unknown>) => {
+  const { data: res } = await apiClient.patch(`/api/v1/jobs/${id}/`, data);
+  return normLead(res.data);
+};
+
+export const deleteJob = async (id: string): Promise<boolean> => {
+  await apiClient.delete(`/api/v1/jobs/${id}/`);
+  return true;
+};
+
+export const rateBid = async ({
+  job_id,
+  bid_id,
+  rating,
+  rating_comment,
+  is_anonymous,
+}: {
+  job_id: string;
+  bid_id: string;
+  rating: number;
+  rating_comment: string;
+  is_anonymous: boolean;
+}) => {
+  const { data: res } = await apiClient.post(`/api/v1/jobs/${job_id}/bids/${bid_id}/rate/`, {
+    rating,
+    rating_comment,
+    is_anonymous,
+  });
+  return res;
 };

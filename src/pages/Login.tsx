@@ -1,50 +1,34 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Home } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/components/ui/use-toast";
-import { isDemoMode, DEMO_CREDENTIALS } from "@/lib/mockData";
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Home, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import Logo from '/home-logo-new.png';
 
 const Login = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
-  // Check if demo mode is enabled
-  const demoMode = isDemoMode();
-
-  // Function to fill demo credentials
-  const fillDemoCredentials = () => {
-    setEmail(DEMO_CREDENTIALS.email);
-    setPassword(DEMO_CREDENTIALS.password);
-  };
-
-  // Redirect if already logged in
   if (user) {
-    navigate('/dashboard');
-    return null;
+    return <Navigate to="/dashboard" replace />;
   }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     setLoading(true);
 
     const { error } = await signIn(email, password);
 
     if (error) {
-      toast({
-        title: "Sign in failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      setFormError(error.message);
       setLoading(false);
     } else {
       navigate('/dashboard');
@@ -53,97 +37,114 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-hero">
-              <Home className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold">Home+</span>
+          <Link to="/" className="inline-flex items-center gap-2.5">
+            <img src={Logo} className="max-w-[100px]" />
           </Link>
         </div>
 
-        <Card className="shadow-strong">
-          <CardHeader className="text-center space-y-2">
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
-            <CardDescription>
-              Sign in to your Home+ account
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Demo Mode Banner */}
-            {/* {demoMode && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-5 w-5 rounded-full bg-amber-400 flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">!</span>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-amber-800">Demo Mode Active</p>
-                    <p className="text-xs text-amber-700 mt-1">
-                      Use demo credentials or any email/password to explore the app.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={fillDemoCredentials}
-                      className="mt-2 text-xs font-medium text-amber-900 bg-amber-200 hover:bg-amber-300 px-3 py-1.5 rounded-md transition-colors"
-                    >
-                      Fill Demo Credentials
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )} */}
+        {/* Heading */}
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">Sign in to your account</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">Enter your credentials to continue</p>
+        </div>
 
-            <form onSubmit={handleSignIn} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder={"you@example.com"}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Link to="/forgot-password" className="text-sm text-primary hover:underline">
-                    Forgot password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder={"Enter your password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
+        {/* Error banner */}
+        {formError && (
+          <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <p className="text-sm text-destructive">{formError}</p>
+          </div>
+        )}
 
-              <Button
-                type="submit"
-                className="w-full h-12 text-lg"
-                disabled={loading}
-              >
-                {loading ? "Signing in..." : "Sign in"}
-              </Button>
-            </form>
+        {/* Form */}
+        <form onSubmit={handleSignIn} className="space-y-4" noValidate>
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-sm font-medium">
+              Email address
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={e => {
+                setEmail(e.target.value);
+                setFormError('');
+              }}
+              autoComplete="email"
+              autoFocus
+              disabled={loading}
+              required
+              className="h-10 bg-white"
+            />
+          </div>
 
-            <div className="text-center text-sm text-foreground">
-              Don't have an account?{" "}
-              <Link to="/signup" className="text-primary hover:underline font-medium">
-                Sign up for free
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password" className="text-sm font-medium">
+                Password
+              </Label>
+              <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-primary transition-colors" tabIndex={-1}>
+                Forgot password?
               </Link>
             </div>
-          </CardContent>
-        </Card>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={e => {
+                  setPassword(e.target.value);
+                  setFormError('');
+                }}
+                autoComplete="current-password"
+                disabled={loading}
+                required
+                className="h-10 pr-10 bg-white"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-2 w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium
+              flex items-center justify-center gap-2
+              hover:bg-primary/90 active:scale-[0.98]
+              disabled:opacity-60 disabled:cursor-not-allowed
+              transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Signing in…
+              </>
+            ) : (
+              'Sign in'
+            )}
+          </button>
+        </form>
+
+        {/* Footer */}
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Don't have an account?{' '}
+          <Link to="/signup" className="font-medium text-primary hover:underline">
+            Create one
+          </Link>
+        </p>
       </div>
     </div>
   );
