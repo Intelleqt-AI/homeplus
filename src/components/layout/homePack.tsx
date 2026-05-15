@@ -1,36 +1,17 @@
-import React, { useState } from "react";
-import {
-  Bell,
-  User,
-  Camera,
-  Calendar,
-  Wrench,
-  Package,
-  MessageSquare,
-  Plus,
-  Upload,
-  FileText,
-  Clock,
-  X,
-} from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "../ui/button";
-import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { listFilesWithMetadata } from "@/lib/Api";
-import { useAuth } from "@/hooks/useAuth";
-import { format, isPast } from "date-fns";
+import React, { useState } from 'react';
+import { Bell, User, Camera, Calendar, Wrench, Package, MessageSquare, Plus, Upload, FileText, Clock, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '../ui/button';
+import { Link } from 'react-router-dom';
+import useFetch from '@/hooks/useFetch';
+import { listFilesWithMetadata } from '@/lib/Api';
+import { useAuth } from '@/hooks/useAuth';
+import { format, isPast } from 'date-fns';
 
 const getStatusColor = (statusDate: string | undefined) => {
-  if (!statusDate) return "text-gray-600 bg-gray-50"; // no date
-  if (isPast(new Date(statusDate))) return "text-yellow-600 bg-yellow-50"; // expired
-  return "text-green-600 bg-green-50"; // still valid
+  if (!statusDate) return 'text-gray-600 bg-gray-50'; // no date
+  if (isPast(new Date(statusDate))) return 'text-yellow-600 bg-yellow-50'; // expired
+  return 'text-green-600 bg-green-50'; // still valid
 };
 
 const HomePack = ({ setOpenForm }) => {
@@ -41,8 +22,8 @@ const HomePack = ({ setOpenForm }) => {
     data: docs,
     isLoading,
     refetch,
-  } = useQuery({
-    queryKey: ["GetAllDocs", user.id],
+  } = useFetch('/api/v1/documents/', {
+    queryKey: ['/api/v1/documents/'],
     queryFn: () => listFilesWithMetadata(user.id),
     enabled: !!user.id,
   });
@@ -65,12 +46,9 @@ const HomePack = ({ setOpenForm }) => {
               <Package className="w-8 h-8 text-gray-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-black mb-2">
-                Digital Home Pack
-              </h3>
+              <h3 className="text-lg font-semibold text-black mb-2">Digital Home Pack</h3>
               <p className="text-gray-600 text-sm">
-                Access all your property documents, certificates, warranties,
-                and important information in one place.
+                Access all your property documents, certificates, warranties, and important information in one place.
               </p>
             </div>
           </div>
@@ -78,30 +56,20 @@ const HomePack = ({ setOpenForm }) => {
             {docs &&
               docs.length > 0 &&
               docs
-                .filter((item) => item.id && item.name !== "cover")
+                .filter(item => item.id && item.name !== 'cover')
                 ?.map(({ id, name, metadata, publicUrl }) => {
                   return (
-                    <div
-                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg"
-                      key={id}>
+                    <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg" key={id}>
                       <div className="flex items-center space-x-3">
                         <FileText className="w-5 h-5 text-gray-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          {name}
-                        </span>
+                        <span className="text-sm font-medium text-gray-700">{name}</span>
                       </div>
-                      <span
-                        className={`text-xs font-medium px-2 py-1 rounded ${getStatusColor(
-                          metadata?.metadata?.status
-                        )}`}>
+                      <span className={`text-xs font-medium px-2 py-1 rounded ${getStatusColor(metadata?.metadata?.status)}`}>
                         {metadata?.metadata?.status
                           ? isPast(new Date(metadata.metadata.status))
-                            ? "Action required"
-                            : `Valid until ${format(
-                                new Date(metadata.metadata.status),
-                                "yyyy"
-                              )}`
-                          : "—"}
+                            ? 'Action required'
+                            : `Valid until ${format(new Date(metadata.metadata.status), 'yyyy')}`
+                          : '—'}
                       </span>
                       {/* <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
                 Complete
@@ -148,10 +116,7 @@ const HomePack = ({ setOpenForm }) => {
             <Link to="/dashboard/documents" className="flex-1">
               <Button className="w-full">View All Documents</Button>
             </Link>
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setOpenForm(true)}>
+            <Button variant="outline" className="flex-1" onClick={() => setOpenForm(true)}>
               Add Document
             </Button>
           </div>

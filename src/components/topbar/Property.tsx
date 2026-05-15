@@ -1,20 +1,19 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { addNewProperty } from '@/lib/Api';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePost } from '@/hooks/usePost';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import React from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '../ui/button';
 
 const Property = () => {
   const queryClient = useQueryClient();
 
-  const mutation = useMutation({
-    mutationFn: addNewProperty,
+  const mutation = usePost({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['property'] });
     },
-    onError: error => {
+    onError: (error) => {
       console.log(error);
       toast.error('Error! Try again');
     },
@@ -42,11 +41,20 @@ const Property = () => {
       return;
     }
 
-    mutation.mutate(payload, {
+    mutation.mutate({
+      url: '/api/v1/properties/',
+      data: {
+        address: payload.address,
+        postcode: '',
+        property_type: (payload.type || 'other').toLowerCase().replace(' ', '_'),
+        role: (payload.role || 'homeowner').toLowerCase(),
+        bedrooms: Number(payload.bedrooms) || 0,
+        bathrooms: 0,
+      },
+    }, {
       onSuccess: () => {
         toast.success('Property added');
         setIsAddPropertyOpen(false);
-        // reset simple fields
         setAddress('');
         setType('House');
         setBedrooms('1');

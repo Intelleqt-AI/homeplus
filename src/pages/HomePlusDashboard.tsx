@@ -27,9 +27,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import useFetch from '@/hooks/useFetch';
+import { usePost } from '@/hooks/usePost';
 import { getEvents, uploadCover, getCoverImage } from '@/lib/Api2';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { listFilesWithMetadata } from '@/lib/Api';
 
@@ -46,52 +47,41 @@ const HomePlusDashboard = () => {
   };
 
   // Fetch property cover image
-  const {
-    data: cover,
-    isLoading: coverLoading,
-    refetch,
-  } = useQuery({
+  const { data: cover, isLoading: coverLoading, refetch } = useFetch('/api/v1/properties/cover/', {
     queryKey: ['GetCover', user.id],
     queryFn: async () => {
-      // Get the first property id, then fetch its cover
       const { data: prop } = await import('@/lib/Api2').then(m => m.getProperty());
       if (!prop?.id) return [];
       return getCoverImage(prop.id);
     },
     enabled: !!user.id,
   });
-  
-    const {
-      data: apiDocs,
-    } = useQuery({
-      queryKey: ['GetAllDocs', user.id],
-      queryFn: () => listFilesWithMetadata(user.id),
-      enabled: !!user.id,
-    });
 
+  const { data: apiDocs } = useFetch('/api/v1/documents/', {
+    queryKey: ['GetAllDocs', user.id],
+    queryFn: () => listFilesWithMetadata(user.id),
+    enabled: !!user.id,
+  });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useFetch('/api/v1/properties/', {
     queryKey: ['property'],
     queryFn: () => import('@/lib/Api2').then(mod => mod.getProperty()),
   });
 
-  const { data: eventData, isLoading: isLoadingEvents } = useQuery({
+  const { data: eventData, isLoading: isLoadingEvents } = useFetch('/api/v1/events/', {
     queryKey: ['event'],
     queryFn: getEvents,
   });
 
-  const uploadMutation = useMutation({
+  const uploadMutation = usePost({
     mutationFn: uploadCover,
-    onMutate: () => toast.loading('Uploading...', { id: 'upload-toast' }),
     onSuccess: () => {
-      toast.dismiss('upload-toast');
       toast.success('Uploaded successfully!');
       setSelectedFile(null);
       refetch();
     },
-    onError: e => {
+    onError: (e) => {
       console.log(e);
-      toast.dismiss('upload-toast');
       toast.error('Failed to upload document.');
     },
   });

@@ -1,145 +1,150 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-// import { SupabaseAuthClient } from '@supabase/supabase-js/dist/module/lib/SupabaseAuthClient';
-import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
+import { Eye, EyeOff, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { toast } from "@/lib/toast";
+import { usePost } from "@/hooks/usePost";
+
+type Fields = { current: string; newPass: string; confirm: string };
+type Errors = Partial<Record<keyof Fields, string>>;
+
+const RULES = [
+  { label: "At least 8 characters",          test: (p: string) => p.length >= 8 },
+  { label: "At least one letter",             test: (p: string) => /[a-zA-Z]/.test(p) },
+  { label: "At least one number",             test: (p: string) => /\d/.test(p) },
+];
+
+function validate(f: Fields): Errors {
+  const e: Errors = {};
+  if (!f.current.trim())     e.current = "Current password is required.";
+  if (!f.newPass)             e.newPass = "New password is required.";
+  else if (f.newPass.length < 8) e.newPass = "Must be at least 8 characters.";
+  else if (!/[a-zA-Z]/.test(f.newPass)) e.newPass = "Must include a letter.";
+  else if (!/\d/.test(f.newPass))       e.newPass = "Must include a number.";
+  if (!f.confirm)             e.confirm = "Please confirm your new password.";
+  else if (f.confirm !== f.newPass) e.confirm = "Passwords do not match.";
+  return e;
+}
 
 const Security = () => {
-  const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
-  const [showPassword, setShowPassword] = useState({
-    current: false,
-    new: false,
-    confirm: false,
-  });
+  const [fields, setFields] = useState<Fields>({ current: "", newPass: "", confirm: "" });
+  const [show, setShow]     = useState({ current: false, newPass: false, confirm: false });
+  const [errors, setErrors] = useState<Errors>({});
 
-  const togglePasswordVisibility = (field: "current" | "new" | "confirm") => {
-    setShowPassword((prev) => ({ ...prev, [field]: !prev[field] }));
+  const changePassword = usePost();
+
+  const set = (k: keyof Fields) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFields(prev => ({ ...prev, [k]: e.target.value }));
+    setErrors(prev => { const next = { ...prev }; delete next[k]; return next; });
   };
 
-  const validatePassword = (password: string) => {
-    const minLength = /.{6,}/;
-    const hasUppercase = /[A-Z]/;
-    const hasNumber = /\d/;
-    return (
-      minLength.test(password) &&
-      hasUppercase.test(password) &&
-      hasNumber.test(password)
-    );
-  };
+  const toggleShow = (k: keyof typeof show) =>
+    setShow(prev => ({ ...prev, [k]: !prev[k] }));
 
-  const handlePasswordChange = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(e.currentTarget);
-    const current = formData.get("current") as string;
-    const newPass = formData.get("new") as string;
-    const confirm = formData.get("confirm") as string;
-
-    if (!current || !newPass || !confirm) {
-      toast.error("All fields are required.");
-      return;
-    }
-
-    if (newPass !== confirm) {
-      toast.error("New passwords do not match.");
-      return;
-    }
-
-    if (!validatePassword(newPass)) {
-      toast.error(
-        "Password must be at least 6 characters, include one uppercase letter and one number."
-      );
-      return;
-    }
+    const errs = validate(fields);
+    if (Object.keys(errs).length) { setErrors(errs); return; }
 
     try {
-      setLoading(true);
-
-      // Reauthenticate current password
-      const { data: signInData, error: signInError } =
-        await supabase.auth.signInWithPassword({
-          email: user?.email ?? "",
-          password: current,
-        });
-
-      if (signInError) {
-        toast.error("Current password is incorrect.");
-        return;
-      }
-
-      // Update password if reauthentication succeeded
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPass,
+      await changePassword.mutateAsync({
+        url: "/api/v1/auth/change-password/",
+        data: {
+          old_password:         fields.current,
+          new_password:         fields.newPass,
+          new_password_confirm: fields.confirm,
+        },
       });
-
-      if (updateError) throw updateError;
-
-      toast.success("Password updated successfully!");
-      form.reset();
-    } catch (err: any) {
-      toast.error(
-        err.message || "Something went wrong while updating password."
-      );
-    } finally {
-      setLoading(false);
+      toast.success("Password updated.");
+      setFields({ current: "", newPass: "", confirm: "" });
+      setErrors({});
+    } catch (err: unknown) {
+      const data = (err as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } })?.response?.data;
+      const apiErrors = data?.errors ?? {};
+      const mapped: Errors = {};
+      if (apiErrors.old_password)          mapped.current = apiErrors.old_password[0];
+      if (apiErrors.new_password)          mapped.newPass = apiErrors.new_password[0];
+      if (apiErrors.new_password_confirm)  mapped.confirm = apiErrors.new_password_confirm[0];
+      if (Object.keys(mapped).length) {
+        setErrors(mapped);
+      } else {
+        toast.error(data?.message || "Failed to update password.");
+      }
     }
   };
 
+  const inputFields = [
+    { key: "current" as const, label: "Current password" },
+    { key: "newPass" as const, label: "New password" },
+    { key: "confirm" as const, label: "Confirm new password" },
+  ];
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Password & Security</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <form onSubmit={handlePasswordChange} className="space-y-4">
-          {[
-            { id: "current", label: "Current Password" },
-            { id: "new", label: "New Password" },
-            { id: "confirm", label: "Confirm New Password" },
-          ].map((field) => (
-            <div key={field.id} className="relative">
-              <Label htmlFor={field.id}>{field.label}</Label>
-              <Input
-                id={field.id}
-                name={field.id}
-                type={
-                  showPassword[field.id as keyof typeof showPassword]
-                    ? "text"
-                    : "password"
-                }
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  togglePasswordVisibility(
-                    field.id as "current" | "new" | "confirm"
-                  )
-                }
-                className="absolute right-3 top-9 text-gray-500 hover:text-gray-700">
-                {showPassword[field.id as keyof typeof showPassword] ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Change Password</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            {inputFields.map(({ key, label }) => (
+              <div key={key} className="space-y-1.5">
+                <Label htmlFor={key}>{label}</Label>
+                <div className="relative">
+                  <Input
+                    id={key}
+                    type={show[key] ? "text" : "password"}
+                    value={fields[key]}
+                    onChange={set(key)}
+                    className={`pr-10 ${errors[key] ? "border-destructive focus-visible:ring-0" : ""}`}
+                    autoComplete={key === "current" ? "current-password" : "new-password"}
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => toggleShow(key)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={show[key] ? "Hide" : "Show"}
+                  >
+                    {show[key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {errors[key] && (
+                  <p className="text-xs text-destructive">{errors[key]}</p>
                 )}
-              </button>
+              </div>
+            ))}
+
+            {/* Password strength hints — shown when new password field has content */}
+            {fields.newPass.length > 0 && (
+              <ul className="space-y-1 rounded-lg bg-muted/50 px-4 py-3">
+                {RULES.map(r => {
+                  const ok = r.test(fields.newPass);
+                  return (
+                    <li key={r.label} className={`flex items-center gap-2 text-xs ${ok ? "text-green-600" : "text-muted-foreground"}`}>
+                      {ok
+                        ? <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                        : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+                      {r.label}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" disabled={changePassword.isPending} className="min-w-[160px]">
+                {changePassword.isPending
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating…</>
+                  : "Update password"}
+              </Button>
             </div>
-          ))}
-          <Button
-            type="submit"
-            disabled={loading}
-            className="diasbled:opacity-50 disabled:cursor-not-allowed">
-            {loading ? "Updating..." : "Update Password"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Building, CreditCard, Flame, Home, Plus, Settings, Shield, Trash2, X, Zap } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { usePost } from '@/hooks/usePost';
 import { addNewEvent } from '@/lib/Api2';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -52,12 +53,12 @@ const AddEvent = () => {
     resolver: zodResolver(eventSchema),
   });
 
-  const mutation = useMutation({
+  const mutation = usePost({
     mutationFn: addNewEvent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event'] });
     },
-    onError: error => {
+    onError: (error) => {
       console.log(error);
       toast.error('Error! Try again');
     },

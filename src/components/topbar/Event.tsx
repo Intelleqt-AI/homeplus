@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Calendar, Plus, Bell, ClipboardList, FileText } from 'lucide-react';
 import { Button } from '../ui/button';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { usePost } from '@/hooks/usePost';
 import { addNewEvent } from '@/lib/Api2';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -28,12 +29,12 @@ const Event = () => {
     complianceType: 'none',
   });
 
-  const mutation = useMutation({
+  const mutation = usePost({
     mutationFn: addNewEvent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event'] });
     },
-    onError: error => {
+    onError: (error) => {
       console.log(error);
       toast.error('Error! Try again');
     },
