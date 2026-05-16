@@ -982,17 +982,10 @@ const JobLeads = () => {
       toast.success('Bid updated successfully');
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['bids'] });
-      addJob.mutate({
-        trade: currentItem?.service,
-        location: currentItem?.location,
-        rate: currentBid?.proposedValue,
-        status: 'todo',
-        priority: 'medium',
-        leads_id: currentItem?.id,
-        trader_id: currentBid?.bid_by,
-      });
+      setCurrentItem(null);
+      setCurrentBid(null);
     },
-    onError: () => toast.error('No trades found'),
+    onError: () => toast.error('Failed to update bid'),
   });
 
   const { data, isLoading } = useFetch('/api/v1/jobs/', {
