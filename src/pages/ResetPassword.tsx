@@ -1,15 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Home, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/lib/apiClient';
 import Logo from '/home-logo-new.png';
 
+type TokenState = 'validating' | 'valid' | 'invalid';
+
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
+
+  const [tokenState, setTokenState] = useState<TokenState>('validating');
+  const [tokenError, setTokenError] = useState('');
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -21,6 +26,25 @@ const ResetPassword = () => {
   const [done, setDone] = useState(false);
 
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (!token) return;
+    apiClient
+      .get(`/api/v1/auth/validate-reset-token/?token=${encodeURIComponent(token)}`, {
+        _skipRefresh: true,
+      } as any)
+      .then(() => setTokenState('valid'))
+      .catch((err: any) => {
+        const errors = err.response?.data?.errors || {};
+        const msg =
+          errors.token?.[0] ||
+          err.response?.data?.message ||
+          'This reset link is invalid or has expired.';
+        setTokenError(msg);
+        setTokenState('invalid');
+      });
+  }, [token]);
+
   if (user) return <Navigate to="/dashboard" replace />;
   if (!token) return <Navigate to="/forgot-password" replace />;
 
@@ -45,11 +69,7 @@ const ResetPassword = () => {
     try {
       await apiClient.post(
         '/api/v1/auth/reset-password/',
-        {
-          token,
-          new_password: newPassword,
-          confirm_password: confirmPassword,
-        },
+        { token, new_password: newPassword, confirm_password: confirmPassword },
         { _skipRefresh: true } as any,
       );
       setDone(true);
@@ -68,18 +88,63 @@ const ResetPassword = () => {
     }
   };
 
+  const logoBlock = (
+    <div className="text-center mb-8">
+      <Link to="/" className="inline-flex items-center gap-2.5">
+        <img src={Logo} className="max-w-[100px]" />
+      </Link>
+    </div>
+  );
+
+  if (tokenState === 'validating') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          {logoBlock}
+          <div className="bg-card border rounded-xl shadow-sm p-6 flex flex-col items-center gap-4">
+            <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Validating your reset link…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenState === 'invalid') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          {logoBlock}
+          <div className="bg-card border rounded-xl shadow-sm p-6 text-center space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+              <XCircle className="h-6 w-6 text-red-500" />
+            </div>
+            <div className="space-y-1.5">
+              <h1 className="text-xl font-semibold">Link invalid or expired</h1>
+              <p className="text-sm text-muted-foreground">{tokenError}</p>
+            </div>
+            <Link
+              to="/forgot-password"
+              className="block w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium
+                flex items-center justify-center hover:bg-primary/90 transition-colors"
+            >
+              Request a new link
+            </Link>
+            <Link to="/login" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">
+              ← Back to sign in
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2.5">
-            <img src={Logo} className="max-w-[100px]" />
-          </Link>
-        </div>
+        {logoBlock}
 
         {done ? (
-          /* Success state */
           <div className="bg-card border rounded-xl shadow-sm p-6 text-center space-y-4">
             <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
               <CheckCircle2 className="h-6 w-6 text-green-600" />
@@ -91,14 +156,12 @@ const ResetPassword = () => {
             <Link
               to="/login"
               className="block w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium
-                flex items-center justify-center
-                hover:bg-primary/90 transition-colors"
+                flex items-center justify-center hover:bg-primary/90 transition-colors"
             >
               Sign in
             </Link>
           </div>
         ) : (
-          /* Form state */
           <>
             <div className="mb-6 text-center">
               <h1 className="text-2xl font-semibold tracking-tight">Set new password</h1>
