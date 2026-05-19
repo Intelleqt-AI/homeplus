@@ -212,6 +212,7 @@ const Quote = ({ open, setOpen }) => {
                   <select value={service} onChange={e => { setService(e.target.value); setCategory(''); setAnswers({}); }} className={selectCls}>
                     <option value="Plumbing">Plumbing</option>
                     <option value="Gas Engineer">Gas Engineer</option>
+                    <option value="Roofing">Roofing</option>
                     <option value="Electrical">Electrical</option>
                     <option value="Heating">Heating</option>
                     <option value="Gardening">Gardening</option>

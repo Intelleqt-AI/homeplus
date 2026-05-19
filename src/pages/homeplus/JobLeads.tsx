@@ -119,7 +119,7 @@ interface EditJobModalProps {
   onDeleted: () => void;
 }
 
-const TRADES = ['Plumbing', 'Gas Engineer', 'Electrical', 'Heating', 'Gardening', 'Cleaning', 'Other'];
+const TRADES = ['Plumbing', 'Gas Engineer', 'Roofing', 'Electrical', 'Heating', 'Gardening', 'Cleaning', 'Other'];
 
 const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
