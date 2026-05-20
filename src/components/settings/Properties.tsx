@@ -42,6 +42,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
+import PropertyMapPicker from '@/components/PropertyMapPicker';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,8 @@ interface Property {
   bedrooms: number;
   bathrooms: number;
   cover_image_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface PropertyForm {
@@ -94,6 +97,8 @@ export interface PropertyForm {
   role: string;
   bedrooms: string;
   bathrooms: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export type FormErrors = Partial<Record<keyof PropertyForm, string>>;
@@ -125,6 +130,8 @@ export const EMPTY_FORM: PropertyForm = {
   role: 'homeowner',
   bedrooms: '0',
   bathrooms: '0',
+  latitude: null,
+  longitude: null,
 };
 
 function propertyToForm(p: Property): PropertyForm {
@@ -137,6 +144,8 @@ function propertyToForm(p: Property): PropertyForm {
     role: p.role ?? 'homeowner',
     bedrooms: String(p.bedrooms ?? 0),
     bathrooms: String(p.bathrooms ?? 0),
+    latitude: p.latitude ?? null,
+    longitude: p.longitude ?? null,
   };
 }
 
@@ -151,6 +160,9 @@ export function validatePropertyForm(form: PropertyForm): FormErrors {
   if (!form.property_type) {
     errors.property_type = 'Select a property type.';
   }
+  if (form.latitude === null || form.longitude === null) {
+    errors.postcode = errors.postcode || 'Set the property location on the map.';
+  }
   return errors;
 }
 
@@ -164,6 +176,8 @@ export function formToPayload(form: PropertyForm) {
     role: form.role,
     bedrooms: parseInt(form.bedrooms) || 0,
     bathrooms: parseInt(form.bathrooms) || 0,
+    latitude: form.latitude,
+    longitude: form.longitude,
   };
 }
 
@@ -297,6 +311,33 @@ export function PropertyFormFields({
           />
           <FieldError message={errors.postcode} />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>
+          Exact location <span className="text-destructive">*</span>
+          <span className="text-xs text-muted-foreground font-normal ml-2">Drag the pin to your exact address</span>
+        </Label>
+        <PropertyMapPicker
+          lat={form.latitude}
+          lng={form.longitude}
+          postcode={form.postcode}
+          onChange={({ lat, lng, address, postcode, city }) =>
+            setForm(prev => ({
+              ...prev,
+              latitude: lat,
+              longitude: lng,
+              ...(postcode ? { postcode: postcode.toUpperCase() } : {}),
+              ...(address ? { address } : {}),
+              ...(city ? { location: city } : {}),
+            }))
+          }
+        />
+        {form.latitude !== null && form.longitude !== null && (
+          <p className="text-xs text-muted-foreground">
+            Pin: {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">

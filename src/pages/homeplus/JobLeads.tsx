@@ -119,7 +119,7 @@ interface EditJobModalProps {
   onDeleted: () => void;
 }
 
-const TRADES = ['Plumbing', 'Gas Engineer', 'Roofing', 'Electrical', 'Heating', 'Gardening', 'Cleaning', 'Other'];
+const TRADES = ['Plumbing', 'Gas Engineer', 'Roofing', 'Electrical'];
 
 const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -158,7 +158,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
     setDescription(job.description ?? '');
     // service is stored capitalized (e.g. "Plumbing")
     const svc = job.service ? job.service.charAt(0).toUpperCase() + job.service.slice(1).toLowerCase() : 'Plumbing';
-    setService(TRADES.includes(svc) ? svc : 'Other');
+    setService(TRADES.includes(svc) ? svc : 'Plumbing');
     setCategory(job.category ?? '');
     setUrgency(job.urgency ?? 'normal');
     setPriority(job.priority ?? 'medium');

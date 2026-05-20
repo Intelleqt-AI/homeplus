@@ -129,6 +129,9 @@ const Property = () => {
               <option>Property Manager</option>
             </select>
           </div>
+          <p className="text-xs text-gray-500 bg-yellow-50 border border-yellow-200 rounded-md p-2">
+            ⚠ For posting jobs, set the exact location and postcode in <strong>Settings → Properties</strong> after adding.
+          </p>
           <div className="flex space-x-3 pt-4">
             <Button type="submit" className="flex-1" disabled={mutation.status === 'pending'}>
               {mutation.status === 'pending' ? 'Adding...' : 'Add Property'}

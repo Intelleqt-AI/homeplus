@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -16,7 +16,19 @@ import { categoryConfig } from '@/lib/jobCategories';
 import { Check, ChevronsUpDown, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const Quote = ({ open, setOpen }) => {
+export type QuotePrefill = {
+  title?: string;
+  service?: string;
+  category?: string;
+};
+
+interface QuoteProps {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  prefill?: QuotePrefill;
+}
+
+const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -43,7 +55,13 @@ const Quote = ({ open, setOpen }) => {
 
   // Fetch user's properties
   interface PropertyData {
-    id: string; address: string; postcode: string; location: string; name?: string;
+    id: string;
+    address: string;
+    postcode: string;
+    location: string;
+    name?: string;
+    latitude: number | null;
+    longitude: number | null;
   }
   const { data: propertiesRes } = useFetch<{ results?: PropertyData[]; data?: PropertyData[] }>('/api/v1/properties/');
   const properties: PropertyData[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
@@ -55,6 +73,16 @@ const Quote = ({ open, setOpen }) => {
     setLocationArea(''); setLocationPostcode('');
     setAnswers({});
   };
+
+  useEffect(() => {
+    if (!open || !prefill) return;
+    if (prefill.title) setTitle(prefill.title);
+    if (prefill.service) {
+      setService(prefill.service);
+      setAnswers({});
+    }
+    if (prefill.category) setCategory(prefill.category);
+  }, [open, prefill?.title, prefill?.service, prefill?.category]);
 
   const { mutate: submitJob, isPending } = usePost({
     mutationFn: (vars: Record<string, unknown>) => createJob(vars),
@@ -81,6 +109,11 @@ const Quote = ({ open, setOpen }) => {
   };
 
   const handleSubmit = () => {
+    if (!propertyId) { toast.error('Please select a property'); return; }
+    if (selectedProperty && (selectedProperty.latitude === null || selectedProperty.longitude === null)) {
+      toast.error('Selected property has no exact location. Open Settings → Properties to set its map pin.');
+      return;
+    }
     if (!title.trim()) { toast.error('Job title is required'); return; }
     if (!locationPostcode.trim()) { toast.error('Postcode is required'); return; }
     if (serviceCategories.length > 0 && !category) { toast.error('Please select a category'); return; }
@@ -93,7 +126,7 @@ const Quote = ({ open, setOpen }) => {
     }
 
     submitJob({
-      ...(propertyId ? { property: propertyId } : {}),
+      property: propertyId,
       title,
       description,
       service,
@@ -126,7 +159,7 @@ const Quote = ({ open, setOpen }) => {
 
           {/* ── Property ─────────────────────────────────────── */}
           <div>
-            <p className={sectionTitle}>Property</p>
+            <p className={sectionTitle}>Property <span className="text-red-500">*</span></p>
             <Popover open={propertyOpen} onOpenChange={setPropertyOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -150,7 +183,7 @@ const Quote = ({ open, setOpen }) => {
                         )}
                       </span>
                     ) : (
-                      <span>Select a property (optional)</span>
+                      <span>Select a property</span>
                     )}
                   </span>
                   <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -162,10 +195,6 @@ const Quote = ({ open, setOpen }) => {
                   <CommandList>
                     <CommandEmpty>No properties found.</CommandEmpty>
                     <CommandGroup>
-                      <CommandItem value="" onSelect={() => { setPropertyId(''); setPropertyOpen(false); }}>
-                        <Check className={cn('mr-2 h-3.5 w-3.5', !propertyId ? 'opacity-100' : 'opacity-0')} />
-                        None (no property)
-                      </CommandItem>
                       {properties.map(p => (
                         <CommandItem
                           key={p.id}
@@ -196,6 +225,11 @@ const Quote = ({ open, setOpen }) => {
                 </Command>
               </PopoverContent>
             </Popover>
+            {selectedProperty && (selectedProperty.latitude === null || selectedProperty.longitude === null) && (
+              <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
+                ⚠ This property has no map pin yet. Go to <strong>Settings → Properties</strong> and drag the pin to its exact location before posting the job.
+              </p>
+            )}
           </div>
 
           {/* ── Job Details ───────────────────────────────────── */}
@@ -214,10 +248,6 @@ const Quote = ({ open, setOpen }) => {
                     <option value="Gas Engineer">Gas Engineer</option>
                     <option value="Roofing">Roofing</option>
                     <option value="Electrical">Electrical</option>
-                    <option value="Heating">Heating</option>
-                    <option value="Gardening">Gardening</option>
-                    <option value="Cleaning">Cleaning</option>
-                    <option value="Other">Other</option>
                   </select>
                 </div>
                 {serviceCategories.length > 0 && (
