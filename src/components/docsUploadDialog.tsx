@@ -14,38 +14,7 @@ import { uploadFileWithMetadata } from '@/lib/Api';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-
-const DOC_TYPES = [
-  { value: 'gas_safety', label: 'Gas Safety Certificate' },
-  { value: 'eicr', label: 'EICR' },
-  { value: 'epc', label: 'EPC' },
-  { value: 'pat_testing', label: 'PAT Testing' },
-  { value: 'fire_risk', label: 'Fire Risk Assessment' },
-  { value: 'legionella', label: 'Legionella Risk Assessment' },
-  { value: 'asbestos', label: 'Asbestos Survey' },
-  { value: 'buildings_insurance', label: 'Buildings Insurance' },
-  { value: 'contents_insurance', label: 'Contents Insurance' },
-  { value: 'tenancy_agreement', label: 'Tenancy Agreement' },
-  { value: 'inventory', label: 'Inventory' },
-  { value: 'mortgage', label: 'Mortgage' },
-  { value: 'title_deed', label: 'Title Deed' },
-  { value: 'planning_permission', label: 'Planning Permission' },
-  { value: 'warranty', label: 'Warranty' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'invoice', label: 'Invoice' },
-  { value: 'other', label: 'Other' },
-];
-
-const CATEGORIES = [
-  { value: 'compliance', label: 'Compliance' },
-  { value: 'warranty', label: 'Warranty' },
-  { value: 'insurance', label: 'Insurance' },
-  { value: 'tenancy', label: 'Tenancy' },
-  { value: 'purchase', label: 'Purchase' },
-  { value: 'planning', label: 'Planning' },
-  { value: 'utility', label: 'Utility' },
-  { value: 'other', label: 'Other' },
-];
+import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
 
 interface Props {
   openForm: boolean;
@@ -54,8 +23,9 @@ interface Props {
 }
 
 const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
-  const [documentType, setDocumentType] = useState('other');
-  const [documentCategory, setDocumentCategory] = useState('other');
+  const [documentType, setDocumentType] = useState('');
+  const [documentTradeCategory, setDocumentTradeCategory] = useState('');
+  const [documentDiscipline, setDocumentDiscipline] = useState('other');
   const [documentName, setDocumentName] = useState('');
   const [documentNotes, setDocumentNotes] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -66,9 +36,12 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  const tradeCategories = documentType ? tradeCategoriesByType[documentType] ?? [] : [];
+
   const reset = () => {
-    setDocumentType('other');
-    setDocumentCategory('other');
+    setDocumentType('');
+    setDocumentTradeCategory('');
+    setDocumentDiscipline('other');
     setDocumentName('');
     setDocumentNotes('');
     setSelectedFile(null);
@@ -103,6 +76,14 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
       toast.error('Please select a file.');
       return;
     }
+    if (!documentType) {
+      toast.error('Please select a document type.');
+      return;
+    }
+    if (!documentTradeCategory) {
+      toast.error('Please select a category.');
+      return;
+    }
     toast.promise(
       uploadMutation.mutateAsync({
         file: selectedFile,
@@ -110,7 +91,8 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
         metadata: {
           name: documentName || selectedFile.name,
           type: documentType,
-          category: documentCategory,
+          category: documentTradeCategory,
+          discipline: documentDiscipline,
           status: selectedDate,
           notes: documentNotes,
         },
@@ -161,37 +143,45 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
             <Label htmlFor="doc-name">Document Name</Label>
             <Input
               id="doc-name"
-              placeholder="e.g. Home Insurance Certificate 2026"
+              placeholder="e.g. Boiler Service Report 2026"
               value={documentName}
               onChange={e => setDocumentName(e.target.value)}
             />
           </div>
 
-          {/* Type + Category */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Document Type</Label>
-              <Select value={documentType} onValueChange={setDocumentType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOC_TYPES.map(t => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Type */}
+          <div className="space-y-2">
+            <Label>Document Type</Label>
+            <Select
+              value={documentType}
+              onValueChange={v => {
+                setDocumentType(v);
+                setDocumentTradeCategory('');
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                {TRADE_OPTIONS.map(t => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Category — appears only after Document Type is selected */}
+          {documentType && (
             <div className="space-y-2">
               <Label>Category</Label>
-              <Select value={documentCategory} onValueChange={setDocumentCategory}>
+              <Select value={documentTradeCategory} onValueChange={setDocumentTradeCategory}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map(c => (
+                  {tradeCategories.map(c => (
                     <SelectItem key={c.value} value={c.value}>
                       {c.label}
                     </SelectItem>
@@ -199,6 +189,23 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
                 </SelectContent>
               </Select>
             </div>
+          )}
+
+          {/* Discipline */}
+          <div className="space-y-2">
+            <Label>Discipline</Label>
+            <Select value={documentDiscipline} onValueChange={setDocumentDiscipline}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select discipline" />
+              </SelectTrigger>
+              <SelectContent>
+                {DISCIPLINE_OPTIONS.map(d => (
+                  <SelectItem key={d.value} value={d.value}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Expiry date */}

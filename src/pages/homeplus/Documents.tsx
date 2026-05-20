@@ -38,51 +38,21 @@ import {
   type DocumentUpdatePayload,
 } from '@/lib/Api';
 import DocsUploadDialog from '@/components/docsUploadDialog';
+import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
 import { cn } from '@/lib/utils';
+import {
+  TRADE_OPTIONS,
+  DISCIPLINE_OPTIONS,
+  tradeCategoriesByType,
+  getTradeCategoryLabel,
+} from '@/lib/tradeCategories';
 
-const CATEGORY_TABS = [
-  { id: 'all', label: 'All' },
-  { id: 'compliance', label: 'Compliance' },
-  { id: 'warranty', label: 'Warranty' },
-  { id: 'insurance', label: 'Insurance' },
-  { id: 'tenancy', label: 'Tenancy' },
-  { id: 'purchase', label: 'Purchase' },
-  { id: 'planning', label: 'Planning' },
-  { id: 'utility', label: 'Utility' },
-  { id: 'other', label: 'Other' },
-];
+const CATEGORY_TABS = [{ id: 'all', label: 'All' }, ...DISCIPLINE_OPTIONS.map(d => ({ id: d.value, label: d.label }))];
 
-const CATEGORIES = [
-  { value: 'compliance', label: 'Compliance' },
-  { value: 'warranty', label: 'Warranty' },
-  { value: 'insurance', label: 'Insurance' },
-  { value: 'tenancy', label: 'Tenancy' },
-  { value: 'purchase', label: 'Purchase' },
-  { value: 'planning', label: 'Planning' },
-  { value: 'utility', label: 'Utility' },
-  { value: 'other', label: 'Other' },
-];
+const DISCIPLINES = DISCIPLINE_OPTIONS;
+const DOC_TYPES = TRADE_OPTIONS;
 
-const DOC_TYPES = [
-  { value: 'gas_safety', label: 'Gas Safety Certificate' },
-  { value: 'eicr', label: 'EICR' },
-  { value: 'epc', label: 'EPC' },
-  { value: 'pat_testing', label: 'PAT Testing' },
-  { value: 'fire_risk', label: 'Fire Risk Assessment' },
-  { value: 'legionella', label: 'Legionella Risk Assessment' },
-  { value: 'asbestos', label: 'Asbestos Survey' },
-  { value: 'buildings_insurance', label: 'Buildings Insurance' },
-  { value: 'contents_insurance', label: 'Contents Insurance' },
-  { value: 'tenancy_agreement', label: 'Tenancy Agreement' },
-  { value: 'inventory', label: 'Inventory' },
-  { value: 'mortgage', label: 'Mortgage' },
-  { value: 'title_deed', label: 'Title Deed' },
-  { value: 'planning_permission', label: 'Planning Permission' },
-  { value: 'warranty', label: 'Warranty' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'invoice', label: 'Invoice' },
-  { value: 'other', label: 'Other' },
-];
+const tradeTypeLabel = (value: string) => TRADE_OPTIONS.find(t => t.value === value)?.label ?? value;
 
 const formatBytes = (bytes: number) => {
   if (!bytes) return '—';
@@ -99,10 +69,18 @@ const expiryStatus = (doc: NormDoc) => {
   return { label: 'Valid', cls: 'bg-green-50 text-green-600' };
 };
 
+const needsJobCTA = (doc: NormDoc): boolean => {
+  if (!doc.expires_at) return false;
+  if (doc.is_expired) return true;
+  const days = Math.ceil((new Date(doc.expires_at).getTime() - Date.now()) / 86_400_000);
+  return days >= 0 && days <= 7;
+};
+
 interface EditState {
   name: string;
   doc_type: string;
   category: string;
+  discipline: string;
   expires_at: Date | null;
   notes: string;
 }
@@ -123,6 +101,19 @@ const Documents = () => {
   const [previewDoc, setPreviewDoc] = useState<NormDoc | null>(null);
   const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quotePrefill, setQuotePrefill] = useState<QuotePrefill | undefined>();
+
+  const handlePostJob = (doc: NormDoc) => {
+    const tradeLabel = TRADE_OPTIONS.find(t => t.value === doc.doc_type)?.label;
+    const categoryLabel = doc.category ? getTradeCategoryLabel(doc.category) : undefined;
+    setQuotePrefill({
+      title: doc.name,
+      service: tradeLabel,
+      category: categoryLabel,
+    });
+    setQuoteOpen(true);
+  };
 
   const {
     data: allDocs = [],
@@ -164,6 +155,7 @@ const Documents = () => {
       name: doc.name,
       doc_type: doc.doc_type,
       category: doc.category,
+      discipline: doc.discipline || 'other',
       expires_at: doc.expires_at ? new Date(doc.expires_at) : null,
       notes: doc.notes,
     });
@@ -177,15 +169,18 @@ const Documents = () => {
         name: editState.name.trim() || editDoc.name,
         doc_type: editState.doc_type,
         category: editState.category,
+        discipline: editState.discipline,
         expires_at: editState.expires_at ? editState.expires_at.toISOString().split('T')[0] : null,
         notes: editState.notes,
       },
     });
   };
 
+  const editTradeCategories = editState?.doc_type ? tradeCategoriesByType[editState.doc_type] ?? [] : [];
+
   const filtered = useMemo(() => {
     let docs = allDocs;
-    if (activeTab !== 'all') docs = docs.filter(d => d.category === activeTab);
+    if (activeTab !== 'all') docs = docs.filter(d => d.discipline === activeTab);
     if (search.trim()) {
       const q = search.toLowerCase();
       docs = docs.filter(
@@ -200,7 +195,7 @@ const Documents = () => {
       total: allDocs.length,
       expiring: expiringDocs.length,
       expired: allDocs.filter(d => d.is_expired).length,
-      compliance: allDocs.filter(d => d.category === 'compliance').length,
+      compliance: allDocs.filter(d => d.discipline === 'compliance').length,
     }),
     [allDocs, expiringDocs],
   );
@@ -396,18 +391,29 @@ const Documents = () => {
 
                     <div className="flex-1 min-w-0">
                       <h4 className="text-[#1A1A1A] text-sm font-medium truncate">{doc.name}</h4>
-                      <p className="text-[#6B6B6B] text-xs capitalize">
-                        {doc.doc_type.replace(/_/g, ' ')} · {formatBytes(doc.file_size)}
+                      <p className="text-[#6B6B6B] text-xs">
+                        {tradeTypeLabel(doc.doc_type) || '—'}
+                        {doc.category ? ` · ${getTradeCategoryLabel(doc.category)}` : ''} · {formatBytes(doc.file_size)}
                       </p>
                     </div>
 
                     <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-[#E8E8E3] text-[#4A4A4A] capitalize shrink-0">
-                      {doc.category}
+                      {doc.discipline || 'other'}
                     </span>
 
                     <p className="text-[#6B6B6B] text-xs shrink-0 w-24 text-right">{format(parseISO(doc.uploaded_at), 'dd MMM yyyy')}</p>
 
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${status.cls}`}>{status.label}</span>
+
+                    {needsJobCTA(doc) && doc.doc_type && (
+                      <Button
+                        onClick={() => handlePostJob(doc)}
+                        size="sm"
+                        className="bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] h-8 px-3 rounded-full text-xs font-medium shrink-0"
+                      >
+                        Post a Job
+                      </Button>
+                    )}
 
                     <div className="flex items-center gap-1 shrink-0">
                       <button
@@ -488,6 +494,9 @@ const Documents = () => {
         {/* Upload dialog */}
         <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} refetch={refetch} />
 
+        {/* Post-a-Job dialog (prefilled from a doc) */}
+        <Quote open={quoteOpen} setOpen={setQuoteOpen} prefill={quotePrefill} />
+
         {/* Export modal */}
         <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
           <DialogContent className="sm:max-w-md">
@@ -561,30 +570,39 @@ const Documents = () => {
                   <Input value={editState.name} onChange={e => setEditState(prev => (prev ? { ...prev, name: e.target.value } : prev))} />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Type</Label>
-                    <Select value={editState.doc_type} onValueChange={v => setEditState(prev => (prev ? { ...prev, doc_type: v } : prev))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DOC_TYPES.map(t => (
-                          <SelectItem key={t.value} value={t.value}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-1.5">
+                  <Label>Document Type</Label>
+                  <Select
+                    value={editState.doc_type}
+                    onValueChange={v =>
+                      setEditState(prev => (prev ? { ...prev, doc_type: v, category: '' } : prev))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DOC_TYPES.map(t => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {editState.doc_type && (
                   <div className="space-y-1.5">
                     <Label>Category</Label>
-                    <Select value={editState.category} onValueChange={v => setEditState(prev => (prev ? { ...prev, category: v } : prev))}>
+                    <Select
+                      value={editState.category}
+                      onValueChange={v => setEditState(prev => (prev ? { ...prev, category: v } : prev))}
+                    >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {CATEGORIES.map(c => (
+                        {editTradeCategories.map(c => (
                           <SelectItem key={c.value} value={c.value}>
                             {c.label}
                           </SelectItem>
@@ -592,6 +610,25 @@ const Documents = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label>Discipline</Label>
+                  <Select
+                    value={editState.discipline}
+                    onValueChange={v => setEditState(prev => (prev ? { ...prev, discipline: v } : prev))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select discipline" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DISCIPLINES.map(d => (
+                        <SelectItem key={d.value} value={d.value}>
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-1.5">
@@ -654,8 +691,10 @@ const Documents = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-[#1A1A1A]">{previewDoc.name}</h3>
-                    <p className="text-xs text-[#6B6B6B] capitalize">
-                      {previewDoc.doc_type.replace(/_/g, ' ')} · {previewDoc.category}
+                    <p className="text-xs text-[#6B6B6B]">
+                      {tradeTypeLabel(previewDoc.doc_type) || '—'}
+                      {previewDoc.category ? ` · ${getTradeCategoryLabel(previewDoc.category)}` : ''}
+                      {previewDoc.discipline ? ` · ${previewDoc.discipline}` : ''}
                     </p>
                   </div>
                 </div>

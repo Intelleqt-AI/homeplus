@@ -79,6 +79,7 @@ export type NormDoc = {
   name: string;
   category: string;
   doc_type: string;
+  discipline: string;
   expires_at: string | null;
   is_expired: boolean;
   notes: string;
@@ -101,8 +102,9 @@ export type NormDoc = {
 const normDoc = (doc: any): NormDoc => ({
   id: doc.id,
   name: doc.name,
-  category: doc.category ?? 'other',
-  doc_type: doc.doc_type ?? 'other',
+  category: doc.category ?? '',
+  doc_type: doc.doc_type ?? '',
+  discipline: doc.discipline ?? 'other',
   expires_at: doc.expires_at ?? null,
   is_expired: doc.is_expired ?? false,
   notes: doc.notes ?? '',
@@ -118,8 +120,8 @@ const normDoc = (doc: any): NormDoc => ({
   metadata: {
     createdAt: doc.uploaded_at,
     metadata: {
-      type: cap(doc.doc_type),
-      category: doc.category,
+      type: cap(doc.doc_type ?? ''),
+      category: doc.category ?? '',
       status: doc.expires_at ?? null,
     },
   },
@@ -128,7 +130,7 @@ const normDoc = (doc: any): NormDoc => ({
 // ─── Properties ──────────────────────────────────────────────────────────────
 
 export const addNewProperty = async (property: any) => {
-  const payload = {
+  const payload: Record<string, any> = {
     address: property.address || '',
     postcode: property.postcode || property.post_code || '',
     property_type: (property.property_type || property.type || 'other').toLowerCase().replace(' ', '_'),
@@ -136,6 +138,8 @@ export const addNewProperty = async (property: any) => {
     bedrooms: property.bedrooms || 0,
     bathrooms: property.bathrooms || 0,
   };
+  if (property.latitude !== undefined && property.latitude !== null) payload.latitude = property.latitude;
+  if (property.longitude !== undefined && property.longitude !== null) payload.longitude = property.longitude;
 
   const { data: res } = await apiClient.post('/api/v1/properties/', payload);
   return { data: res.data };
@@ -154,6 +158,7 @@ export type DocumentUpdatePayload = {
   name?: string;
   category?: string;
   doc_type?: string;
+  discipline?: string;
   expires_at?: string | null;
   notes?: string;
   property?: string | null;
@@ -193,13 +198,21 @@ export const uploadFileWithMetadata = async ({
 }: {
   file: File;
   id: string;
-  metadata: { type?: string; status?: Date | string | null; category?: string; name?: string; notes?: string };
+  metadata: {
+    type?: string;
+    status?: Date | string | null;
+    category?: string;
+    discipline?: string;
+    name?: string;
+    notes?: string;
+  };
 }): Promise<NormDoc> => {
   const form = new FormData();
   form.append('file', file);
   form.append('name', metadata?.name || file.name);
-  form.append('doc_type', (metadata?.type || 'other').toLowerCase());
-  form.append('category', (metadata?.category || 'other').toLowerCase());
+  if (metadata?.type) form.append('doc_type', metadata.type.toLowerCase());
+  if (metadata?.category) form.append('category', metadata.category.toLowerCase());
+  form.append('discipline', (metadata?.discipline || 'other').toLowerCase());
   if (metadata?.notes?.trim()) form.append('notes', metadata.notes.trim());
   if (metadata?.status) {
     const d = metadata.status instanceof Date ? metadata.status : new Date(metadata.status);
