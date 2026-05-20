@@ -94,8 +94,6 @@ interface Job {
   status: string;
   urgency: string;
   priority: string;
-  budget_min: string | null;
-  budget_max: string | null;
   preferred_date: string | null;
   property: string | null;
   answers: Record<string, unknown>;
@@ -121,8 +119,7 @@ interface EditJobModalProps {
   onDeleted: () => void;
 }
 
-const TRADES = ['Plumbing', 'Electrical', 'Heating', 'Gardening', 'Cleaning', 'Other'];
-const plumbingCategories = categoryConfig.map(c => c.category);
+const TRADES = ['Plumbing', 'Gas Engineer', 'Roofing', 'Electrical', 'Heating', 'Gardening', 'Cleaning', 'Other'];
 
 const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -139,10 +136,6 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
   const [urgency, setUrgency] = useState('normal');
   const [priority, setPriority] = useState('medium');
   const [preferredDate, setPreferredDate] = useState('');
-
-  // budget
-  const [budgetMin, setBudgetMin] = useState('');
-  const [budgetMax, setBudgetMax] = useState('');
 
   // location
   const [locationArea, setLocationArea] = useState('');
@@ -171,8 +164,6 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
     setPriority(job.priority ?? 'medium');
     setLocationArea(job.location ?? '');
     setLocationPostcode(job.postcode ?? '');
-    setBudgetMin(job.budget_min ? String(parseFloat(String(job.budget_min))) : '');
-    setBudgetMax(job.budget_max ? String(parseFloat(String(job.budget_max))) : '');
     setPreferredDate(job.preferred_date ?? '');
     setAnswers((job.answers as Record<string, string | number | undefined>) ?? {});
     setDeleteConfirm(false);
@@ -201,6 +192,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
   if (!job) return null;
 
   const locked = job.bids.length > 0;
+  const serviceCategories = categoryConfig.filter(c => c.trade === service).map(c => c.category);
   const selectedCategoryConfig = categoryConfig.find(c => c.category === category);
 
   const handleAnswerChange = (key: string, value: string | number) => {
@@ -210,7 +202,6 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
   const handleSave = () => {
     if (!title.trim()) { toast.error('Job title is required'); return; }
     if (!locationPostcode.trim()) { toast.error('Postcode is required'); return; }
-    if (!budgetMin.trim()) { toast.error('Minimum budget is required'); return; }
     saveJob({
       ...(propertyId ? { property: propertyId } : { property: null }),
       title: title.trim(),
@@ -221,8 +212,6 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
       priority,
       location: locationArea.trim(),
       postcode: locationPostcode.trim(),
-      ...(budgetMin ? { budget_min: parseFloat(budgetMin) } : {}),
-      ...(budgetMax ? { budget_max: parseFloat(budgetMax) } : {}),
       ...(preferredDate ? { preferred_date: preferredDate } : { preferred_date: null }),
       answers,
     });
@@ -359,7 +348,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                     {TRADES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
-                {service === 'Plumbing' && (
+                {serviceCategories.length > 0 && (
                   <div>
                     <Label className="text-sm font-medium text-gray-700">Category</Label>
                     <select
@@ -369,7 +358,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                       className={selectCls(locked)}
                     >
                       <option value="">Select category</option>
-                      {plumbingCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      {serviceCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
                   </div>
                 )}
@@ -480,39 +469,6 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   onChange={e => setPreferredDate(e.target.value)}
                   disabled={locked}
                   min={new Date().toISOString().split('T')[0]}
-                  className={inputCls(locked)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ── Budget ───────────────────────────────────────── */}
-          <div>
-            <p className={sectionTitle}>Budget</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Min Budget (£) <span className="text-red-500">*</span></Label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={budgetMin}
-                  onChange={e => setBudgetMin(e.target.value)}
-                  disabled={locked}
-                  placeholder="e.g. 100"
-                  className={inputCls(locked)}
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Max Budget (£)</Label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={budgetMax}
-                  onChange={e => setBudgetMax(e.target.value)}
-                  disabled={locked}
-                  placeholder="e.g. 500"
                   className={inputCls(locked)}
                 />
               </div>

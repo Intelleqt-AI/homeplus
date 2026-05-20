@@ -279,15 +279,8 @@ const normLead = (job: any) => ({
   description: job.description || '',
   priority: job.priority || 'medium',
   urgency: job.urgency || 'normal',
-  budget_min: job.budget_min ?? null,
-  budget_max: job.budget_max ?? null,
   preferred_date: job.preferred_date ?? null,
   property: job.property ?? null,
-  value: job.budget_min && job.budget_max
-    ? `£${parseFloat(job.budget_min).toFixed(0)}–£${parseFloat(job.budget_max).toFixed(0)}`
-    : job.budget_min
-    ? `£${parseFloat(job.budget_min).toFixed(0)}+`
-    : 'POA',
   homeID: null,
   isApproved: job.is_approved,
   status: job.status,
@@ -353,11 +346,7 @@ export const createJob = async (job: any) => {
   };
   if (job.property) payload.property = job.property;
   if (job.title) payload.title = job.title;
-  if (job.budget_min) payload.budget_min = job.budget_min;
-  if (job.budget_max) payload.budget_max = job.budget_max;
-  if (job.budget) payload.budget = job.budget;
   if (job.preferred_date) payload.preferred_date = job.preferred_date;
-  if (job.budget_min || job.rate) payload.budget_min = payload.budget_min ?? job.rate;
 
   const { data: res } = await apiClient.post('/api/v1/jobs/', payload);
   return { success: true, ...(res.data ?? {}) };

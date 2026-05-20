@@ -33,10 +33,6 @@ const Quote = ({ open, setOpen }) => {
   const [priority, setPriority] = useState('medium');
   const [preferredDate, setPreferredDate] = useState('');
 
-  // Budget
-  const [budgetMin, setBudgetMin] = useState('');
-  const [budgetMax, setBudgetMax] = useState('');
-
   // Location
   const [locationArea, setLocationArea] = useState('');
   const [locationPostcode, setLocationPostcode] = useState('');
@@ -56,7 +52,7 @@ const Quote = ({ open, setOpen }) => {
   const reset = () => {
     setPropertyId(''); setTitle(''); setDescription(''); setService('Plumbing');
     setCategory(''); setUrgency('normal'); setPriority('medium'); setPreferredDate('');
-    setBudgetMin(''); setBudgetMax(''); setLocationArea(''); setLocationPostcode('');
+    setLocationArea(''); setLocationPostcode('');
     setAnswers({});
   };
 
@@ -75,7 +71,7 @@ const Quote = ({ open, setOpen }) => {
     },
   });
 
-  const plumbingCategories = categoryConfig.map(c => c.category);
+  const serviceCategories = categoryConfig.filter(c => c.trade === service).map(c => c.category);
 
   // Get selected category configuration
   const selectedCategoryConfig = categoryConfig.find(c => c.category === category);
@@ -87,8 +83,7 @@ const Quote = ({ open, setOpen }) => {
   const handleSubmit = () => {
     if (!title.trim()) { toast.error('Job title is required'); return; }
     if (!locationPostcode.trim()) { toast.error('Postcode is required'); return; }
-    if (!budgetMin.trim()) { toast.error('Minimum budget is required'); return; }
-    if (service === 'Plumbing' && !category) { toast.error('Please select a category'); return; }
+    if (serviceCategories.length > 0 && !category) { toast.error('Please select a category'); return; }
     const requiredUnanswered = selectedCategoryConfig?.questions.filter(
       q => q.required && !answers[q.output_key]
     );
@@ -107,8 +102,6 @@ const Quote = ({ open, setOpen }) => {
       priority,
       location: locationArea,
       postcode: locationPostcode,
-      ...(budgetMin ? { budget_min: parseFloat(budgetMin) } : {}),
-      ...(budgetMax ? { budget_max: parseFloat(budgetMax) } : {}),
       ...(preferredDate ? { preferred_date: preferredDate } : {}),
       answers,
     });
@@ -218,6 +211,8 @@ const Quote = ({ open, setOpen }) => {
                   <Label className="text-sm font-medium text-gray-700">Trade <span className="text-red-500">*</span></Label>
                   <select value={service} onChange={e => { setService(e.target.value); setCategory(''); setAnswers({}); }} className={selectCls}>
                     <option value="Plumbing">Plumbing</option>
+                    <option value="Gas Engineer">Gas Engineer</option>
+                    <option value="Roofing">Roofing</option>
                     <option value="Electrical">Electrical</option>
                     <option value="Heating">Heating</option>
                     <option value="Gardening">Gardening</option>
@@ -225,12 +220,12 @@ const Quote = ({ open, setOpen }) => {
                     <option value="Other">Other</option>
                   </select>
                 </div>
-                {service === 'Plumbing' && (
+                {serviceCategories.length > 0 && (
                   <div>
                     <Label className="text-sm font-medium text-gray-700">Category</Label>
                     <select value={category} onChange={e => { setCategory(e.target.value); setAnswers({}); }} className={selectCls}>
                       <option value="">Select category</option>
-                      {plumbingCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      {serviceCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
                   </div>
                 )}
@@ -328,37 +323,6 @@ const Quote = ({ open, setOpen }) => {
                   value={preferredDate}
                   onChange={e => setPreferredDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className={inputCls}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ── Budget ───────────────────────────────────────── */}
-          <div>
-            <p className={sectionTitle}>Budget</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Min Budget (£) <span className="text-red-500">*</span></Label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={budgetMin}
-                  onChange={e => setBudgetMin(e.target.value)}
-                  placeholder="e.g. 100"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Max Budget (£)</Label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={budgetMax}
-                  onChange={e => setBudgetMax(e.target.value)}
-                  placeholder="e.g. 500"
                   className={inputCls}
                 />
               </div>
