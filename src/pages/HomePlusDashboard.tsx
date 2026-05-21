@@ -46,21 +46,15 @@ const HomePlusDashboard = () => {
     fileInputRef.current?.click(); // manually open file picker
   };
 
-  // Fetch property cover image
-  const { data: cover, isLoading: coverLoading, refetch } = useFetch('/api/v1/properties/cover/', {
-    queryKey: ['GetCover', user.id],
-    queryFn: async () => {
-      const { data: prop } = await import('@/lib/Api2').then(m => m.getProperty());
-      if (!prop?.id) return [];
-      return getCoverImage(prop.id);
-    },
-    enabled: !!user.id,
-  });
-
-  const { data: apiDocs } = useFetch('/api/v1/documents/', {
-    queryKey: ['GetAllDocs', user.id],
-    queryFn: () => listFilesWithMetadata(user.id),
-    enabled: !!user.id,
+  // Fetch files/folders
+  const {
+    data: cover,
+    isLoading: coverLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['GetCover', user?.id],
+    queryFn: () => listFilesWithMetadata(`${user?.id}/cover`),
+    enabled: !!user?.id,
   });
 
   const { data, isLoading } = useFetch('/api/v1/properties/', {

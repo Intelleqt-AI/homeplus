@@ -22,10 +22,10 @@ const HomePack = ({ setOpenForm }) => {
     data: docs,
     isLoading,
     refetch,
-  } = useFetch('/api/v1/documents/', {
-    queryKey: ['/api/v1/documents/'],
-    queryFn: () => listFilesWithMetadata(user.id),
-    enabled: !!user.id,
+  } = useQuery({
+    queryKey: ["GetAllDocs", user?.id],
+    queryFn: () => listFilesWithMetadata(user?.id),
+    enabled: !!user?.id,
   });
 
   return (

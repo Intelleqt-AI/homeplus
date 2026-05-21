@@ -119,8 +119,10 @@ const Documents = () => {
     data: allDocs = [],
     isLoading,
     refetch,
-  } = useFetch<NormDoc[]>(DOCS_URL, {
-    queryFn: () => fetchDocuments(),
+  } = useQuery({
+    queryKey: ['GetAllDocs', user?.id],
+    queryFn: () => listFilesWithMetadata(user?.id),
+    enabled: !!user?.id,
   });
 
   const { data: expiringDocs = [] } = useFetch<NormDoc[]>(EXPIRY_URL, {
