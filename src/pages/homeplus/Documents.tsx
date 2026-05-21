@@ -168,9 +168,9 @@ const Documents = () => {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['GetAllDocs', user.id],
-    queryFn: () => listFilesWithMetadata(user.id),
-    enabled: !!user.id,
+    queryKey: ['GetAllDocs', user?.id],
+    queryFn: () => listFilesWithMetadata(user?.id),
+    enabled: !!user?.id,
   });
 
   // Combine API docs with sample documents (sample docs shown when no API data)

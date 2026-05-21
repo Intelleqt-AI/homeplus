@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -33,8 +33,21 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { addNewEvent } from "@/lib/Api2";
 import { toast } from "sonner";
 
-const AddEvent = () => {
-  const [isAddEventOpen, setIsAddEventOpen] = useState(false);
+interface AddEventProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  initialDate?: string;
+  hideTrigger?: boolean;
+}
+
+const AddEvent = ({ open, onOpenChange, initialDate, hideTrigger }: AddEventProps = {}) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const isAddEventOpen = isControlled ? open : internalOpen;
+  const setIsAddEventOpen = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [quickAddType, setQuickAddType] = useState<
     "property" | "household" | null
   >(null);
@@ -57,6 +70,12 @@ const AddEvent = () => {
     property: "main",
     complianceType: "none",
   });
+
+  useEffect(() => {
+    if (isAddEventOpen && initialDate) {
+      setNewEvent((prev) => ({ ...prev, date: initialDate }));
+    }
+  }, [isAddEventOpen, initialDate]);
 
   const mutation = useMutation({
     mutationFn: addNewEvent,
@@ -418,13 +437,15 @@ const AddEvent = () => {
     <>
       {/* Quick Add with Smart Options */}
       <div className="relative">
-        <Button
-          onClick={() => setQuickAddType("property")}
-          className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
-        >
-          <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
-          Add Task
-        </Button>
+        {!hideTrigger && (
+          <Button
+            onClick={() => setQuickAddType("property")}
+            className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
+          >
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
+            Add Task
+          </Button>
+        )}
 
         {/* Quick Add Popover */}
         {quickAddType && (
@@ -707,6 +728,8 @@ const AddEvent = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="never">Never</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Biweekly</SelectItem>
                     <SelectItem value="monthly">Monthly</SelectItem>
                     <SelectItem value="quarterly">Quarterly</SelectItem>
                     <SelectItem value="annually">Annually</SelectItem>

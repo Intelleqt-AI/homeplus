@@ -51,9 +51,9 @@ const HomePlusDashboard = () => {
     isLoading: coverLoading,
     refetch,
   } = useQuery({
-    queryKey: ['GetCover', user.id],
-    queryFn: () => listFilesWithMetadata(`${user.id}/cover`),
-    enabled: !!user.id,
+    queryKey: ['GetCover', user?.id],
+    queryFn: () => listFilesWithMetadata(`${user?.id}/cover`),
+    enabled: !!user?.id,
   });
 
   const { data, isLoading } = useQuery({

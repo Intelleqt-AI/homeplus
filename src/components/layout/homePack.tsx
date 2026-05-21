@@ -42,9 +42,9 @@ const HomePack = ({ setOpenForm }) => {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["GetAllDocs", user.id],
-    queryFn: () => listFilesWithMetadata(user.id),
-    enabled: !!user.id,
+    queryKey: ["GetAllDocs", user?.id],
+    queryFn: () => listFilesWithMetadata(user?.id),
+    enabled: !!user?.id,
   });
 
   return (

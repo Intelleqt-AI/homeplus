@@ -11,7 +11,7 @@ const Sidebar = () => {
   const sidebarItems = [
     { icon: Home, label: 'My Home', path: '/dashboard' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
-    { icon: ClipboardList, label: 'Tasks', path: '/dashboard/calendar' },
+    { icon: ClipboardList, label: 'Tasks & Reminders', path: '/dashboard/calendar' },
     { icon: Search, label: 'Find a Trade', path: '/dashboard/job-leads' },
     { icon: HelpCircle, label: 'How it Works', path: '/dashboard/how-it-works' },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },

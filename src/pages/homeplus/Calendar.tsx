@@ -25,8 +25,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddEvent from "@/components/event/AddEvent";
-import { useQuery } from "@tanstack/react-query";
-import { getEvents } from "@/lib/Api2";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getEvents, updateEventDate } from "@/lib/Api2";
+import { toast } from "sonner";
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -44,11 +45,98 @@ const Calendar = () => {
   const [selectedEvents, setSelectedEvents] = useState<Array<string | number>>(
     []
   );
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addDialogDate, setAddDialogDate] = useState<string | undefined>(undefined);
+  const [dragOverDateKey, setDragOverDateKey] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const moveEventMutation = useMutation({
+    mutationFn: ({ id, date }: { id: string | number; date: string }) =>
+      updateEventDate(id, date),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["event"] });
+    },
+    onError: () => {
+      toast.error("Couldn't move task");
+    },
+  });
+
+  const toDateInputValue = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const handleDayClick = (day: Date) => {
+    setAddDialogDate(toDateInputValue(day));
+    setAddDialogOpen(true);
+  };
+
+  const handleEventDragStart = (
+    e: React.DragEvent<HTMLDivElement>,
+    eventId: string | number
+  ) => {
+    e.stopPropagation();
+    e.dataTransfer.setData("text/plain", String(eventId));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDayDragOver = (e: React.DragEvent<HTMLDivElement>, day: Date) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const key = toDateInputValue(day);
+    if (dragOverDateKey !== key) setDragOverDateKey(key);
+  };
+
+  const handleDayDragLeave = (e: React.DragEvent<HTMLDivElement>, day: Date) => {
+    // Only clear if we're really leaving this cell (not entering a child).
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    const key = toDateInputValue(day);
+    if (dragOverDateKey === key) setDragOverDateKey(null);
+  };
+
+  const handleDayDrop = (e: React.DragEvent<HTMLDivElement>, day: Date) => {
+    e.preventDefault();
+    setDragOverDateKey(null);
+    const eventId = e.dataTransfer.getData("text/plain");
+    if (!eventId) return;
+    const newDate = toDateInputValue(day);
+    const dropped = filteredEvents.find((ev) => String(ev.id) === eventId);
+    if (dropped?.date && getEventDateString(dropped) === day.toDateString()) return;
+    moveEventMutation.mutate({ id: eventId, date: newDate });
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["event"],
     queryFn: getEvents,
   });
+
+  type BankHoliday = { title: string; date: string; notes?: string };
+  type BankHolidaysResponse = {
+    [division: string]: { division: string; events: BankHoliday[] };
+  };
+
+  const { data: bankHolidays } = useQuery({
+    queryKey: ["uk-bank-holidays"],
+    queryFn: async (): Promise<Record<string, BankHoliday>> => {
+      const res = await fetch("https://www.gov.uk/bank-holidays.json");
+      if (!res.ok) throw new Error("Failed to load bank holidays");
+      const json = (await res.json()) as BankHolidaysResponse;
+      // Default to England & Wales — adjust the division key for Scotland/NI if needed.
+      const events = json["england-and-wales"]?.events ?? [];
+      return Object.fromEntries(events.map((ev) => [ev.date, ev]));
+    },
+    staleTime: 1000 * 60 * 60 * 24,
+  });
+
+  const getBankHolidayForDate = (d: Date): BankHoliday | undefined => {
+    if (!bankHolidays) return undefined;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return bankHolidays[`${y}-${m}-${day}`];
+  };
 
   const today = new Date();
 
@@ -609,13 +697,36 @@ const Calendar = () => {
                       const isToday =
                         day.toDateString() === new Date().toDateString();
                       const dayEvents = getEventsForDate(day);
+                      const bankHoliday = getBankHolidayForDate(day);
+
+                      const dayKey = toDateInputValue(day);
+                      const isDragOver = dragOverDateKey === dayKey;
 
                       return (
                         <div
                           key={index}
+                          onClick={() => handleDayClick(day)}
+                          onDragOver={(e) => handleDayDragOver(e, day)}
+                          onDragLeave={(e) => handleDayDragLeave(e, day)}
+                          onDrop={(e) => handleDayDrop(e, day)}
+                          role="button"
+                          tabIndex={0}
+                          title={
+                            bankHoliday
+                              ? `UK Bank Holiday: ${bankHoliday.title}${
+                                  bankHoliday.notes ? ` — ${bankHoliday.notes}` : ""
+                                }\nClick to add a task on this day`
+                              : "Click to add a task on this day"
+                          }
                           className={`min-h-[100px] p-2 border border-gray-100 hover:bg-gray-50 cursor-pointer ${
                             !isCurrentMonth ? "text-gray-400 bg-gray-50" : ""
-                          } ${isToday ? "bg-primary/10 border-primary" : ""}`}>
+                          } ${isToday ? "bg-primary/10 border-primary" : ""} ${
+                            bankHoliday && isCurrentMonth ? "bg-rose-50/60" : ""
+                          } ${
+                            isDragOver
+                              ? "ring-2 ring-primary/60 bg-primary/5"
+                              : ""
+                          }`}>
                           <div
                             className={`text-sm mb-1 ${
                               isToday ? "font-bold text-primary" : ""
@@ -623,16 +734,27 @@ const Calendar = () => {
                             {day.getDate()}
                           </div>
 
+                          {bankHoliday && (
+                            <div className="text-[10px] font-medium px-1.5 py-0.5 mb-1 rounded bg-rose-100 text-rose-700 border border-rose-200 truncate">
+                              {bankHoliday.title}
+                            </div>
+                          )}
+
                           {/* Clean Event Display */}
                           <div className="space-y-1">
                             {dayEvents.slice(0, 2).map((event) => (
                               <div
                                 key={event.id}
+                                draggable
+                                onDragStart={(e) => handleEventDragStart(e, event.id)}
                                 className={`text-xs px-2 py-2 rounded border ${getStatusBorder(
                                   event.status
-                                )} cursor-pointer hover:shadow-sm transition-shadow`}
-                                title={`${event.time} - ${event.title}\n${event.description}`}
-                                onClick={() => toggleEventSelection(event.id)}>
+                                )} cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow`}
+                                title={`${event.time} - ${event.title}\n${event.description}\n(drag to another day to reschedule)`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleEventSelection(event.id);
+                                }}>
                                 <div className="font-medium text-gray-900 truncate">
                                   {event.title}
                                 </div>
@@ -996,6 +1118,14 @@ const Calendar = () => {
           </div>
         </div>
       </div>
+
+      {/* Day-click "Add Task" dialog (prefilled with the clicked date) */}
+      <AddEvent
+        hideTrigger
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        initialDate={addDialogDate}
+      />
     </DashboardLayout>
   );
 };
