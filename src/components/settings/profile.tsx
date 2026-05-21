@@ -1,117 +1,240 @@
-import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabaseClient";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateUserInfo } from "@/lib/Api";
-import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Loader2, CheckCircle, ChevronsUpDown, Check, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
+import { useAuth } from '@/hooks/useAuth';
+import usePatch from '@/hooks/usePatch';
+import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
+
+const PROPERTY_TYPES = [
+  { value: 'detached', label: 'Detached' },
+  { value: 'semi_detached', label: 'Semi-Detached' },
+  { value: 'terraced', label: 'Terraced' },
+  { value: 'flat', label: 'Flat' },
+  { value: 'bungalow', label: 'Bungalow' },
+  { value: 'other', label: 'Other' },
+];
 
 const Profile = () => {
+  const { user, refreshUser } = useAuth();
+  const [locationOpen, setLocationOpen] = useState(false);
+
   const [form, setForm] = useState({
-    full_name: "",
-    phone: "",
-    email: "",
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    location: '',
+    postcode: '',
+    property_type: '',
   });
-  const [message, setMessage] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  // console.log(user);
-
-  const mutation = useMutation({
-    mutationFn: updateUserInfo, // your API function
-    onSuccess: () => {
-      toast.success("User updated successfully!");
-      // queryClient.invalidateQueries(["getUser"]); // update user data cache
+  const updateProfile = usePatch({
+    onSuccess: async () => {
+      await refreshUser();
+      setSaved(true);
+      toast.success('Profile updated.');
+      setTimeout(() => setSaved(false), 2500);
     },
-    onError: (error) => {
-      toast.error(error.message || "Error! Could not update user.");
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to save profile.';
+      toast.error(msg);
     },
   });
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    // console.log(name, value);
-    setForm((prev) => {
-      return { ...prev, [name]: value };
-    });
-  };
-
-  const handleSave = () => {
-    setMessage("");
-
-    // ✅ Supabase client expects metadata under the "data" key
-    const payload = {
-      data: { full_name: form.full_name },
-    };
-
-    // console.log("Update payload:", payload);
-    mutation.mutate({ userData: payload });
-  };
 
   useEffect(() => {
     if (!user) return;
-
-    const { full_name, phone, email } = user.user_metadata || {};
+    const meta = user.user_metadata || {};
     setForm({
-      full_name: full_name || "",
-      phone: phone || "",
-      email: email || "",
+      first_name: meta.first_name || '',
+      last_name: meta.last_name || '',
+      email: user.email || '',
+      phone: user._raw?.profile?.phone || '',
+      location: meta.location || '',
+      postcode: meta.postcode || '',
+      property_type: meta.property_type || '',
     });
+    setPhoneVerified(user._raw?.profile?.phone_verified ?? false);
   }, [user]);
 
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, [field]: e.target.value }));
+
+  const selectLocation = (val: string) => {
+    setForm(prev => ({
+      ...prev,
+      location: val,
+      postcode: LOCATION_POSTCODE[val] ?? prev.postcode,
+    }));
+    setLocationOpen(false);
+  };
+
+  const handleSave = () => {
+    setSaved(false);
+    updateProfile.mutate({
+      url: '/api/v1/auth/me/',
+      data: {
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        profile: {
+          phone: form.phone.trim(),
+          location: form.location.trim(),
+          postcode: form.postcode.trim().toUpperCase(),
+          property_type: form.property_type,
+        },
+      },
+    });
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Profile Information</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 gap-4">
-          <div>
-            <Label htmlFor="full_name">Full Name</Label>
-            <Input
-              id="full_name"
-              name="full_name"
-              value={form.full_name}
-              onChange={handleChange}
-            />
+    <div className="space-y-6">
+      {/* Personal info */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Personal Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="first_name">First name</Label>
+              <Input id="first_name" value={form.first_name} onChange={set('first_name')} placeholder="John" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="last_name">Last name</Label>
+              <Input id="last_name" value={form.last_name} onChange={set('last_name')} placeholder="Smith" />
+            </div>
           </div>
-          {/* <div>
-            <Label htmlFor="lastName">Last Name</Label>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email address</Label>
             <Input
-              id="lastName"
-              value={form.lastName}
-              onChange={handleChange}
+              id="email"
+              type="email"
+              value={form.email}
+              readOnly
+              disabled
+              className="bg-muted text-muted-foreground cursor-not-allowed"
             />
-          </div> */}
-        </div>
-        <div>
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            value={form.email}
-            onChange={handleChange}
-            readOnly
-            className="bg-gray-100 text-gray-600 cursor-not-allowed border border-gray-300"
-          />
-        </div>
-        <div>
-          <Label htmlFor="phone">Phone</Label>
-          <Input
-            id="phone"
-            type="tel"
-            value={form.phone}
-            onChange={handleChange}
-          />
-        </div>
-        <Button onClick={handleSave}>Save Changes</Button>
-        {message && <p className="mt-2 text-sm">{message}</p>}
-      </CardContent>
-    </Card>
+            <p className="text-xs text-muted-foreground">Email cannot be changed here. Contact support.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="phone">Phone number</Label>
+              {phoneVerified ? (
+                <Badge variant="outline" className="gap-1 text-xs border-green-300 text-green-700 bg-green-50">
+                  <ShieldCheck className="w-3 h-3" /> Verified
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1 text-xs border-orange-300 text-orange-700 bg-orange-50">
+                  <ShieldAlert className="w-3 h-3" /> Not verified
+                </Badge>
+              )}
+            </div>
+            <Input id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+44 7700 900 123" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Property / Location */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Property & Location</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>City / Area</Label>
+              <Popover open={locationOpen} onOpenChange={setLocationOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'w-full h-10 px-3 rounded-md border border-input text-sm flex items-center justify-between gap-1 bg-background',
+                      'hover:bg-muted/40 transition-colors',
+                      !form.location && 'text-muted-foreground',
+                    )}
+                  >
+                    <span className="truncate">{form.location || 'Select area'}</span>
+                    <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search area…" />
+                    <CommandList>
+                      <CommandEmpty>No area found.</CommandEmpty>
+                      {UK_LOCATIONS.map(group => (
+                        <CommandGroup key={group.group} heading={group.group}>
+                          {group.items.map(item => (
+                            <CommandItem key={item} value={item} onSelect={selectLocation}>
+                              <Check className={cn('mr-2 h-3.5 w-3.5', form.location === item ? 'opacity-100' : 'opacity-0')} />
+                              {item}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="postcode">Postcode</Label>
+              <Input
+                id="postcode"
+                value={form.postcode}
+                onChange={e => setForm(prev => ({ ...prev, postcode: e.target.value.toUpperCase() }))}
+                placeholder="SW1A 1AA"
+                className="uppercase"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="property_type">Property type</Label>
+            <Select value={form.property_type} onValueChange={v => setForm(prev => ({ ...prev, property_type: v }))}>
+              <SelectTrigger id="property_type">
+                <SelectValue placeholder="Select type…" />
+              </SelectTrigger>
+              <SelectContent>
+                {PROPERTY_TYPES.map(t => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Save */}
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={updateProfile.isPending} className="min-w-[140px]">
+          {updateProfile.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…
+            </>
+          ) : saved ? (
+            <>
+              <CheckCircle className="w-4 h-4 mr-2" /> Saved
+            </>
+          ) : (
+            'Save changes'
+          )}
+        </Button>
+      </div>
+    </div>
   );
 };
 

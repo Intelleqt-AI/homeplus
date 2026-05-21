@@ -1,20 +1,19 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { addNewProperty } from '@/lib/Api';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePost } from '@/hooks/usePost';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import React from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '../ui/button';
 
 const Property = () => {
   const queryClient = useQueryClient();
 
-  const mutation = useMutation({
-    mutationFn: addNewProperty,
+  const mutation = usePost({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['property'] });
     },
-    onError: error => {
+    onError: (error) => {
       console.log(error);
       toast.error('Error! Try again');
     },
@@ -42,11 +41,20 @@ const Property = () => {
       return;
     }
 
-    mutation.mutate(payload, {
+    mutation.mutate({
+      url: '/api/v1/properties/',
+      data: {
+        address: payload.address,
+        postcode: '',
+        property_type: (payload.type || 'other').toLowerCase().replace(' ', '_'),
+        role: (payload.role || 'homeowner').toLowerCase(),
+        bedrooms: Number(payload.bedrooms) || 0,
+        bathrooms: 0,
+      },
+    }, {
       onSuccess: () => {
         toast.success('Property added');
         setIsAddPropertyOpen(false);
-        // reset simple fields
         setAddress('');
         setType('House');
         setBedrooms('1');
@@ -121,6 +129,9 @@ const Property = () => {
               <option>Property Manager</option>
             </select>
           </div>
+          <p className="text-xs text-gray-500 bg-yellow-50 border border-yellow-200 rounded-md p-2">
+            ⚠ For posting jobs, set the exact location and postcode in <strong>Settings → Properties</strong> after adding.
+          </p>
           <div className="flex space-x-3 pt-4">
             <Button type="submit" className="flex-1" disabled={mutation.status === 'pending'}>
               {mutation.status === 'pending' ? 'Adding...' : 'Add Property'}

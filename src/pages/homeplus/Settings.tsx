@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   User,
   Bell,
@@ -31,13 +32,10 @@ import { Badge } from "@/components/ui/badge";
 import SetupWizard from "@/components/SetupWizard";
 import Profile from "@/components/settings/profile";
 import Security from "@/components/settings/security";
+import Notifications from "@/components/settings/Notifications";
+import Properties from "@/components/settings/Properties";
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState<
-    "profile" | "notifications" | "security" | "properties" | "tasks"
-  >("profile");
-  const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
-
   const tabs = [
     { id: "profile" as const, label: "Profile", icon: User },
     { id: "notifications" as const, label: "Notifications", icon: Bell },
@@ -46,9 +44,13 @@ const Settings = () => {
     { id: "tasks" as const, label: "Task Templates", icon: Calendar },
   ];
 
-  const handleSetupComplete = (data: any) => {
-    console.log("Setup completed with data:", data);
-    // Here you would typically save the setup data and generate tasks
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as typeof tabs[number]['id']) || 'profile';
+  const setActiveTab = (id: typeof tabs[number]['id']) => setSearchParams({ tab: id }, { replace: true });
+  const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
+
+  const handleSetupComplete = () => {
+    setIsSetupWizardOpen(false);
   };
 
   const renderTaskTemplates = () => (
@@ -580,67 +582,11 @@ const Settings = () => {
           <div className="lg:col-span-3">
             {activeTab === "profile" && <Profile />}
 
-            {activeTab === "notifications" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Notification Preferences</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {[
-                    {
-                      label: "Email Notifications",
-                      description: "Receive updates via email",
-                      enabled: true,
-                    },
-                    {
-                      label: "SMS Notifications",
-                      description: "Receive urgent alerts via SMS",
-                      enabled: false,
-                    },
-                    {
-                      label: "Calendar Reminders",
-                      description: "Add events to your calendar",
-                      enabled: true,
-                    },
-                    {
-                      label: "Marketing Emails",
-                      description: "Receive tips and offers",
-                      enabled: false,
-                    },
-                  ].map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between py-3 border-b">
-                      <div>
-                        <p className="font-medium">{item.label}</p>
-                        <p className="text-sm text-gray-600">
-                          {item.description}
-                        </p>
-                      </div>
-                      <Switch defaultChecked={item.enabled} />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+            {activeTab === "notifications" && <Notifications />}
 
             {activeTab === "security" && <Security />}
 
-            {activeTab === "properties" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Property Management</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 mb-4">
-                    Manage your properties and their settings
-                  </p>
-                  <Button onClick={() => setIsSetupWizardOpen(true)}>
-                    Add New Property
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            {activeTab === "properties" && <Properties />}
 
             {activeTab === "tasks" && renderTaskTemplates()}
           </div>

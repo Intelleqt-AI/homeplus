@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from 'react';
 import {
   Upload,
   Download,
@@ -6,165 +6,117 @@ import {
   Trash2,
   FileText,
   Package,
-  Home,
-  Car,
-  Shield,
   FolderOpen,
-  CheckCircle,
-} from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
-import DashboardLayout from "@/components/layout/DashboardLayout";
-import { toast } from "sonner";
-import { format, isPast } from "date-fns";
-import { useMutation, useQuery } from "@tanstack/react-query";
+  Search,
+  AlertTriangle,
+  Pencil,
+  Loader2,
+  CalendarIcon,
+} from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { toast } from '@/lib/toast';
+import { format, parseISO } from 'date-fns';
+import useFetch from '@/hooks/useFetch';
+import useDelete from '@/hooks/useDelete';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   deleteFile,
-  listFilesWithMetadata,
-} from "@/lib/Api";
-import { useAuth } from "@/hooks/useAuth";
-import DocsUploadDialog from "@/components/docsUploadDialog";
+  fetchDocuments,
+  fetchExpiringDocuments,
+  updateDocument,
+  getDocumentDownloadUrl,
+  type NormDoc,
+  type DocumentUpdatePayload,
+} from '@/lib/Api';
+import DocsUploadDialog from '@/components/docsUploadDialog';
+import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
+import { cn } from '@/lib/utils';
+import {
+  TRADE_OPTIONS,
+  DISCIPLINE_OPTIONS,
+  tradeCategoriesByType,
+  getTradeCategoryLabel,
+} from '@/lib/tradeCategories';
 
-const categoryTabs = [
-  { id: 'all', label: 'All', icon: FolderOpen },
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'car', label: 'Car', icon: Car },
-  { id: 'warranties', label: 'Warranties', icon: Shield },
-  { id: 'miscellaneous', label: 'Miscellaneous', icon: FileText },
-];
+const CATEGORY_TABS = [{ id: 'all', label: 'All' }, ...DISCIPLINE_OPTIONS.map(d => ({ id: d.value, label: d.label }))];
 
-const getStatusColor = (statusDate: string | undefined) => {
-  if (!statusDate) return 'text-gray-600 bg-gray-50'; // no date
-  if (isPast(new Date(statusDate))) return 'text-yellow-600 bg-yellow-50'; // expired
-  return 'text-green-600 bg-green-50'; // still valid
+const DISCIPLINES = DISCIPLINE_OPTIONS;
+const DOC_TYPES = TRADE_OPTIONS;
+
+const tradeTypeLabel = (value: string) => TRADE_OPTIONS.find(t => t.value === value)?.label ?? value;
+
+const formatBytes = (bytes: number) => {
+  if (!bytes) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const expiryStatus = (doc: NormDoc) => {
+  if (!doc.expires_at) return { label: 'No expiry', cls: 'bg-gray-100 text-gray-600' };
+  if (doc.is_expired) return { label: 'Expired', cls: 'bg-red-50 text-red-600' };
+  const days = Math.ceil((new Date(doc.expires_at).getTime() - Date.now()) / 86_400_000);
+  if (days <= 30) return { label: `${days}d left`, cls: 'bg-yellow-50 text-yellow-600' };
+  return { label: 'Valid', cls: 'bg-green-50 text-green-600' };
+};
+
+const needsJobCTA = (doc: NormDoc): boolean => {
+  if (!doc.expires_at) return false;
+  if (doc.is_expired) return true;
+  const days = Math.ceil((new Date(doc.expires_at).getTime() - Date.now()) / 86_400_000);
+  return days >= 0 && days <= 7;
+};
+
+interface EditState {
+  name: string;
+  doc_type: string;
+  category: string;
+  discipline: string;
+  expires_at: Date | null;
+  notes: string;
+}
+
+const DOCS_URL = '/api/v1/documents/';
+const EXPIRY_URL = '/api/v1/documents/expiring/';
+
 const Documents = () => {
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
+  const queryClient = useQueryClient();
+
   const [openForm, setOpenForm] = useState(false);
-  const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [editDoc, setEditDoc] = useState<NormDoc | null>(null);
+  const [editState, setEditState] = useState<EditState | null>(null);
+  const [editDateOpen, setEditDateOpen] = useState(false);
+  const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<NormDoc | null>(null);
+  const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quotePrefill, setQuotePrefill] = useState<QuotePrefill | undefined>();
 
-  const { user } = useAuth();
+  const handlePostJob = (doc: NormDoc) => {
+    const tradeLabel = TRADE_OPTIONS.find(t => t.value === doc.doc_type)?.label;
+    const categoryLabel = doc.category ? getTradeCategoryLabel(doc.category) : undefined;
+    setQuotePrefill({
+      title: doc.name,
+      service: tradeLabel,
+      category: categoryLabel,
+    });
+    setQuoteOpen(true);
+  };
 
-  // Sample documents for demo purposes with categories
-  const sampleDocuments = [
-    {
-      id: 'sample-1',
-      name: 'Home Insurance Certificate 2024',
-      metadata: {
-        createdAt: '2024-03-15T10:30:00Z',
-        metadata: {
-          type: 'Insurance',
-          category: 'home',
-          status: '2025-03-15',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-2',
-      name: 'Building Regulations Certificate',
-      metadata: {
-        createdAt: '2023-08-22T14:15:00Z',
-        metadata: {
-          type: 'Compliance',
-          category: 'home',
-          status: null,
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-3',
-      name: 'Car Insurance Policy',
-      metadata: {
-        createdAt: '2024-01-10T09:00:00Z',
-        metadata: {
-          type: 'Insurance',
-          category: 'car',
-          status: '2025-01-10',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-4',
-      name: 'Fridge Freezer Warranty',
-      metadata: {
-        createdAt: '2022-11-05T16:45:00Z',
-        metadata: {
-          type: 'Warranty',
-          category: 'warranties',
-          status: '2024-11-05',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-5',
-      name: 'Washing Machine Receipt',
-      metadata: {
-        createdAt: '2023-06-18T11:20:00Z',
-        metadata: {
-          type: 'Receipt',
-          category: 'miscellaneous',
-          status: null,
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-6',
-      name: 'MOT Certificate',
-      metadata: {
-        createdAt: '2024-02-20T10:00:00Z',
-        metadata: {
-          type: 'Certificate',
-          category: 'car',
-          status: '2025-02-20',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-7',
-      name: 'Boiler Warranty',
-      metadata: {
-        createdAt: '2023-01-15T09:30:00Z',
-        metadata: {
-          type: 'Warranty',
-          category: 'warranties',
-          status: '2028-01-15',
-        },
-      },
-      publicUrl: '#',
-    },
-    {
-      id: 'sample-8',
-      name: 'EPC Certificate',
-      metadata: {
-        createdAt: '2023-05-10T14:00:00Z',
-        metadata: {
-          type: 'Certificate',
-          category: 'home',
-          status: '2033-05-10',
-        },
-      },
-      publicUrl: '#',
-    },
-  ];
-
-  // Fetch files/folders
   const {
-    data: apiDocs,
+    data: allDocs = [],
     isLoading,
     refetch,
   } = useQuery({
@@ -173,812 +125,621 @@ const Documents = () => {
     enabled: !!user?.id,
   });
 
-  // Combine API docs with sample documents (sample docs shown when no API data)
-  const allDocs = apiDocs && apiDocs.length > 0 ? apiDocs : sampleDocuments;
-
-  // Filter documents by active tab
-  const docs = activeTab === 'all'
-    ? allDocs
-    : allDocs.filter(doc => doc.metadata?.metadata?.category === activeTab);
-
-  const handleExportSelection = (docId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedForExport(prev => [...prev, docId]);
-    } else {
-      setSelectedForExport(prev => prev.filter(id => id !== docId));
-    }
-  };
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const allIds = allDocs?.filter(item => item.id && item.name !== 'cover').map(item => item.id) || [];
-      setSelectedForExport(allIds);
-    } else {
-      setSelectedForExport([]);
-    }
-  };
-
-  const handleGeneratePack = () => {
-    const selectedDocs = allDocs?.filter(doc => selectedForExport.includes(doc.id));
-    console.log('Generating home pack with:', selectedDocs);
-    toast.success(`Exporting ${selectedForExport.length} documents`);
-    setIsExportModalOpen(false);
-  };
-
-  // File delete Function
-  const deleteMutation = useMutation({
-    mutationFn: deleteFile,
-    onMutate: () => {
-      toast.loading('Deleting...', { id: 'delete-toast' });
-    },
-    onSuccess: () => {
-      refetch();
-      toast.dismiss('delete-toast');
-      toast.success(`Deleted successfully!`);
-    },
-    onError: () => {
-      toast.dismiss('delete-toast');
-      toast.error('Failed to delete file.');
-    },
+  const { data: expiringDocs = [] } = useFetch<NormDoc[]>(EXPIRY_URL, {
+    queryFn: () => fetchExpiringDocuments(),
   });
 
-  function downloadFile(url: string, fileName: string) {
-    fetch(url)
-      .then(r => {
-        if (!r.ok) throw new Error('Network response was not ok');
-        return r.blob();
-      })
-      .then(blob => {
-        const objectUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(objectUrl);
-      })
-      .catch(() => toast.error('Download failed'));
-  }
+  const deleteMutation = useDelete({
+    mutationFn: deleteFile,
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: [DOCS_URL] });
+      queryClient.refetchQueries({ queryKey: [EXPIRY_URL] });
+      setDeleteDocId(null);
+      toast.success('Document deleted.');
+    },
+    onError: () => toast.error('Failed to delete.'),
+  });
 
-  function openPreview(doc: any) {
-    setPreviewDoc(doc);
-  }
+  const editMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: DocumentUpdatePayload }) => updateDocument(id, data),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: [DOCS_URL] });
+      queryClient.refetchQueries({ queryKey: [EXPIRY_URL] });
+      setEditDoc(null);
+      toast.success('Document updated.');
+    },
+    onError: () => toast.error('Failed to update document.'),
+  });
 
-  function getFakeDocumentContent(name: string, type: string) {
-    switch (type) {
-      case 'Insurance':
-        return (
-          <div className="bg-white border border-[#E8E8E3] rounded-[16px] overflow-hidden">
-            <div className="bg-[#1A1A1A] text-white px-8 py-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-white/60 uppercase tracking-wider">Certificate of Insurance</p>
-                  <h3 className="text-lg font-semibold mt-1">{name}</h3>
-                </div>
-                <div className="h-12 w-12 bg-white/10 rounded-full flex items-center justify-center">
-                  <Shield className="w-6 h-6 text-[#FBBF24]" />
-                </div>
-              </div>
-            </div>
-            <div className="px-8 py-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Policy Number</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">HP-INS-2024-{Math.floor(Math.random() * 9000 + 1000)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Provider</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">Aviva Home Insurance</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Policy Holder</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">Mr J. Smith</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Property Address</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">14 Oak Lane, London, SW1A 1AA</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Start Date</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">15 Mar 2024</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">End Date</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">15 Mar 2025</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Annual Premium</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">£342.00</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4">
-                <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-2">Coverage</p>
-                <div className="space-y-2">
-                  {['Buildings Cover — £350,000', 'Contents Cover — £75,000', 'Personal Possessions — £5,000', 'Accidental Damage — Included'].map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                      <span className="text-xs text-[#4A4A4A]">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'Compliance':
-        return (
-          <div className="bg-white border border-[#E8E8E3] rounded-[16px] overflow-hidden">
-            <div className="bg-[#1A1A1A] text-white px-8 py-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-white/60 uppercase tracking-wider">Compliance Certificate</p>
-                  <h3 className="text-lg font-semibold mt-1">{name}</h3>
-                </div>
-                <div className="h-12 w-12 bg-white/10 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-[#FBBF24]" />
-                </div>
-              </div>
-            </div>
-            <div className="px-8 py-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Reference Number</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">BR/2023/{Math.floor(Math.random() * 9000 + 1000)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Issued By</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">London Borough Council</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Property Address</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">14 Oak Lane, London, SW1A 1AA</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Date of Issue</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">22 Aug 2023</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4">
-                <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-2">Compliance Details</p>
-                <div className="space-y-2">
-                  {[
-                    'Structural alterations comply with Building Regulations 2010',
-                    'Fire safety requirements met (Part B)',
-                    'Electrical installation compliant (Part P)',
-                    'Energy efficiency standards met (Part L)',
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                      <span className="text-xs text-[#4A4A4A]">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4">
-                <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Inspector</p>
-                <p className="text-sm font-medium text-[#1A1A1A]">D. Williams, RICS Chartered Surveyor</p>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'Warranty':
-        return (
-          <div className="bg-white border border-[#E8E8E3] rounded-[16px] overflow-hidden">
-            <div className="bg-[#1A1A1A] text-white px-8 py-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-white/60 uppercase tracking-wider">Product Warranty</p>
-                  <h3 className="text-lg font-semibold mt-1">{name}</h3>
-                </div>
-                <div className="h-12 w-12 bg-white/10 rounded-full flex items-center justify-center">
-                  <Shield className="w-6 h-6 text-[#FBBF24]" />
-                </div>
-              </div>
-            </div>
-            <div className="px-8 py-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Product</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">{name.replace(' Warranty', '')}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Serial Number</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">SN-{Math.floor(Math.random() * 900000 + 100000)}</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Manufacturer</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">{name.includes('Boiler') ? 'Worcester Bosch' : 'Samsung'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Purchase Date</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">{name.includes('Boiler') ? '15 Jan 2023' : '05 Nov 2022'}</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Warranty Period</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">{name.includes('Boiler') ? '5 Years' : '2 Years'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Warranty Expires</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">{name.includes('Boiler') ? '15 Jan 2028' : '05 Nov 2024'}</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4">
-                <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-2">Coverage Includes</p>
-                <div className="space-y-2">
-                  {['Manufacturing defects', 'Parts & labour', 'Call-out charges', 'Annual service included'].map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                      <span className="text-xs text-[#4A4A4A]">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'Receipt':
-        return (
-          <div className="bg-white border border-[#E8E8E3] rounded-[16px] overflow-hidden">
-            <div className="bg-[#1A1A1A] text-white px-8 py-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-white/60 uppercase tracking-wider">Purchase Receipt</p>
-                  <h3 className="text-lg font-semibold mt-1">{name}</h3>
-                </div>
-                <div className="h-12 w-12 bg-white/10 rounded-full flex items-center justify-center">
-                  <FileText className="w-6 h-6 text-[#FBBF24]" />
-                </div>
-              </div>
-            </div>
-            <div className="px-8 py-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Store</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">Currys PC World</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Receipt No.</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">RC-{Math.floor(Math.random() * 900000 + 100000)}</p>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4">
-                <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-3">Items</p>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#4A4A4A]">Samsung Ecobubble™ Washing Machine 9kg</span>
-                    <span className="font-medium text-[#1A1A1A]">£449.00</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#4A4A4A]">Delivery & Installation</span>
-                    <span className="font-medium text-[#1A1A1A]">£29.99</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#4A4A4A]">5 Year Extended Warranty</span>
-                    <span className="font-medium text-[#1A1A1A]">£89.99</span>
-                  </div>
-                </div>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4 flex justify-between">
-                <span className="text-sm font-semibold text-[#1A1A1A]">Total</span>
-                <span className="text-sm font-semibold text-[#1A1A1A]">£568.98</span>
-              </div>
-              <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Payment Method</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">Visa •••• 4521</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Transaction Date</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">18 Jun 2023</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'Certificate':
-      default:
-        return (
-          <div className="bg-white border border-[#E8E8E3] rounded-[16px] overflow-hidden">
-            <div className="bg-[#1A1A1A] text-white px-8 py-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-white/60 uppercase tracking-wider">{name.includes('MOT') ? 'MOT Test Certificate' : name.includes('EPC') ? 'Energy Performance Certificate' : 'Certificate'}</p>
-                  <h3 className="text-lg font-semibold mt-1">{name}</h3>
-                </div>
-                <div className="h-12 w-12 bg-white/10 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-[#FBBF24]" />
-                </div>
-              </div>
-            </div>
-            <div className="px-8 py-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Certificate Number</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">{name.includes('MOT') ? 'MOT' : 'EPC'}-{Math.floor(Math.random() * 900000 + 100000)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">{name.includes('MOT') ? 'Testing Station' : 'Assessor'}</p>
-                  <p className="text-sm font-medium text-[#1A1A1A]">{name.includes('MOT') ? 'Kwik Fit — Clapham' : 'GreenEnergy Assessments Ltd'}</p>
-                </div>
-              </div>
-              {name.includes('MOT') ? (
-                <>
-                  <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Vehicle Registration</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">AB21 CDE</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Make & Model</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">Volkswagen Golf 1.5 TSI</p>
-                    </div>
-                  </div>
-                  <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Test Date</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">20 Feb 2024</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Expiry Date</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">20 Feb 2025</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Mileage</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">34,218</p>
-                    </div>
-                  </div>
-                  <div className="border-t border-[#E8E8E3] pt-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                      <span className="text-sm font-medium text-green-700">PASS</span>
-                    </div>
-                    <div className="space-y-2">
-                      {['Brakes — Pass', 'Suspension — Pass', 'Lights — Pass', 'Emissions — Pass'].map((item, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                          <span className="text-xs text-[#4A4A4A]">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Property Address</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">14 Oak Lane, London, SW1A 1AA</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Assessment Date</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">10 May 2023</p>
-                    </div>
-                  </div>
-                  <div className="border-t border-[#E8E8E3] pt-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="h-14 w-14 rounded-[10px] bg-[#22C55E] flex items-center justify-center">
-                        <span className="text-white text-xl font-bold">B</span>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-[#1A1A1A]">Energy Rating: B (82)</p>
-                        <p className="text-xs text-[#6B6B6B]">Very energy efficient</p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      {['Wall insulation — Cavity fill', 'Roof insulation — 250mm loft', 'Windows — Double glazed', 'Heating — Gas condensing boiler'].map((item, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                          <span className="text-xs text-[#4A4A4A]">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="border-t border-[#E8E8E3] pt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">Valid Until</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">10 May 2033</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[#6B6B6B] uppercase tracking-wider mb-1">RRN</p>
-                      <p className="text-sm font-medium text-[#1A1A1A]">0382-1947-6253-8190-4021</p>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        );
-    }
-  }
-
-  // Delete files or folders
-  const handleDeleteTask = name => {
-    deleteMutation.mutate({
-      fileName: name,
-      id: user?.id,
+  const openEdit = (doc: NormDoc) => {
+    setEditDoc(doc);
+    setEditState({
+      name: doc.name,
+      doc_type: doc.doc_type,
+      category: doc.category,
+      discipline: doc.discipline || 'other',
+      expires_at: doc.expires_at ? new Date(doc.expires_at) : null,
+      notes: doc.notes,
     });
   };
 
-  return (
-    <>
-      <DashboardLayout>
-        <div className="space-y-6">
-          {/* Header Section - Dashboard Style */}
-          <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
-                </div>
-                <div>
-                  <p className="text-[#6B6B6B] text-sm mb-0.5">Your documents</p>
-                  <h1 className="text-[#1A1A1A] text-2xl font-semibold">Documents</h1>
-                </div>
-              </div>
+  const handleEditSave = () => {
+    if (!editDoc || !editState) return;
+    editMutation.mutate({
+      id: editDoc.id,
+      data: {
+        name: editState.name.trim() || editDoc.name,
+        doc_type: editState.doc_type,
+        category: editState.category,
+        discipline: editState.discipline,
+        expires_at: editState.expires_at ? editState.expires_at.toISOString().split('T')[0] : null,
+        notes: editState.notes,
+      },
+    });
+  };
 
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsExportModalOpen(true)}
-                  disabled={selectedForExport.length === 0}
-                  className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white transition-all text-sm font-medium h-10 px-4 rounded-full disabled:opacity-50"
-                >
-                  <Package className="w-4 h-4 mr-2" strokeWidth={1.5} />
-                  Export Pack {selectedForExport.length > 0 && `(${selectedForExport.length})`}
-                </Button>
-                <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Export Home Pack</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <p className="text-sm text-[#6B6B6B] mb-4">
-                        You have selected {selectedForExport.length} document{selectedForExport.length !== 1 ? 's' : ''} to export.
-                      </p>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {allDocs?.filter(doc => selectedForExport.includes(doc.id)).map(doc => (
-                          <div key={doc.id} className="flex items-center gap-3 p-2 bg-[#F5F5F0] rounded-lg">
-                            <FileText className="w-4 h-4 text-[#6B6B6B]" />
-                            <span className="text-sm text-[#1A1A1A]">{doc.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="outline" onClick={() => setIsExportModalOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleGeneratePack} className="bg-[#1A1A1A] text-white hover:bg-[#333333]">
-                        Generate Pack
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                <Button
-                  onClick={() => setOpenForm(true)}
-                  className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
-                >
-                  <Upload className="w-4 h-4 mr-2" strokeWidth={1.5} />
-                  Upload Document
-                </Button>
+  const editTradeCategories = editState?.doc_type ? tradeCategoriesByType[editState.doc_type] ?? [] : [];
+
+  const filtered = useMemo(() => {
+    let docs = allDocs;
+    if (activeTab !== 'all') docs = docs.filter(d => d.discipline === activeTab);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      docs = docs.filter(
+        d => d.name.toLowerCase().includes(q) || d.notes?.toLowerCase().includes(q) || d.file_name?.toLowerCase().includes(q),
+      );
+    }
+    return docs;
+  }, [allDocs, activeTab, search]);
+
+  const stats = useMemo(
+    () => ({
+      total: allDocs.length,
+      expiring: expiringDocs.length,
+      expired: allDocs.filter(d => d.is_expired).length,
+      compliance: allDocs.filter(d => d.discipline === 'compliance').length,
+    }),
+    [allDocs, expiringDocs],
+  );
+
+  function downloadFile(docId: string, fileName: string) {
+    toast.promise(
+      getDocumentDownloadUrl(docId).then(url =>
+        fetch(url)
+          .then(r => {
+            if (!r.ok) throw new Error('Download failed');
+            return r.blob();
+          })
+          .then(blob => {
+            const a = document.createElement('a');
+            a.href = window.URL.createObjectURL(blob);
+            a.download = fileName;
+            a.click();
+            a.remove();
+          }),
+      ),
+      { loading: 'Downloading…', success: 'Download started.', error: 'Download failed.' },
+    );
+  }
+
+  const handleExportSelection = (id: string, checked: boolean) =>
+    setSelectedForExport(prev => (checked ? [...prev, id] : prev.filter(x => x !== id)));
+
+  const handleSelectAll = (checked: boolean) => setSelectedForExport(checked ? allDocs.map(d => d.id) : []);
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header + Stats */}
+        <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                <FileText className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+              </div>
+              <div>
+                <p className="text-[#6B6B6B] text-sm mb-0.5">Your documents</p>
+                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Documents</h1>
               </div>
             </div>
-
-            {/* Stats Row */}
-            <div className="grid grid-cols-4 gap-4">
-              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[#6B6B6B] text-sm">Total Documents</span>
-                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
-                    <FolderOpen className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">{allDocs?.filter(item => item.id && item.name !== 'cover')?.length || 0}</p>
-                <p className="text-[#8B8B8B] text-xs mt-1">Stored safely</p>
-              </div>
-
-              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[#6B6B6B] text-sm">Home</span>
-                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
-                    <Home className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">{allDocs?.filter(item => item.metadata?.metadata?.category === 'home')?.length || 0}</p>
-                <p className="text-[#8B8B8B] text-xs mt-1">Home documents</p>
-              </div>
-
-              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[#6B6B6B] text-sm">Car</span>
-                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
-                    <Car className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">{allDocs?.filter(item => item.metadata?.metadata?.category === 'car')?.length || 0}</p>
-                <p className="text-[#8B8B8B] text-xs mt-1">Vehicle documents</p>
-              </div>
-
-              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[#6B6B6B] text-sm">Action Required</span>
-                  <div className="h-8 w-8 rounded-full bg-[#FEF2F2] flex items-center justify-center">
-                    <Shield className="w-4 h-4 text-[#DC2626]" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <p className="text-[#DC2626] text-2xl font-semibold">{allDocs?.filter(item => item.metadata?.metadata?.status && isPast(new Date(item.metadata.metadata.status)))?.length || 0}</p>
-                <p className="text-[#8B8B8B] text-xs mt-1">Need attention</p>
-              </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setIsExportModalOpen(true)}
+                disabled={selectedForExport.length === 0}
+                className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white text-sm font-medium h-10 px-4 rounded-full disabled:opacity-50"
+              >
+                <Package className="w-4 h-4 mr-2" strokeWidth={1.5} />
+                Export Pack {selectedForExport.length > 0 && `(${selectedForExport.length})`}
+              </Button>
+              <Button
+                onClick={() => setOpenForm(true)}
+                className="bg-[#1A1A1A] text-white hover:bg-[#333333] text-sm font-medium h-10 px-4 rounded-full"
+              >
+                <Upload className="w-4 h-4 mr-2" strokeWidth={1.5} />
+                Upload Document
+              </Button>
             </div>
           </div>
 
-          {/* Category Tabs */}
-          <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-            <div className="flex items-center gap-2 mb-6">
-              {categoryTabs.map(tab => {
-                const isActive = activeTab === tab.id;
-                const TabIcon = tab.icon;
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              {
+                label: 'Total Documents',
+                value: stats.total,
+                sub: 'Stored safely',
+                Icon: FolderOpen,
+                iconCls: 'text-[#FBBF24]',
+                iconBg: 'bg-[#FEF9E7]',
+                valCls: 'text-[#1A1A1A]',
+              },
+              {
+                label: 'Expiring Soon',
+                value: stats.expiring,
+                sub: 'Within 30 days',
+                Icon: AlertTriangle,
+                iconCls: 'text-orange-500',
+                iconBg: 'bg-orange-50',
+                valCls: stats.expiring > 0 ? 'text-orange-600' : 'text-[#1A1A1A]',
+              },
+              {
+                label: 'Expired',
+                value: stats.expired,
+                sub: 'Need attention',
+                Icon: AlertTriangle,
+                iconCls: 'text-[#DC2626]',
+                iconBg: 'bg-[#FEF2F2]',
+                valCls: stats.expired > 0 ? 'text-[#DC2626]' : 'text-[#1A1A1A]',
+              },
+              {
+                label: 'Compliance',
+                value: stats.compliance,
+                sub: 'Certificates',
+                Icon: FileText,
+                iconCls: 'text-[#FBBF24]',
+                iconBg: 'bg-[#FEF9E7]',
+                valCls: 'text-[#1A1A1A]',
+              },
+            ].map(s => (
+              <div key={s.label} className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#6B6B6B] text-sm">{s.label}</span>
+                  <div className={`h-8 w-8 rounded-full ${s.iconBg} flex items-center justify-center`}>
+                    <s.Icon className={`w-4 h-4 ${s.iconCls}`} strokeWidth={1.5} />
+                  </div>
+                </div>
+                <p className={`text-2xl font-semibold ${s.valCls}`}>{s.value}</p>
+                <p className="text-[#8B8B8B] text-xs mt-1">{s.sub}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Expiring banner */}
+        {expiringDocs.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-[16px] px-5 py-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" strokeWidth={1.5} />
+            <div>
+              <p className="text-sm font-medium text-yellow-800">
+                {expiringDocs.length} document{expiringDocs.length !== 1 ? 's' : ''} expiring within 30 days
+              </p>
+              <p className="text-xs text-yellow-700 mt-0.5">{expiringDocs.map(d => d.name).join(' · ')}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Table card */}
+        <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+          {/* Search + Tabs */}
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B6B6B]" />
+              <Input placeholder="Search documents…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {CATEGORY_TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 text-sm font-medium rounded-full transition-all ${
+                    activeTab === tab.id ? 'bg-[#1A1A1A] text-white' : 'text-[#4A4A4A] hover:bg-[#F5F5F0]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Select all */}
+          {filtered.length > 0 && (
+            <div className="flex items-center justify-end mb-3">
+              {selectedForExport.length > 0 && (
+                <span className="text-sm text-[#FBBF24] font-medium mr-3">{selectedForExport.length} selected</span>
+              )}
+              <label htmlFor="select-all" className="text-sm text-[#6B6B6B] cursor-pointer mr-2">
+                Select all
+              </label>
+              <Checkbox
+                id="select-all"
+                checked={selectedForExport.length === allDocs.length && allDocs.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
+            </div>
+          )}
+
+          {/* Loading skeletons */}
+          {isLoading && (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-[#F5F5F0] rounded-[12px] h-16 animate-pulse" />
+              ))}
+            </div>
+          )}
+
+          {/* Doc list */}
+          {!isLoading && (
+            <div className="space-y-3">
+              {filtered.map(doc => {
+                const status = expiryStatus(doc);
                 return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-all duration-200 ${
-                      isActive
-                        ? 'bg-[#1A1A1A] text-white'
-                        : 'text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A]'
-                    }`}
+                  <div
+                    key={doc.id}
+                    className="bg-[#F5F5F0] rounded-[12px] px-5 py-4 hover:shadow-sm transition-all flex items-center gap-4"
                   >
-                    <TabIcon className="w-4 h-4" strokeWidth={1.5} />
-                    {tab.label}
-                  </button>
+                    <div className="h-10 w-10 rounded-[10px] bg-white border border-[#E5E7EB] flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-[#1A1A1A] text-sm font-medium truncate">{doc.name}</h4>
+                      <p className="text-[#6B6B6B] text-xs">
+                        {tradeTypeLabel(doc.doc_type) || '—'}
+                        {doc.category ? ` · ${getTradeCategoryLabel(doc.category)}` : ''} · {formatBytes(doc.file_size)}
+                      </p>
+                    </div>
+
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-[#E8E8E3] text-[#4A4A4A] capitalize shrink-0">
+                      {doc.discipline || 'other'}
+                    </span>
+
+                    <p className="text-[#6B6B6B] text-xs shrink-0 w-24 text-right">{format(parseISO(doc.uploaded_at), 'dd MMM yyyy')}</p>
+
+                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${status.cls}`}>{status.label}</span>
+
+                    {needsJobCTA(doc) && doc.doc_type && (
+                      <Button
+                        onClick={() => handlePostJob(doc)}
+                        size="sm"
+                        className="bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] h-8 px-3 rounded-full text-xs font-medium shrink-0"
+                      >
+                        Post a Job
+                      </Button>
+                    )}
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setPreviewDoc(doc)}
+                        className="p-2 text-[#4A4A4A] hover:bg-[#E8E8E3] rounded-full transition-colors"
+                        title="Preview"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => downloadFile(doc.id, doc.file_name || doc.name)}
+                        className="p-2 text-[#4A4A4A] hover:bg-[#E8E8E3] rounded-full transition-colors"
+                        title="Download"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openEdit(doc)}
+                        className="p-2 text-[#4A4A4A] hover:bg-[#E8E8E3] rounded-full transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteDocId(doc.id)}
+                        className="p-2 text-[#6B6B6B] hover:text-[#DC2626] hover:bg-[#FEF2F2] rounded-full transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="shrink-0 pl-2 border-l border-[#E8E8E3]">
+                      <Checkbox
+                        checked={selectedForExport.includes(doc.id)}
+                        onCheckedChange={checked => handleExportSelection(doc.id, checked as boolean)}
+                      />
+                    </div>
+                  </div>
                 );
               })}
-            </div>
 
-            {/* Select All Row */}
-            {docs?.filter(item => item.id && item.name !== 'cover')?.length > 0 && (
-              <div className="flex items-center justify-end mb-4 px-5 py-2">
-                {selectedForExport.length > 0 && (
-                  <span className="text-sm text-[#FBBF24] font-medium mr-4">
-                    {selectedForExport.length} selected
-                  </span>
-                )}
-                <label htmlFor="select-all" className="text-sm text-[#6B6B6B] cursor-pointer mr-3">
-                  Select all for export
-                </label>
-                <div className="flex-shrink-0 pl-2 border-l border-[#E8E8E3]">
-                  <Checkbox
-                    id="select-all"
-                    checked={selectedForExport.length === allDocs?.filter(item => item.id && item.name !== 'cover')?.length}
-                    onCheckedChange={handleSelectAll}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Documents List */}
-            <div className="space-y-3">
-              {docs &&
-                docs.length > 0 &&
-                docs
-                  .filter(item => item.id && item.name !== 'cover')
-                  .map(({ id, name, metadata, publicUrl }) => (
-                    <div
-                      key={id}
-                      className="bg-[#F5F5F0] rounded-[12px] px-5 py-4 hover:shadow-sm transition-all flex items-center gap-4"
-                    >
-                      {/* Document Icon */}
-                      <div className="h-10 w-10 rounded-[10px] bg-white border border-[#E5E7EB] flex items-center justify-center flex-shrink-0">
-                        <FileText className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
-                      </div>
-
-                      {/* Document Info */}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-[#1A1A1A] text-sm font-medium truncate">{name}</h4>
-                        <p className="text-[#6B6B6B] text-xs">{metadata?.metadata?.type || 'Document'}</p>
-                      </div>
-
-                      {/* Category Badge */}
-                      <div className="flex-shrink-0">
-                        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-[#E8E8E3] text-[#4A4A4A] capitalize">
-                          {metadata?.metadata?.category || 'misc'}
-                        </span>
-                      </div>
-
-                      {/* Date */}
-                      <div className="flex-shrink-0 w-24 text-right">
-                        <p className="text-[#6B6B6B] text-xs">
-                          {metadata?.createdAt ? format(new Date(metadata.createdAt), 'dd MMM yyyy') : '—'}
-                        </p>
-                      </div>
-
-                      {/* Status Badge */}
-                      <div className="flex-shrink-0 w-24">
-                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getStatusColor(metadata?.metadata?.status)}`}>
-                          {metadata?.metadata?.status
-                            ? isPast(new Date(metadata.metadata.status))
-                              ? 'Expired'
-                              : 'Valid'
-                            : 'No expiry'}
-                        </span>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => openPreview({ id, name, metadata, publicUrl })}
-                          className="p-2 text-[#4A4A4A] hover:bg-[#E8E8E3] rounded-full transition-colors"
-                          title="View"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => downloadFile(publicUrl, name)}
-                          className="p-2 text-[#4A4A4A] hover:bg-[#E8E8E3] rounded-full transition-colors"
-                          title="Download"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTask(name)}
-                          className="p-2 text-[#6B6B6B] hover:text-[#DC2626] hover:bg-[#FEF2F2] rounded-full transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Export Checkbox */}
-                      <div className="flex-shrink-0 pl-2 border-l border-[#E8E8E3]">
-                        <Checkbox
-                          id={`export-${id}`}
-                          checked={selectedForExport.includes(id)}
-                          onCheckedChange={(checked) => handleExportSelection(id, checked as boolean)}
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-              {/* Upload Row */}
+              {/* Upload row */}
               <div
                 className="bg-white rounded-[12px] px-5 py-4 border-2 border-dashed border-[#E8E8E3] cursor-pointer hover:bg-[#F5F5F0] hover:border-[#FBBF24] transition-all flex items-center gap-4"
                 onClick={() => setOpenForm(true)}
               >
-                <div className="h-10 w-10 rounded-[10px] bg-[#FEF9E7] flex items-center justify-center flex-shrink-0">
+                <div className="h-10 w-10 rounded-[10px] bg-[#FEF9E7] flex items-center justify-center shrink-0">
                   <Upload className="w-5 h-5 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
-                <div className="flex-1">
+                <div>
                   <h4 className="text-[#1A1A1A] text-sm font-medium">Upload Document</h4>
                   <p className="text-[#6B6B6B] text-xs">Click to add a new document</p>
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Empty State */}
-            {docs?.filter(item => item.id && item.name !== 'cover')?.length === 0 && (
-              <div className="text-center py-12">
-                <div className="h-16 w-16 rounded-full bg-[#F5F5F0] flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-8 h-8 text-[#6B6B6B]" strokeWidth={1.5} />
-                </div>
-                <h3 className="text-[#1A1A1A] text-lg font-medium mb-2">No documents in this category</h3>
-                <p className="text-[#6B6B6B] text-sm mb-4">Upload your first document to get started</p>
-                <Button
-                  onClick={() => setOpenForm(true)}
-                  className="bg-[#1A1A1A] text-white hover:bg-[#333333] rounded-full"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Document
-                </Button>
+          {/* Empty state */}
+          {!isLoading && filtered.length === 0 && (
+            <div className="text-center py-12">
+              <div className="h-16 w-16 rounded-full bg-[#F5F5F0] flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-8 h-8 text-[#6B6B6B]" strokeWidth={1.5} />
               </div>
-            )}
-          </div>
+              <h3 className="text-[#1A1A1A] text-lg font-medium mb-2">{search ? 'No results found' : 'No documents yet'}</h3>
+              <p className="text-[#6B6B6B] text-sm mb-4">
+                {search ? 'Try a different search term' : 'Upload your first document to get started'}
+              </p>
+              {!search && (
+                <Button onClick={() => setOpenForm(true)} className="bg-[#1A1A1A] text-white hover:bg-[#333333] rounded-full">
+                  <Upload className="w-4 h-4 mr-2" /> Upload Document
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
 
-          <DocsUploadDialog
-            openForm={openForm}
-            setOpenForm={setOpenForm}
-            refetch={refetch}
-          />
+        {/* Upload dialog */}
+        <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} refetch={refetch} />
 
-          {/* Delete Confirmation Dialog */}
-          {/* <DeleteDialog
-        isOpen={isDeleteOpen}
-        onClose={() => {
-          setIsDeleteOpen(false);
-          setDeleteTarget(null);
-        }}
-        onConfirm={() => {
-          if (deleteTarget) {
-            handleDeleteTask(deleteTarget.name, deleteTarget.isFolder);
-            setDeleteTarget(null);
-          }
-        }}
-        title={deleteTarget?.isFolder ? "Delete Folder" : "Delete File"}
-        description="Are you sure you want to delete this item? This action cannot be undone."
-        itemName={deleteTarget?.name}
-        requireConfirmation={false}
-      /> */}
+        {/* Post-a-Job dialog (prefilled from a doc) */}
+        <Quote open={quoteOpen} setOpen={setQuoteOpen} prefill={quotePrefill} />
 
-          {/* Document Preview Dialog */}
-          <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
-            <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto p-0 rounded-[20px] border border-[#E8E8E3]">
-              {previewDoc && (
-                <>
-                  {/* Preview Header */}
-                  <div className="flex items-center justify-between px-6 pt-6 pb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-[10px] bg-[#F5F5F0] border border-[#E8E8E3] flex items-center justify-center flex-shrink-0">
-                        <FileText className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
-                      </div>
-                      <div>
-                        <h3 className="text-[#1A1A1A] text-base font-semibold">{previewDoc.name}</h3>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-[#6B6B6B]">{previewDoc.metadata?.metadata?.type || 'Document'}</span>
-                          <span className="text-[#E8E8E3]">·</span>
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#E8E8E3] text-[#4A4A4A] capitalize">
-                            {previewDoc.metadata?.metadata?.category || 'misc'}
-                          </span>
-                          <span className="text-[#E8E8E3]">·</span>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getStatusColor(previewDoc.metadata?.metadata?.status)}`}>
-                            {previewDoc.metadata?.metadata?.status
-                              ? isPast(new Date(previewDoc.metadata.metadata.status))
-                                ? 'Expired'
-                                : 'Valid'
-                              : 'No expiry'}
-                          </span>
-                        </div>
-                      </div>
+        {/* Export modal */}
+        <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Export Home Pack</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-[#6B6B6B] mb-4">
+                {selectedForExport.length} document{selectedForExport.length !== 1 ? 's' : ''} selected.
+              </p>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {allDocs
+                  .filter(d => selectedForExport.includes(d.id))
+                  .map(doc => (
+                    <div key={doc.id} className="flex items-center gap-3 p-2 bg-[#F5F5F0] rounded-lg">
+                      <FileText className="w-4 h-4 text-[#6B6B6B]" />
+                      <span className="text-sm text-[#1A1A1A]">{doc.name}</span>
                     </div>
-                  </div>
+                  ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button className="text-black hover:bg-gray-200" variant="outline" onClick={() => setIsExportModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-[#1A1A1A] text-white hover:bg-[#333333]"
+                onClick={() => {
+                  toast.success(`Exporting ${selectedForExport.length} documents`);
+                  setIsExportModalOpen(false);
+                }}
+              >
+                Generate Pack
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-                  {/* Fake Document Preview */}
-                  <div className="px-6 pb-4">
-                    {getFakeDocumentContent(previewDoc.name, previewDoc.metadata?.metadata?.type || 'Certificate')}
-                  </div>
+        {/* Delete confirm */}
+        <Dialog open={!!deleteDocId} onOpenChange={() => setDeleteDocId(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Delete Document</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground py-2">This action cannot be undone. The document will be permanently deleted.</p>
+            <div className="flex justify-end gap-2">
+              <Button className="" variant="outline" onClick={() => setDeleteDocId(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteDocId && deleteMutation.mutate({ id: deleteDocId })}
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-                  {/* Footer Actions */}
-                  <div className="flex items-center justify-between px-6 py-4 border-t border-[#E8E8E3] bg-[#FAFAF7]">
-                    <p className="text-xs text-[#6B6B6B]">
-                      Uploaded {previewDoc.metadata?.createdAt ? format(new Date(previewDoc.metadata.createdAt), 'dd MMM yyyy') : '—'}
-                    </p>
-                    <div className="flex items-center gap-2">
+        {/* Edit dialog */}
+        <Dialog open={!!editDoc} onOpenChange={() => setEditDoc(null)}>
+          <DialogContent className="sm:max-w-[440px]">
+            <DialogHeader>
+              <DialogTitle>Edit Document</DialogTitle>
+            </DialogHeader>
+            {editState && (
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label>Name</Label>
+                  <Input value={editState.name} onChange={e => setEditState(prev => (prev ? { ...prev, name: e.target.value } : prev))} />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Document Type</Label>
+                  <Select
+                    value={editState.doc_type}
+                    onValueChange={v =>
+                      setEditState(prev => (prev ? { ...prev, doc_type: v, category: '' } : prev))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DOC_TYPES.map(t => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {editState.doc_type && (
+                  <div className="space-y-1.5">
+                    <Label>Category</Label>
+                    <Select
+                      value={editState.category}
+                      onValueChange={v => setEditState(prev => (prev ? { ...prev, category: v } : prev))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {editTradeCategories.map(c => (
+                          <SelectItem key={c.value} value={c.value}>
+                            {c.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label>Discipline</Label>
+                  <Select
+                    value={editState.discipline}
+                    onValueChange={v => setEditState(prev => (prev ? { ...prev, discipline: v } : prev))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select discipline" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DISCIPLINES.map(d => (
+                        <SelectItem key={d.value} value={d.value}>
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Expiry Date</Label>
+                  <Popover open={editDateOpen} onOpenChange={setEditDateOpen}>
+                    <PopoverTrigger asChild>
                       <Button
                         variant="outline"
-                        onClick={() => previewDoc.publicUrl !== '#' && downloadFile(previewDoc.publicUrl, previewDoc.name)}
-                        className="text-[#1A1A1A] border-[#E8E8E3] hover:bg-[#F5F5F0] text-sm h-9 px-4 rounded-full"
+                        className={cn('w-full justify-start font-normal', !editState.expires_at && 'text-muted-foreground')}
                       >
-                        <Download className="w-3.5 h-3.5 mr-2" strokeWidth={1.5} />
-                        Download
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {editState.expires_at ? format(editState.expires_at, 'PPP') : 'No expiry date'}
                       </Button>
-                      <Button
-                        onClick={() => setPreviewDoc(null)}
-                        className="bg-[#1A1A1A] text-white hover:bg-[#333333] text-sm h-9 px-4 rounded-full"
-                      >
-                        Close
-                      </Button>
-                    </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={editState.expires_at ?? undefined}
+                        onSelect={d => {
+                          setEditState(prev => (prev ? { ...prev, expires_at: d ?? null } : prev));
+                          setEditDateOpen(false);
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Notes</Label>
+                  <Textarea
+                    value={editState.notes}
+                    onChange={e => setEditState(prev => (prev ? { ...prev, notes: e.target.value } : prev))}
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setEditDoc(null)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleEditSave} disabled={editMutation.isPending}>
+                    {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                    Save
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Preview dialog */}
+        <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
+          <DialogContent className="sm:max-w-[500px] rounded-[20px] border border-[#E8E8E3]">
+            {previewDoc && (
+              <>
+                <div className="flex items-center gap-3 pb-4 border-b border-[#E8E8E3]">
+                  <div className="h-10 w-10 rounded-[10px] bg-[#F5F5F0] flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-[#4A4A4A]" />
                   </div>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
-      </DashboardLayout>
-    </>
+                  <div>
+                    <h3 className="font-semibold text-[#1A1A1A]">{previewDoc.name}</h3>
+                    <p className="text-xs text-[#6B6B6B]">
+                      {tradeTypeLabel(previewDoc.doc_type) || '—'}
+                      {previewDoc.category ? ` · ${getTradeCategoryLabel(previewDoc.category)}` : ''}
+                      {previewDoc.discipline ? ` · ${previewDoc.discipline}` : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 py-2">
+                  {(
+                    [
+                      { label: 'File name', value: previewDoc.file_name || '—' },
+                      { label: 'File size', value: formatBytes(previewDoc.file_size) },
+                      { label: 'Uploaded', value: format(parseISO(previewDoc.uploaded_at), 'dd MMM yyyy, HH:mm') },
+                      { label: 'Last updated', value: format(parseISO(previewDoc.updated_at), 'dd MMM yyyy, HH:mm') },
+                      {
+                        label: 'Expiry',
+                        value: previewDoc.expires_at ? format(parseISO(previewDoc.expires_at), 'dd MMM yyyy') : 'No expiry',
+                      },
+                      previewDoc.notes ? { label: 'Notes', value: previewDoc.notes } : null,
+                      previewDoc.property_address ? { label: 'Property', value: previewDoc.property_address } : null,
+                    ] as Array<{ label: string; value: string } | null>
+                  )
+                    .filter((r): r is { label: string; value: string } => r !== null)
+                    .map(row => (
+                      <div key={row.label} className="flex justify-between text-sm">
+                        <span className="text-[#6B6B6B]">{row.label}</span>
+                        <span className="text-[#1A1A1A] font-medium text-right max-w-[280px] break-words">{row.value}</span>
+                      </div>
+                    ))}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-[#E8E8E3]">
+                  <Button variant="outline" onClick={() => downloadFile(previewDoc.id, previewDoc.file_name || previewDoc.name)}>
+                    <Download className="w-3.5 h-3.5 mr-2" strokeWidth={1.5} />
+                    Download
+                  </Button>
+                  <Button className="bg-[#1A1A1A] text-white hover:bg-[#333333]" onClick={() => setPreviewDoc(null)}>
+                    Close
+                  </Button>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    </DashboardLayout>
   );
 };
 
