@@ -1,3 +1,60 @@
+import React, { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Building,
+  CreditCard,
+  Flame,
+  Home,
+  Plus,
+  Settings,
+  Shield,
+  Trash2,
+  X,
+  Zap,
+} from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { addNewEvent } from "@/lib/Api2";
+import { toast } from "sonner";
+
+interface AddEventProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  initialDate?: string;
+  hideTrigger?: boolean;
+}
+
+const AddEvent = ({ open, onOpenChange, initialDate, hideTrigger }: AddEventProps = {}) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const isAddEventOpen = isControlled ? open : internalOpen;
+  const setIsAddEventOpen = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
+  const [quickAddType, setQuickAddType] = useState<
+    "property" | "household" | null
+  >(null);
+  const [taskInput, setTaskInput] = useState("");
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  const [selectedEvents, setSelectedEvents] = useState<number[]>([]);
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -53,6 +110,13 @@ const AddEvent = () => {
     resolver: zodResolver(eventSchema),
   });
 
+  useEffect(() => {
+    if (isAddEventOpen && initialDate) {
+      setNewEvent((prev) => ({ ...prev, date: initialDate }));
+    }
+  }, [isAddEventOpen, initialDate]);
+
+  const mutation = useMutation({
   const mutation = usePost({
     mutationFn: addNewEvent,
     onSuccess: () => {
@@ -165,13 +229,15 @@ const AddEvent = () => {
   return (
     <>
       <div className="relative">
-        <Button
-          onClick={() => setQuickAddType('property')}
-          className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
-        >
-          <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
-          Add Task
-        </Button>
+        {!hideTrigger && (
+          <Button
+            onClick={() => setQuickAddType("property")}
+            className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
+          >
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
+            Add Task
+          </Button>
+        )}
 
         {quickAddType && (
           <div className="absolute top-full right-0 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4">
@@ -376,26 +442,24 @@ const AddEvent = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="recurring">Recurring <span className="text-red-500">*</span></Label>
-                <Controller
-                  name="recurring"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger className={errors.recurring ? 'border-red-500' : ''}>
-                        <SelectValue placeholder="Select frequency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="never">Never</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                        <SelectItem value="quarterly">Quarterly</SelectItem>
-                        <SelectItem value="annually">Annually</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.recurring && <p className="text-xs text-red-500">{errors.recurring.message}</p>}
+                <Label htmlFor="recurring">Recurring</Label>
+                <Select
+                  value={newEvent.recurring}
+                  onValueChange={(value) =>
+                    setNewEvent({ ...newEvent, recurring: value })
+                  }>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="never">Never</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Biweekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="annually">Annually</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
