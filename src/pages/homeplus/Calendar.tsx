@@ -25,8 +25,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddEvent from "@/components/event/AddEvent";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getEvents, updateEventDate } from "@/lib/Api2";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getEvents } from "@/lib/Api2";
+import usePatch from "@/hooks/usePatch";
 import { toast } from "sonner";
 
 const Calendar = () => {
@@ -50,9 +51,7 @@ const Calendar = () => {
   const [dragOverDateKey, setDragOverDateKey] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const moveEventMutation = useMutation({
-    mutationFn: ({ id, date }: { id: string | number; date: string }) =>
-      updateEventDate(id, date),
+  const moveEventMutation = usePatch({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["event"] });
     },
@@ -104,7 +103,7 @@ const Calendar = () => {
     const newDate = toDateInputValue(day);
     const dropped = filteredEvents.find((ev) => String(ev.id) === eventId);
     if (dropped?.date && getEventDateString(dropped) === day.toDateString()) return;
-    moveEventMutation.mutate({ id: eventId, date: newDate });
+    moveEventMutation.mutate({ url: `/api/v1/events/${eventId}/`, data: { date: newDate } });
   };
 
   const { data, isLoading } = useQuery({

@@ -28,24 +28,11 @@ import { format, parseISO } from 'date-fns';
 import useFetch from '@/hooks/useFetch';
 import useDelete from '@/hooks/useDelete';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  deleteFile,
-  fetchDocuments,
-  fetchExpiringDocuments,
-  updateDocument,
-  getDocumentDownloadUrl,
-  type NormDoc,
-  type DocumentUpdatePayload,
-} from '@/lib/Api';
+import { deleteFile, updateDocument, getDocumentDownloadUrl, type NormDoc, type DocumentUpdatePayload, type PaginatedResponse } from '@/lib/Api';
 import DocsUploadDialog from '@/components/docsUploadDialog';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
 import { cn } from '@/lib/utils';
-import {
-  TRADE_OPTIONS,
-  DISCIPLINE_OPTIONS,
-  tradeCategoriesByType,
-  getTradeCategoryLabel,
-} from '@/lib/tradeCategories';
+import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType, getTradeCategoryLabel } from '@/lib/tradeCategories';
 
 const CATEGORY_TABS = [{ id: 'all', label: 'All' }, ...DISCIPLINE_OPTIONS.map(d => ({ id: d.value, label: d.label }))];
 
@@ -115,19 +102,11 @@ const Documents = () => {
     setQuoteOpen(true);
   };
 
-  const {
-    data: allDocs = [],
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ['GetAllDocs', user?.id],
-    queryFn: () => listFilesWithMetadata(user?.id),
-    enabled: !!user?.id,
-  });
+  const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL);
+  const allDocs = useMemo(() => docsPage?.results ?? [], [docsPage]);
 
-  const { data: expiringDocs = [] } = useFetch<NormDoc[]>(EXPIRY_URL, {
-    queryFn: () => fetchExpiringDocuments(),
-  });
+  const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL);
+  const expiringDocs = useMemo(() => expiringPage?.results ?? [], [expiringPage]);
 
   const deleteMutation = useDelete({
     mutationFn: deleteFile,
@@ -178,7 +157,7 @@ const Documents = () => {
     });
   };
 
-  const editTradeCategories = editState?.doc_type ? tradeCategoriesByType[editState.doc_type] ?? [] : [];
+  const editTradeCategories = editState?.doc_type ? (tradeCategoriesByType[editState.doc_type] ?? []) : [];
 
   const filtered = useMemo(() => {
     let docs = allDocs;
@@ -196,8 +175,8 @@ const Documents = () => {
     () => ({
       total: allDocs.length,
       expiring: expiringDocs.length,
-      expired: allDocs.filter(d => d.is_expired).length,
-      compliance: allDocs.filter(d => d.discipline === 'compliance').length,
+      expired: allDocs?.filter(d => d.is_expired).length,
+      compliance: allDocs?.filter(d => d.discipline === 'compliance').length,
     }),
     [allDocs, expiringDocs],
   );
@@ -576,9 +555,7 @@ const Documents = () => {
                   <Label>Document Type</Label>
                   <Select
                     value={editState.doc_type}
-                    onValueChange={v =>
-                      setEditState(prev => (prev ? { ...prev, doc_type: v, category: '' } : prev))
-                    }
+                    onValueChange={v => setEditState(prev => (prev ? { ...prev, doc_type: v, category: '' } : prev))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
@@ -596,10 +573,7 @@ const Documents = () => {
                 {editState.doc_type && (
                   <div className="space-y-1.5">
                     <Label>Category</Label>
-                    <Select
-                      value={editState.category}
-                      onValueChange={v => setEditState(prev => (prev ? { ...prev, category: v } : prev))}
-                    >
+                    <Select value={editState.category} onValueChange={v => setEditState(prev => (prev ? { ...prev, category: v } : prev))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>

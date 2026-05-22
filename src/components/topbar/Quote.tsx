@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -10,11 +10,14 @@ import { toast } from '@/lib/toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePost } from '@/hooks/usePost';
 import useFetch from '@/hooks/useFetch';
-import { createJob } from '@/lib/Api';
+import { createJob, postData } from '@/lib/Api';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { categoryConfig } from '@/lib/jobCategories';
-import { Check, ChevronsUpDown, Building2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Building2, Upload, File as FileIcon, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const MAX_FILES = 3;
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 export type QuotePrefill = {
   title?: string;
@@ -53,6 +56,12 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   // Dynamic Q&A
   const [answers, setAnswers] = useState<Record<string, string | number | undefined>>({});
 
+  // File attachments (picked before job exists)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
   // Fetch user's properties
   interface PropertyData {
     id: string;
@@ -68,10 +77,29 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   const selectedProperty = properties.find(p => p.id === propertyId);
 
   const reset = () => {
-    setPropertyId(''); setTitle(''); setDescription(''); setService('Plumbing');
-    setCategory(''); setUrgency('normal'); setPriority('medium'); setPreferredDate('');
-    setLocationArea(''); setLocationPostcode('');
+    setPropertyId('');
+    setTitle('');
+    setDescription('');
+    setService('Plumbing');
+    setCategory('');
+    setUrgency('normal');
+    setPriority('medium');
+    setPreferredDate('');
+    setLocationArea('');
+    setLocationPostcode('');
     setAnswers({});
+    setPendingFiles([]);
+  };
+
+  const handleAddFiles = (fileList: FileList | File[]) => {
+    const incoming = Array.from(fileList);
+    const remaining = MAX_FILES - pendingFiles.length;
+    const valid = incoming.filter(f => {
+      if (f.size > MAX_FILE_BYTES) { toast.error(`${f.name} exceeds 5 MB`); return false; }
+      return true;
+    });
+    if (valid.length > remaining) toast.error(`Max ${MAX_FILES} files — ${valid.length - remaining} skipped`);
+    setPendingFiles(prev => [...prev, ...valid.slice(0, remaining)]);
   };
 
   useEffect(() => {
@@ -86,7 +114,21 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
 
   const { mutate: submitJob, isPending } = usePost({
     mutationFn: (vars: Record<string, unknown>) => createJob(vars),
-    onSuccess: () => {
+    onSuccess: async (result: unknown) => {
+      const jobId = (result as { data?: { id?: string } })?.data?.id;
+      if (jobId && pendingFiles.length > 0) {
+        setUploading(true);
+        for (const file of pendingFiles) {
+          try {
+            const fd = new FormData();
+            fd.append('file', file);
+            await postData({ url: `/api/v1/jobs/${jobId}/files/`, data: fd });
+          } catch {
+            toast.error(`Failed to upload ${file.name}`);
+          }
+        }
+        setUploading(false);
+      }
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success('Job posted successfully!');
       reset();
@@ -109,17 +151,27 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   };
 
   const handleSubmit = () => {
-    if (!propertyId) { toast.error('Please select a property'); return; }
+    if (!propertyId) {
+      toast.error('Please select a property');
+      return;
+    }
     if (selectedProperty && (selectedProperty.latitude === null || selectedProperty.longitude === null)) {
       toast.error('Selected property has no exact location. Open Settings → Properties to set its map pin.');
       return;
     }
-    if (!title.trim()) { toast.error('Job title is required'); return; }
-    if (!locationPostcode.trim()) { toast.error('Postcode is required'); return; }
-    if (serviceCategories.length > 0 && !category) { toast.error('Please select a category'); return; }
-    const requiredUnanswered = selectedCategoryConfig?.questions.filter(
-      q => q.required && !answers[q.output_key]
-    );
+    if (!title.trim()) {
+      toast.error('Job title is required');
+      return;
+    }
+    if (!locationPostcode.trim()) {
+      toast.error('Postcode is required');
+      return;
+    }
+    if (serviceCategories.length > 0 && !category) {
+      toast.error('Please select a category');
+      return;
+    }
+    const requiredUnanswered = selectedCategoryConfig?.questions.filter(q => q.required && !answers[q.output_key]);
     if (requiredUnanswered?.length) {
       toast.error(`Please answer: ${requiredUnanswered[0].question_text}`);
       return;
@@ -140,12 +192,19 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     });
   };
 
-  const inputCls = 'w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white';
+  const inputCls =
+    'w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white';
   const selectCls = `${inputCls} cursor-pointer`;
   const sectionTitle = 'text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3';
 
   return (
-    <Dialog open={open} onOpenChange={open => { if (!open) reset(); setOpen(open); }}>
+    <Dialog
+      open={open}
+      onOpenChange={open => {
+        if (!open) reset();
+        setOpen(open);
+      }}
+    >
       <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto p-0">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
@@ -156,10 +215,11 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
         </div>
 
         <div className="px-6 py-5 space-y-6">
-
           {/* ── Property ─────────────────────────────────────── */}
           <div>
-            <p className={sectionTitle}>Property <span className="text-red-500">*</span></p>
+            <p className={sectionTitle}>
+              Property <span className="text-red-500">*</span>
+            </p>
             <Popover open={propertyOpen} onOpenChange={setPropertyOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -173,12 +233,13 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                     <Building2 className="h-4 w-4 shrink-0 text-gray-400" />
                     {selectedProperty ? (
                       <span className="flex flex-col min-w-0 text-left">
-                        <span className="truncate font-medium text-gray-900 leading-tight">
+                        <span className="truncate font-medium max-w-[300px] text-gray-900 leading-tight">
                           {selectedProperty.name || selectedProperty.address}
                         </span>
                         {selectedProperty.name && (
-                          <span className="truncate text-xs text-gray-400 leading-tight">
-                            {selectedProperty.address}{selectedProperty.postcode ? ` · ${selectedProperty.postcode}` : ''}
+                          <span className="truncate text-xs text-gray-400 max-w-[300px] leading-tight">
+                            {selectedProperty.address}
+                            {selectedProperty.postcode ? ` · ${selectedProperty.postcode}` : ''}
                           </span>
                         )}
                       </span>
@@ -208,16 +269,19 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                         >
                           <Check className={cn('mr-2 h-3.5 w-3.5 shrink-0', propertyId === p.id ? 'opacity-100' : 'opacity-0')} />
                           <span className="flex flex-col min-w-0 flex-1">
-                            <span className="truncate font-medium text-gray-900 text-sm leading-tight">
-                              {p.name || p.address}
-                            </span>
+                            <span className="truncate font-medium text-gray-900 text-sm leading-tight">{p.name || p.address}</span>
                             {p.name && (
                               <span className="truncate text-xs text-gray-400 leading-tight">
-                                {p.address}{p.postcode ? ` · ${p.postcode}` : ''}
+                                {p.address}
+                                {p.postcode ? ` · ${p.postcode}` : ''}
                               </span>
                             )}
                           </span>
-                          {p.postcode && !p.name && <Badge variant="outline" className="ml-auto text-xs shrink-0">{p.postcode}</Badge>}
+                          {p.postcode && !p.name && (
+                            <Badge variant="outline" className="ml-auto text-xs shrink-0">
+                              {p.postcode}
+                            </Badge>
+                          )}
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -227,7 +291,8 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
             </Popover>
             {selectedProperty && (selectedProperty.latitude === null || selectedProperty.longitude === null) && (
               <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
-                ⚠ This property has no map pin yet. Go to <strong>Settings → Properties</strong> and drag the pin to its exact location before posting the job.
+                ⚠ This property has no map pin yet. Go to <strong>Settings → Properties</strong> and drag the pin to its exact location
+                before posting the job.
               </p>
             )}
           </div>
@@ -237,13 +302,30 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
             <p className={sectionTitle}>Job Details</p>
             <div className="space-y-3">
               <div>
-                <Label className="text-sm font-medium text-gray-700">Job Title <span className="text-red-500">*</span></Label>
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Boiler service needed urgently" className={inputCls} />
+                <Label className="text-sm font-medium text-gray-700">
+                  Job Title <span className="text-red-500">*</span>
+                </Label>
+                <input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="e.g. Boiler service needed urgently"
+                  className={inputCls}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">Trade <span className="text-red-500">*</span></Label>
-                  <select value={service} onChange={e => { setService(e.target.value); setCategory(''); setAnswers({}); }} className={selectCls}>
+                  <Label className="text-sm font-medium text-gray-700">
+                    Trade <span className="text-red-500">*</span>
+                  </Label>
+                  <select
+                    value={service}
+                    onChange={e => {
+                      setService(e.target.value);
+                      setCategory('');
+                      setAnswers({});
+                    }}
+                    className={selectCls}
+                  >
                     <option value="Plumbing">Plumbing</option>
                     <option value="Gas Engineer">Gas Engineer</option>
                     <option value="Roofing">Roofing</option>
@@ -253,9 +335,20 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                 {serviceCategories.length > 0 && (
                   <div>
                     <Label className="text-sm font-medium text-gray-700">Category</Label>
-                    <select value={category} onChange={e => { setCategory(e.target.value); setAnswers({}); }} className={selectCls}>
+                    <select
+                      value={category}
+                      onChange={e => {
+                        setCategory(e.target.value);
+                        setAnswers({});
+                      }}
+                      className={selectCls}
+                    >
                       <option value="">Select category</option>
-                      {serviceCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      {serviceCategories.map(cat => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -300,7 +393,15 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                         {UK_LOCATIONS.map(group => (
                           <CommandGroup key={group.group} heading={group.group}>
                             {group.items.map(item => (
-                              <CommandItem key={item} value={item} onSelect={val => { setLocationArea(val); setLocationPostcode(LOCATION_POSTCODE[val] ?? ''); setLocationOpen(false); }}>
+                              <CommandItem
+                                key={item}
+                                value={item}
+                                onSelect={val => {
+                                  setLocationArea(val);
+                                  setLocationPostcode(LOCATION_POSTCODE[val] ?? '');
+                                  setLocationOpen(false);
+                                }}
+                              >
                                 <Check className={cn('mr-2 h-3.5 w-3.5', locationArea === item ? 'opacity-100' : 'opacity-0')} />
                                 {item}
                               </CommandItem>
@@ -313,7 +414,9 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                 </Popover>
               </div>
               <div>
-                <Label className="text-sm font-medium text-gray-700">Postcode <span className="text-red-500">*</span></Label>
+                <Label className="text-sm font-medium text-gray-700">
+                  Postcode <span className="text-red-500">*</span>
+                </Label>
                 <input
                   value={locationPostcode}
                   onChange={e => setLocationPostcode(e.target.value.toUpperCase())}
@@ -374,30 +477,101 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                         {question.required && <span className="text-red-500 ml-1">*</span>}
                       </Label>
                       {question.question_type === 'multiple_choice' && (
-                        <select value={String(answers[question.output_key] ?? '')} onChange={e => handleAnswerChange(question.output_key, e.target.value)} className={`${selectCls} mt-1`}>
+                        <select
+                          value={String(answers[question.output_key] ?? '')}
+                          onChange={e => handleAnswerChange(question.output_key, e.target.value)}
+                          className={`${selectCls} mt-1`}
+                        >
                           <option value="">Select an option</option>
-                          {question.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          {question.options?.map(opt => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
                         </select>
                       )}
                       {question.question_type === 'text' && (
-                        <textarea value={String(answers[question.output_key] ?? '')} onChange={e => handleAnswerChange(question.output_key, e.target.value)} placeholder="Enter details…" rows={3} className={`${inputCls} mt-1 resize-none`} />
+                        <textarea
+                          value={String(answers[question.output_key] ?? '')}
+                          onChange={e => handleAnswerChange(question.output_key, e.target.value)}
+                          placeholder="Enter details…"
+                          rows={3}
+                          className={`${inputCls} mt-1 resize-none`}
+                        />
                       )}
                       {question.question_type === 'number' && (
-                        <input type="number" value={String(answers[question.output_key] ?? '')} onChange={e => handleAnswerChange(question.output_key, Number(e.target.value))} placeholder="Enter number" className={`${inputCls} mt-1`} />
+                        <input
+                          type="number"
+                          value={String(answers[question.output_key] ?? '')}
+                          onChange={e => handleAnswerChange(question.output_key, Number(e.target.value))}
+                          placeholder="Enter number"
+                          className={`${inputCls} mt-1`}
+                        />
                       )}
                     </div>
                   ))}
               </div>
             </div>
           )}
+
+          {/* ── Attachments ──────────────────────────────────── */}
+          <div>
+            <p className={sectionTitle}>Attachments ({pendingFiles.length}/{MAX_FILES}) <span className="normal-case font-normal text-gray-400">— optional, uploaded after job is created</span></p>
+
+            {pendingFiles.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {pendingFiles.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
+                    <FileIcon className="h-4 w-4 text-gray-400 shrink-0" />
+                    <span className="flex-1 truncate text-gray-700">{f.name}</span>
+                    <span className="text-xs text-gray-400 shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                    <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 shrink-0 ml-1">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {pendingFiles.length < MAX_FILES && (
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => { e.preventDefault(); setDragOver(false); handleAddFiles(e.dataTransfer.files); }}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors ${
+                  dragOver ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-primary/40 hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                  className="hidden"
+                  onChange={e => e.target.files && handleAddFiles(e.target.files)}
+                />
+                <Upload className="h-5 w-5 mx-auto mb-1.5 text-gray-400" />
+                <p className="text-sm text-gray-600 font-medium">Drop files or click to browse</p>
+                <p className="text-xs text-gray-400 mt-0.5">Max {MAX_FILES} files · 5 MB each · PDF, images, Word</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-          <Button onClick={handleSubmit} className="flex-1" disabled={isPending}>
-            {isPending ? 'Posting…' : 'Post Job'}
+          <Button onClick={handleSubmit} className="flex-1" disabled={isPending || uploading}>
+            {uploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Uploading…</> : isPending ? 'Posting…' : 'Post Job'}
           </Button>
-          <Button variant="outline" onClick={() => { reset(); setOpen(false); }} className="flex-1">
+          <Button
+            variant="outline"
+            onClick={() => {
+              reset();
+              setOpen(false);
+            }}
+            className="flex-1"
+          >
             Cancel
           </Button>
         </div>

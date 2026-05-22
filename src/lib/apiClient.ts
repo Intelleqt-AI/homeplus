@@ -44,9 +44,10 @@ apiClient.interceptors.response.use(
         await axios.post(`${BASE_URL}/api/v1/auth/token/refresh/`, {}, { withCredentials: true });
         processQueue(null);
         return apiClient(originalRequest);
-      } catch (refreshError) {
+      } catch (refreshError: any) {
         processQueue(refreshError);
-        if (window.location.pathname !== '/login') {
+        const isAuthFailure = refreshError?.response?.status === 401 || refreshError?.response?.status === 403;
+        if (isAuthFailure && window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);

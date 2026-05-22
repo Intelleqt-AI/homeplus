@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   MessageSquare,
   Filter,
   Plus,
   MapPin,
   Clock,
-  PoundSterling,
   Star,
   Briefcase,
   CheckCircle,
@@ -21,6 +20,10 @@ import {
   Phone,
   Mail,
   BadgeCheck,
+  Upload,
+  File as FileIcon,
+  X,
+  Loader2,
 } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,7 +32,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { createJob, fetchLeads, modifyBid, updateJob, deleteJob, rateBid } from '@/lib/Api';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { createJob, fetchLeads, modifyBid, updateJob, deleteJob, rateBid, postData, deleteData } from '@/lib/Api';
 import { useQueryClient } from '@tanstack/react-query';
 import useFetch from '@/hooks/useFetch';
 import { usePost } from '@/hooks/usePost';
@@ -40,7 +44,21 @@ import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { categoryConfig } from '@/lib/jobCategories';
 import { cn } from '@/lib/utils';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const MAX_FILES = 3;
+const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface JobFileData {
+  id: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  presigned_url: string | null;
+  uploaded_at: string;
+}
 
 interface TradePilotProfile {
   user_id: string;
@@ -50,6 +68,7 @@ interface TradePilotProfile {
   postcode: string;
   has_insurance: boolean;
   has_license: boolean;
+  is_verified: boolean;
   completed_jobs: number;
   avg_rating: number | null;
   total_ratings: number;
@@ -98,6 +117,9 @@ interface Job {
   property: string | null;
   answers: Record<string, unknown>;
   updated_at: string;
+  todo_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
   bids: Bid[];
 }
 
@@ -107,6 +129,58 @@ const inputCls = (disabled?: boolean) =>
   `w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white${disabled ? ' opacity-50 cursor-not-allowed' : ''}`;
 
 const selectCls = (disabled?: boolean) => `${inputCls(disabled)} cursor-pointer`;
+
+function VerifiedBadge({
+  size = 'md',
+  has_insurance = false,
+  has_license = false,
+}: {
+  size?: 'sm' | 'md';
+  has_insurance?: boolean;
+  has_license?: boolean;
+}) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <BadgeCheck
+            className={`${size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'} text-blue-500 shrink-0 cursor-help`}
+            aria-label="Verified trader"
+          />
+        </TooltipTrigger>
+        <TooltipContent side="top" className="p-0 bg-transparent border-0 shadow-none">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden w-56">
+            <div className="bg-primary px-3 py-2.5 flex items-center gap-2">
+              <BadgeCheck className="h-4 w-4 text-white shrink-0" />
+              <span className="text-sm font-semibold text-white">Verified Trader</span>
+            </div>
+            <div className="px-3 py-2.5 space-y-2">
+              <p className="text-xs text-slate-500 leading-relaxed">Manually reviewed and verified by the HomePlus team.</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 text-xs text-slate-700">
+                  <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                  <span>Identity confirmed</span>
+                </div>
+                {has_insurance && (
+                  <div className="flex items-center gap-2 text-xs text-slate-700">
+                    <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                    <span>Public liability insurance on file</span>
+                  </div>
+                )}
+                {has_license && (
+                  <div className="flex items-center gap-2 text-xs text-slate-700">
+                    <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                    <span>Trade license verified</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 const sectionTitle = 'text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3';
 
@@ -122,11 +196,57 @@ interface EditJobModalProps {
 const TRADES = ['Plumbing', 'Gas Engineer', 'Roofing', 'Electrical'];
 
 const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) => {
+  const queryClient = useQueryClient();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   // property
   const [propertyId, setPropertyId] = useState('');
   const [propertyOpen, setPropertyOpen] = useState(false);
+
+  // file upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const filesUrl = job ? `/api/v1/jobs/${job.id}/files/` : null;
+  const { data: filesRes } = useFetch<{ data: JobFileData[] }>(filesUrl);
+  const existingFiles: JobFileData[] = filesRes?.data ?? [];
+
+  const handleUploadFiles = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    const slots = MAX_FILES - existingFiles.length;
+    if (slots <= 0) {
+      toast.error(`Max ${MAX_FILES} files reached`);
+      return;
+    }
+    const toUpload = files.slice(0, slots);
+    if (files.length > slots) toast.error(`Only ${slots} slot${slots !== 1 ? 's' : ''} remaining — ${files.length - slots} skipped`);
+    for (const file of toUpload) {
+      if (file.size > MAX_FILE_BYTES) {
+        toast.error(`${file.name} exceeds 5 MB`);
+        continue;
+      }
+      setUploading(true);
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        await postData({ url: `/api/v1/jobs/${job!.id}/files/`, data: fd });
+        queryClient.invalidateQueries({ queryKey: [filesUrl] });
+      } catch {
+        toast.error(`Failed to upload ${file.name}`);
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    try {
+      await deleteData({ url: `/api/v1/jobs/${job!.id}/files/${fileId}/` });
+      queryClient.invalidateQueries({ queryKey: [filesUrl] });
+    } catch {
+      toast.error('Failed to remove file');
+    }
+  };
 
   // job details
   const [title, setTitle] = useState('');
@@ -173,7 +293,10 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
 
   const { mutate: saveJob, isPending: saving } = usePost({
     mutationFn: (vars: Record<string, unknown>) => updateJob(job!.id, vars),
-    onSuccess: () => { toast.success('Job updated'); onSaved(); },
+    onSuccess: () => {
+      toast.success('Job updated');
+      onSaved();
+    },
     onError: (err: unknown) => {
       const e = err as { response?: { data?: { message?: string } }; message?: string };
       toast.error(e?.response?.data?.message ?? e?.message ?? 'Failed to update job');
@@ -182,7 +305,10 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
 
   const { mutate: doDelete, isPending: deleting } = usePost({
     mutationFn: () => deleteJob(job!.id),
-    onSuccess: () => { toast.success('Job deleted'); onDeleted(); },
+    onSuccess: () => {
+      toast.success('Job deleted');
+      onDeleted();
+    },
     onError: (err: unknown) => {
       const e = err as { response?: { data?: { message?: string } }; message?: string };
       toast.error(e?.response?.data?.message ?? e?.message ?? 'Failed to delete job');
@@ -200,8 +326,14 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
   };
 
   const handleSave = () => {
-    if (!title.trim()) { toast.error('Job title is required'); return; }
-    if (!locationPostcode.trim()) { toast.error('Postcode is required'); return; }
+    if (!title.trim()) {
+      toast.error('Job title is required');
+      return;
+    }
+    if (!locationPostcode.trim()) {
+      toast.error('Postcode is required');
+      return;
+    }
     saveJob({
       ...(propertyId ? { property: propertyId } : { property: null }),
       title: title.trim(),
@@ -218,7 +350,12 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
   };
 
   return (
-    <Dialog open={!!job} onOpenChange={open => { if (!open) onClose(); }}>
+    <Dialog
+      open={!!job}
+      onOpenChange={open => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto p-0">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
@@ -240,9 +377,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
           {locked && (
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-amber-700">
-                Job has received quotes and cannot be edited. You can still delete it.
-              </p>
+              <p className="text-sm text-amber-700">Job has received quotes and cannot be edited. You can still delete it.</p>
             </div>
           )}
 
@@ -263,13 +398,14 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   <span className="flex items-center gap-2 min-w-0 flex-1">
                     <Building2 className="h-4 w-4 shrink-0 text-gray-400" />
                     {selectedProperty ? (
-                      <span className="flex flex-col min-w-0 text-left">
+                      <span className="flex flex-col min-w-0 overflow-hidden text-left">
                         <span className="truncate font-medium text-gray-900 leading-tight">
                           {selectedProperty.name || selectedProperty.address}
                         </span>
                         {selectedProperty.name && (
-                          <span className="truncate text-xs text-gray-400 leading-tight">
-                            {selectedProperty.address}{selectedProperty.postcode ? ` · ${selectedProperty.postcode}` : ''}
+                          <span className="truncate max-w-[300px] text-xs text-gray-400 leading-tight">
+                            {selectedProperty.address}
+                            {selectedProperty.postcode ? ` · ${selectedProperty.postcode}` : ''}
                           </span>
                         )}
                       </span>
@@ -286,7 +422,13 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   <CommandList>
                     <CommandEmpty>No properties found.</CommandEmpty>
                     <CommandGroup>
-                      <CommandItem value="" onSelect={() => { setPropertyId(''); setPropertyOpen(false); }}>
+                      <CommandItem
+                        value=""
+                        onSelect={() => {
+                          setPropertyId('');
+                          setPropertyOpen(false);
+                        }}
+                      >
                         <Check className={cn('mr-2 h-3.5 w-3.5', !propertyId ? 'opacity-100' : 'opacity-0')} />
                         None (no property)
                       </CommandItem>
@@ -303,16 +445,19 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                         >
                           <Check className={cn('mr-2 h-3.5 w-3.5 shrink-0', propertyId === p.id ? 'opacity-100' : 'opacity-0')} />
                           <span className="flex flex-col min-w-0 flex-1">
-                            <span className="truncate font-medium text-gray-900 text-sm leading-tight">
-                              {p.name || p.address}
-                            </span>
+                            <span className="truncate font-medium text-gray-900 text-sm leading-tight">{p.name || p.address}</span>
                             {p.name && (
                               <span className="truncate text-xs text-gray-400 leading-tight">
-                                {p.address}{p.postcode ? ` · ${p.postcode}` : ''}
+                                {p.address}
+                                {p.postcode ? ` · ${p.postcode}` : ''}
                               </span>
                             )}
                           </span>
-                          {p.postcode && !p.name && <Badge variant="outline" className="ml-auto text-xs shrink-0">{p.postcode}</Badge>}
+                          {p.postcode && !p.name && (
+                            <Badge variant="outline" className="ml-auto text-xs shrink-0">
+                              {p.postcode}
+                            </Badge>
+                          )}
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -327,7 +472,9 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
             <p className={sectionTitle}>Job Details</p>
             <div className="space-y-3">
               <div>
-                <Label className="text-sm font-medium text-gray-700">Job Title <span className="text-red-500">*</span></Label>
+                <Label className="text-sm font-medium text-gray-700">
+                  Job Title <span className="text-red-500">*</span>
+                </Label>
                 <input
                   value={title}
                   onChange={e => setTitle(e.target.value)}
@@ -338,14 +485,24 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">Trade <span className="text-red-500">*</span></Label>
+                  <Label className="text-sm font-medium text-gray-700">
+                    Trade <span className="text-red-500">*</span>
+                  </Label>
                   <select
                     value={service}
-                    onChange={e => { setService(e.target.value); setCategory(''); setAnswers({}); }}
+                    onChange={e => {
+                      setService(e.target.value);
+                      setCategory('');
+                      setAnswers({});
+                    }}
                     disabled={locked}
                     className={selectCls(locked)}
                   >
-                    {TRADES.map(t => <option key={t} value={t}>{t}</option>)}
+                    {TRADES.map(t => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 {serviceCategories.length > 0 && (
@@ -353,12 +510,19 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                     <Label className="text-sm font-medium text-gray-700">Category</Label>
                     <select
                       value={category}
-                      onChange={e => { setCategory(e.target.value); setAnswers({}); }}
+                      onChange={e => {
+                        setCategory(e.target.value);
+                        setAnswers({});
+                      }}
                       disabled={locked}
                       className={selectCls(locked)}
                     >
                       <option value="">Select category</option>
-                      {serviceCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      {serviceCategories.map(cat => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -427,7 +591,9 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                 </Popover>
               </div>
               <div>
-                <Label className="text-sm font-medium text-gray-700">Postcode <span className="text-red-500">*</span></Label>
+                <Label className="text-sm font-medium text-gray-700">
+                  Postcode <span className="text-red-500">*</span>
+                </Label>
                 <input
                   value={locationPostcode}
                   onChange={e => setLocationPostcode(e.target.value.toUpperCase())}
@@ -497,7 +663,11 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                           className={`${selectCls(locked)} mt-1`}
                         >
                           <option value="">Select an option</option>
-                          {q.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          {q.options?.map(opt => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
                         </select>
                       )}
                       {q.question_type === 'text' && (
@@ -525,15 +695,80 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
               </div>
             </div>
           )}
+
+          {/* ── Attachments ──────────────────────────────────── */}
+          <div>
+            <p className={sectionTitle}>
+              Attachments ({existingFiles.length}/{MAX_FILES})
+            </p>
+
+            {existingFiles.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {existingFiles.map(f => (
+                  <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
+                    <FileIcon className="h-4 w-4 text-gray-400 shrink-0" />
+                    <span className="flex-1 truncate text-gray-700">{f.file_name}</span>
+                    <span className="text-xs text-gray-400 shrink-0">{(f.file_size / 1024).toFixed(0)} KB</span>
+                    {f.presigned_url && (
+                      <a href={f.presigned_url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline shrink-0">
+                        View
+                      </a>
+                    )}
+                    <button onClick={() => handleDeleteFile(f.id)} className="text-red-400 hover:text-red-600 shrink-0 ml-1">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {existingFiles.length < MAX_FILES && (
+              <div
+                onDragOver={e => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  handleUploadFiles(e.dataTransfer.files);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                  dragOver ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-primary/40 hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                  className="hidden"
+                  onChange={e => e.target.files && handleUploadFiles(e.target.files)}
+                />
+                {uploading ? (
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading…
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-5 w-5 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm text-gray-600 font-medium">Drop files here or click to browse</p>
+                    <p className="text-xs text-gray-400 mt-1">Max {MAX_FILES} files · 5 MB each · PDF, images, Word</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100">
           {deleteConfirm ? (
             <div className="space-y-3">
-              <p className="text-sm text-red-600 font-medium text-center">
-                Delete &ldquo;{job.name}&rdquo;? This cannot be undone.
-              </p>
+              <p className="text-sm text-red-600 font-medium text-center">Delete &ldquo;{job.name}&rdquo;? This cannot be undone.</p>
               <div className="flex gap-3">
                 <Button variant="destructive" className="flex-1" disabled={deleting} onClick={() => doDelete()}>
                   {deleting ? 'Deleting…' : 'Yes, Delete'}
@@ -585,14 +820,30 @@ const statusColors: Record<string, string> = {
 };
 
 const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) => {
+  const [showUnverifiedWarning, setShowUnverifiedWarning] = useState(false);
   if (!bid || !job) return null;
   const profile = bid.tradepilot_profile;
   const contractorName = `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim() || bid.bidder.email;
   const isAccepted = bid.status === 'accepted';
   const canAccept = !isAccepted && !job.isApproved;
+  const isVerified = profile?.is_verified ?? false;
+
+  const handleAcceptClick = () => {
+    if (!isVerified) {
+      setShowUnverifiedWarning(true);
+      return;
+    }
+    onAccept(job, bid);
+    onClose();
+  };
 
   return (
-    <Dialog open={!!bid} onOpenChange={open => { if (!open) onClose(); }}>
+    <Dialog
+      open={!!bid}
+      onOpenChange={open => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-[580px] max-h-[90vh] overflow-y-auto p-0">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
@@ -606,7 +857,9 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
                 {bid.company_name && <p className="text-sm text-gray-500">{bid.company_name}</p>}
               </div>
             </div>
-            <span className={`px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColors[bid.status] ?? statusColors.pending}`}>
+            <span
+              className={`px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColors[bid.status] ?? statusColors.pending}`}
+            >
               {bid.status}
             </span>
           </div>
@@ -624,7 +877,9 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
               <div className="bg-gray-50 rounded-xl px-4 py-3">
                 <p className="text-xs text-gray-500 mb-0.5">Available</p>
                 <p className="text-sm font-medium text-gray-900">
-                  {bid.Available ? new Date(bid.Available).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  {bid.Available
+                    ? new Date(bid.Available).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : '—'}
                 </p>
               </div>
               <div className="bg-gray-50 rounded-xl px-4 py-3">
@@ -665,8 +920,19 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
                 {/* Profile header */}
                 <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{profile.business_name}</p>
-                    <p className="text-xs text-gray-500">{profile.trade_specialty} · {profile.years_experience} yrs exp · {profile.postcode}</p>
+                    <div className="flex mb-1 items-center gap-1.5">
+                      <p className="text-sm font-semibold text-gray-900">{profile.business_name}</p>
+                      {profile.is_verified ? (
+                        <VerifiedBadge size="md" has_insurance={profile.has_insurance} has_license={profile.has_license} />
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500 text-[10px] font-medium">
+                          Not verified
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {profile.trade_specialty} · {profile.years_experience} yrs exp · {profile.postcode}
+                    </p>
                   </div>
                   {profile.avg_rating !== null ? (
                     <div className="flex items-center gap-1 bg-yellow-50 px-2.5 py-1 rounded-full">
@@ -697,11 +963,15 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
 
                 {/* Credentials */}
                 <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-3">
-                  <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${profile.has_insurance ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                  <span
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${profile.has_insurance ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'}`}
+                  >
                     <Shield className="h-3.5 w-3.5" />
                     {profile.has_insurance ? 'Insured' : 'No insurance'}
                   </span>
-                  <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${profile.has_license ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
+                  <span
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${profile.has_license ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400'}`}
+                  >
                     <BadgeCheck className="h-3.5 w-3.5" />
                     {profile.has_license ? 'Licensed' : 'No license'}
                   </span>
@@ -719,13 +989,46 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
           )}
         </div>
 
+        {/* Unverified trader warning */}
+        {showUnverifiedWarning && (
+          <div className="mx-6 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-900">Unverified Trader</p>
+                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                  This trader has not been verified by HomePlus. Their identity and credentials have not been reviewed. Proceeding is at
+                  your own risk.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-300 text-amber-800 hover:bg-amber-100 text-xs h-8"
+                    onClick={() => setShowUnverifiedWarning(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8"
+                    onClick={() => {
+                      onAccept(job, bid);
+                      onClose();
+                    }}
+                  >
+                    Proceed Anyway
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-          {canAccept && (
-            <Button
-              className="flex-1"
-              onClick={() => { onAccept(job, bid); onClose(); }}
-            >
+          {canAccept && !showUnverifiedWarning && (
+            <Button className="flex-1" onClick={handleAcceptClick}>
               Accept Bid
             </Button>
           )}
@@ -735,7 +1038,7 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
               Bid Accepted
             </div>
           )}
-          <Button variant="outline" onClick={onClose} className={canAccept ? '' : 'flex-1'}>
+          <Button variant="outline" onClick={onClose} className={canAccept && !showUnverifiedWarning ? '' : 'flex-1'}>
             Close
           </Button>
         </div>
@@ -754,11 +1057,7 @@ interface RateModalProps {
 }
 
 const StarButton = ({ filled, onClick }: { filled: boolean; onClick: () => void }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="focus:outline-none transition-transform hover:scale-110"
-  >
+  <button type="button" onClick={onClick} className="focus:outline-none transition-transform hover:scale-110">
     <Star className={`h-8 w-8 ${filled ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
   </button>
 );
@@ -780,13 +1079,14 @@ const RateTradesmanModal = ({ job, bid, onClose, onRated }: RateModalProps) => {
   const wordCount = comment.trim() ? comment.trim().split(/\s+/).length : 0;
   const overLimit = wordCount > 80;
   const alreadyRated = !!bid?.rated_at;
-  const contractorName = bid
-    ? `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim() || bid.bidder.email
-    : '';
+  const contractorName = bid ? `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim() || bid.bidder.email : '';
 
   const { mutate: submitRating, isPending } = usePost({
     mutationFn: (vars: Record<string, unknown>) => rateBid(vars as Parameters<typeof rateBid>[0]),
-    onSuccess: () => { toast.success('Feedback submitted'); onRated(); },
+    onSuccess: () => {
+      toast.success('Feedback submitted');
+      onRated();
+    },
     onError: (err: unknown) => {
       const e = err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } }; message?: string };
       const detail = e?.response?.data?.errors?.rating_comment?.[0] ?? e?.response?.data?.message ?? e?.message ?? 'Failed to submit';
@@ -797,15 +1097,26 @@ const RateTradesmanModal = ({ job, bid, onClose, onRated }: RateModalProps) => {
   if (!bid || !job) return null;
 
   const handleSubmit = () => {
-    if (rating === 0) { toast.error('Select a rating'); return; }
-    if (overLimit) { toast.error('Feedback must be 80 words or fewer'); return; }
+    if (rating === 0) {
+      toast.error('Select a rating');
+      return;
+    }
+    if (overLimit) {
+      toast.error('Feedback must be 80 words or fewer');
+      return;
+    }
     submitRating({ job_id: job.id, bid_id: bid.id, rating, rating_comment: comment.trim(), is_anonymous: isAnonymous });
   };
 
   const displayRating = hovered || rating;
 
   return (
-    <Dialog open={!!bid} onOpenChange={open => { if (!open) onClose(); }}>
+    <Dialog
+      open={!!bid}
+      onOpenChange={open => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-[480px] p-0">
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
           <DialogHeader>
@@ -822,10 +1133,7 @@ const RateTradesmanModal = ({ job, bid, onClose, onRated }: RateModalProps) => {
           {/* Stars */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Rating</p>
-            <div
-              className="flex gap-1"
-              onMouseLeave={() => !alreadyRated && setHovered(0)}
-            >
+            <div className="flex gap-1" onMouseLeave={() => !alreadyRated && setHovered(0)}>
               {[1, 2, 3, 4, 5].map(n => (
                 <button
                   key={n}
@@ -835,7 +1143,9 @@ const RateTradesmanModal = ({ job, bid, onClose, onRated }: RateModalProps) => {
                   onClick={() => !alreadyRated && setRating(n)}
                   className="focus:outline-none transition-transform hover:scale-110 disabled:cursor-default"
                 >
-                  <Star className={`h-9 w-9 transition-colors ${n <= displayRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} />
+                  <Star
+                    className={`h-9 w-9 transition-colors ${n <= displayRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`}
+                  />
                 </button>
               ))}
               {displayRating > 0 && (
@@ -850,9 +1160,7 @@ const RateTradesmanModal = ({ job, bid, onClose, onRated }: RateModalProps) => {
           <div>
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Feedback</p>
-              <span className={`text-xs ${overLimit ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                {wordCount}/80 words
-              </span>
+              <span className={`text-xs ${overLimit ? 'text-red-500 font-medium' : 'text-gray-400'}`}>{wordCount}/80 words</span>
             </div>
             <textarea
               value={comment}
@@ -875,16 +1183,15 @@ const RateTradesmanModal = ({ job, bid, onClose, onRated }: RateModalProps) => {
               />
               <span className="text-sm text-gray-700">
                 Submit anonymously
-                <span className="block text-xs text-gray-400 mt-0.5">
-                  Your name won&apos;t be shown on the tradesman&apos;s profile
-                </span>
+                <span className="block text-xs text-gray-400 mt-0.5">Your name won&apos;t be shown on the tradesman&apos;s profile</span>
               </span>
             </label>
           )}
 
           {alreadyRated && bid.rating_is_anonymous && (
             <p className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-              Submitted anonymously · {new Date(bid.rated_at!).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+              Submitted anonymously ·{' '}
+              {new Date(bid.rated_at!).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
           )}
           {alreadyRated && !bid.rating_is_anonymous && (
@@ -911,6 +1218,12 @@ const RateTradesmanModal = ({ job, bid, onClose, onRated }: RateModalProps) => {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+interface JobFilters {
+  status: string;
+  trade: string;
+  urgency: string;
+}
+
 const JobLeads = () => {
   const [compareMode, setCompareMode] = useState<Record<string, boolean>>({});
   const [selectedBidDetail, setSelectedBidDetail] = useState<Bid | null>(null);
@@ -919,6 +1232,8 @@ const JobLeads = () => {
   const [leads, setLeads] = useState<Job[]>([]);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [editJob, setEditJob] = useState<Job | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<JobFilters>({ status: '', trade: '', urgency: '' });
   const queryClient = useQueryClient();
   const [currentItem, setCurrentItem] = useState<Job | null>(null);
   const [currentBid, setCurrentBid] = useState<Bid | null>(null);
@@ -956,6 +1271,15 @@ const JobLeads = () => {
   const toggleCompareMode = (jobId: string) => {
     setCompareMode(prev => ({ ...prev, [jobId]: !prev[jobId] }));
   };
+
+  const filteredLeads = leads.filter(job => {
+    if (filters.status && job.status !== filters.status) return false;
+    if (filters.trade && job.trade !== filters.trade) return false;
+    if (filters.urgency && job.urgency !== filters.urgency) return false;
+    return true;
+  });
+
+  const activeFilterCount = [filters.status, filters.trade, filters.urgency].filter(Boolean).length;
 
   const handleApprove = (job: Job, bid: Bid) => {
     setCurrentItem(job);
@@ -1055,22 +1379,88 @@ const JobLeads = () => {
           {/* Jobs list */}
           <div className="lg:col-span-3">
             <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-[#1A1A1A] text-lg font-semibold">Your Jobs</h2>
-                <button className="px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F5F0] rounded-full transition-colors flex items-center gap-2 border border-[#E8E8E3]">
+                <button
+                  onClick={() => setFilterOpen(v => !v)}
+                  className={`px-4 py-2 text-sm font-medium rounded-full transition-colors flex items-center gap-2 border ${
+                    activeFilterCount > 0
+                      ? 'bg-primary text-white border-primary'
+                      : 'text-[#4A4A4A] hover:bg-[#F5F5F0] border-[#E8E8E3]'
+                  }`}
+                >
                   <Filter className="w-3 h-3" />
                   Filter
+                  {activeFilterCount > 0 && (
+                    <span className="bg-white text-primary text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
                 </button>
               </div>
 
+              {filterOpen && (
+                <div className="mb-4 p-4 bg-[#F5F5F0] rounded-[12px] border border-[#E8E8E3]">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-semibold text-[#6B6B6B] uppercase tracking-wide block mb-1">Status</label>
+                      <select
+                        value={filters.status}
+                        onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-[#E8E8E3] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">All</option>
+                        <option value="open">Open</option>
+                        <option value="todo">Booked</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-[#6B6B6B] uppercase tracking-wide block mb-1">Trade</label>
+                      <select
+                        value={filters.trade}
+                        onChange={e => setFilters(f => ({ ...f, trade: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-[#E8E8E3] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">All</option>
+                        {[...new Set(leads.map(j => j.trade).filter(Boolean))].map(t => (
+                          <option key={t} value={t}>{t.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-[#6B6B6B] uppercase tracking-wide block mb-1">Urgency</label>
+                      <select
+                        value={filters.urgency}
+                        onChange={e => setFilters(f => ({ ...f, urgency: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-[#E8E8E3] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">All</option>
+                        <option value="emergency">Emergency</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="normal">Normal</option>
+                        <option value="flexible">Flexible</option>
+                      </select>
+                    </div>
+                  </div>
+                  {activeFilterCount > 0 && (
+                    <button
+                      onClick={() => setFilters({ status: '', trade: '', urgency: '' })}
+                      className="mt-3 text-xs text-[#6B6B6B] hover:text-red-500 transition-colors"
+                    >
+                      Clear all filters
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-3">
-                {leads.map(job => (
+                {filteredLeads.map(job => (
                   <div key={job.id} className="bg-[#F5F5F0] rounded-[12px] px-5 py-4 hover:shadow-sm transition-all">
                     <div className="flex items-start justify-between mb-3">
-                      <div
-                        className="flex items-start gap-4 flex-1 cursor-pointer"
-                        onClick={() => setEditJob(job)}
-                      >
+                      <div className="flex items-start gap-4 flex-1 cursor-pointer" onClick={() => setEditJob(job)}>
                         <div className="h-10 w-10 rounded-[10px] bg-white border border-[#E5E7EB] flex items-center justify-center flex-shrink-0">
                           <Briefcase className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
                         </div>
@@ -1085,10 +1475,11 @@ const JobLeads = () => {
                               <MapPin className="w-3 h-3" />
                               <span>{job.location || '—'}</span>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <PoundSterling className="w-3 h-3" />
-                              <span>{job.value}</span>
-                            </div>
+                            {job.value && (
+                              <div className="flex items-center gap-1">
+                                <span>{job.value}</span>
+                              </div>
+                            )}
                             <div className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               <span>{new Date(job.updated_at).toLocaleDateString()}</span>
@@ -1101,39 +1492,51 @@ const JobLeads = () => {
                         {(() => {
                           const s = job.status;
                           const cfg =
-                            s === 'completed'   ? { cls: 'bg-green-50 text-green-700',   label: 'Completed' }
-                            : s === 'in_progress' ? { cls: 'bg-blue-50 text-blue-700',     label: 'In Progress' }
-                            : s === 'todo'        ? { cls: 'bg-purple-50 text-purple-700', label: 'Booked' }
-                            : s === 'cancelled'   ? { cls: 'bg-red-50 text-red-700',       label: 'Cancelled' }
-                            : job.bids.length > 0 ? { cls: 'bg-yellow-50 text-yellow-700', label: `${job.bids.length} Quote${job.bids.length > 1 ? 's' : ''}` }
-                            :                       { cls: 'bg-gray-50 text-gray-600',     label: 'Awaiting quotes' };
-                          return (
-                            <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${cfg.cls}`}>
-                              {cfg.label}
-                            </span>
-                          );
+                            s === 'completed'
+                              ? { cls: 'bg-green-50 text-green-700', label: 'Completed' }
+                              : s === 'in_progress'
+                                ? { cls: 'bg-blue-50 text-blue-700', label: 'In Progress' }
+                                : s === 'todo'
+                                  ? { cls: 'bg-purple-50 text-purple-700', label: 'Booked' }
+                                  : s === 'cancelled'
+                                    ? { cls: 'bg-red-50 text-red-700', label: 'Cancelled' }
+                                    : job.bids.length > 0
+                                      ? {
+                                          cls: 'bg-yellow-50 text-yellow-700',
+                                          label: `${job.bids.length} Quote${job.bids.length > 1 ? 's' : ''}`,
+                                        }
+                                      : { cls: 'bg-gray-50 text-gray-600', label: 'Awaiting quotes' };
+                          return <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${cfg.cls}`}>{cfg.label}</span>;
                         })()}
 
-                        {job.status === 'completed' && job.bids.some(b => b.status === 'accepted') && (() => {
-                          const acceptedBid = job.bids.find(b => b.status === 'accepted')!;
-                          const alreadyRated = !!acceptedBid.rated_at;
-                          return (
-                            <button
-                              onClick={e => { e.stopPropagation(); setRateBidTarget({ job, bid: acceptedBid }); }}
-                              className={`flex items-center gap-1 px-2.5 h-8 rounded-full text-xs font-medium border transition-colors ${
-                                alreadyRated
-                                  ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
-                                  : 'bg-white text-gray-700 border-[#E8E8E3] hover:bg-[#F5F5F0]'
-                              }`}
-                              title={alreadyRated ? 'View feedback' : 'Rate tradesman'}
-                            >
-                              <Star className={`w-3 h-3 ${alreadyRated ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-                              {alreadyRated ? 'Rated' : 'Rate'}
-                            </button>
-                          );
-                        })()}
+                        {job.status === 'completed' &&
+                          job.bids.some(b => b.status === 'accepted') &&
+                          (() => {
+                            const acceptedBid = job.bids.find(b => b.status === 'accepted')!;
+                            const alreadyRated = !!acceptedBid.rated_at;
+                            return (
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setRateBidTarget({ job, bid: acceptedBid });
+                                }}
+                                className={`flex items-center gap-1 px-2.5 h-8 rounded-full text-xs font-medium border transition-colors ${
+                                  alreadyRated
+                                    ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
+                                    : 'bg-white text-gray-700 border-[#E8E8E3] hover:bg-[#F5F5F0]'
+                                }`}
+                                title={alreadyRated ? 'View feedback' : 'Rate tradesman'}
+                              >
+                                <Star className={`w-3 h-3 ${alreadyRated ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                                {alreadyRated ? 'Rated' : 'Rate'}
+                              </button>
+                            );
+                          })()}
                         <button
-                          onClick={e => { e.stopPropagation(); setEditJob(job); }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            setEditJob(job);
+                          }}
                           className="h-8 w-8 rounded-full bg-white border border-[#E8E8E3] flex items-center justify-center hover:bg-[#F5F5F0] transition-colors"
                           title="Edit job"
                         >
@@ -1141,13 +1544,56 @@ const JobLeads = () => {
                         </button>
 
                         <button
-                          onClick={e => { e.stopPropagation(); toggleCompareMode(job.id); }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            toggleCompareMode(job.id);
+                          }}
                           className="px-3 py-1.5 text-xs font-medium text-[#4A4A4A] bg-white border border-[#E8E8E3] rounded-full hover:bg-[#E8E8E3] transition-colors"
                         >
                           {compareMode[job.id] ? 'Hide quotes' : 'View quotes'}
                         </button>
                       </div>
                     </div>
+
+                    {['todo', 'in_progress', 'completed'].includes(job.status) && (
+                      <div className="mt-3 w-full flex items-start">
+                        {[
+                          { key: 'todo', label: 'Booked', date: job.todo_at },
+                          { key: 'in_progress', label: 'In Progress', date: job.started_at },
+                          { key: 'completed', label: 'Completed', date: job.completed_at },
+                        ].map((step, i, arr) => {
+                          const order = ['todo', 'in_progress', 'completed'];
+                          const jobIdx = order.indexOf(job.status);
+                          const done = i <= jobIdx;
+                          const active = step.key === job.status;
+                          const isLast = i === arr.length - 1;
+                          return (
+                            <div key={step.key} className={`flex items-start ${isLast ? '' : 'flex-1'}`}>
+                              <div className="flex flex-col items-center">
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 shrink-0 transition-all ${done ? 'bg-primary border-primary' : 'bg-white border-[#D1D5DB]'}`}>
+                                  {done && (
+                                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </div>
+                                <span className={`text-[10px] mt-1 font-medium whitespace-nowrap ${active ? 'text-primary' : done ? 'text-[#6B6B6B]' : 'text-[#B0B0B0]'}`}>
+                                  {step.label}
+                                </span>
+                                {step.date && (
+                                  <span className="text-[9px] text-[#B0B0B0] mt-0.5">
+                                    {new Date(step.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                  </span>
+                                )}
+                              </div>
+                              {!isLast && (
+                                <div className={`flex-1 h-0.5 mx-2 mt-2.5 rounded-full transition-all ${order.indexOf(arr[i + 1].key) <= jobIdx ? 'bg-primary' : 'bg-[#E5E7EB]'}`} />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Quotes section */}
                     {job.bids.length > 0 && compareMode[job.id] && (
@@ -1158,11 +1604,16 @@ const JobLeads = () => {
                             return (
                               <div key={bid.id} className="bg-white rounded-[10px] p-4 border border-[#E8E8E3]">
                                 <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-sm font-medium text-[#1A1A1A] truncate">
-                                    {bid.bidder?.first_name
-                                      ? `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim()
-                                      : bid.bidder?.email}
-                                  </h4>
+                                  <div className="flex items-center gap-1 min-w-0">
+                                    <h4 className="text-sm font-medium text-[#1A1A1A] truncate">
+                                      {bid.bidder?.first_name
+                                        ? `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim()
+                                        : bid.bidder?.email}
+                                    </h4>
+                                    {profile?.is_verified && (
+                                      <VerifiedBadge size="sm" has_insurance={profile.has_insurance} has_license={profile.has_license} />
+                                    )}
+                                  </div>
                                   {profile?.avg_rating !== null && profile?.avg_rating !== undefined ? (
                                     <div className="flex items-center gap-1 shrink-0">
                                       <Star className="w-3 h-3 text-yellow-400 fill-current" />
@@ -1172,9 +1623,7 @@ const JobLeads = () => {
                                     <span className="text-xs text-gray-400 shrink-0">New</span>
                                   )}
                                 </div>
-                                {bid.company_name && (
-                                  <p className="text-xs text-gray-500 mb-1.5">{bid.company_name}</p>
-                                )}
+                                {bid.company_name && <p className="text-xs text-gray-500 mb-1.5">{bid.company_name}</p>}
                                 <div className="space-y-1 text-xs text-[#6B6B6B]">
                                   <div className="flex justify-between">
                                     <span>Price:</span>
@@ -1182,18 +1631,24 @@ const JobLeads = () => {
                                   </div>
                                   <div className="flex justify-between">
                                     <span>Available:</span>
-                                    <span>{bid.Available ? new Date(bid.Available).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}</span>
+                                    <span>
+                                      {bid.Available
+                                        ? new Date(bid.Available).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                                        : '—'}
+                                    </span>
                                   </div>
                                   {profile && (
                                     <div className="flex gap-1.5 mt-2 pt-2 border-t border-gray-100">
                                       {profile.has_insurance && (
                                         <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-700 rounded text-[10px] font-medium">
-                                          <Shield className="h-2.5 w-2.5" />Insured
+                                          <Shield className="h-2.5 w-2.5" />
+                                          Insured
                                         </span>
                                       )}
                                       {profile.has_license && (
                                         <span className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-medium">
-                                          <BadgeCheck className="h-2.5 w-2.5" />Licensed
+                                          <BadgeCheck className="h-2.5 w-2.5" />
+                                          Licensed
                                         </span>
                                       )}
                                     </div>
@@ -1205,7 +1660,10 @@ const JobLeads = () => {
                                       ? 'bg-green-50 text-green-700 border border-green-200'
                                       : 'text-[#4A4A4A] bg-[#F5F5F0] hover:bg-[#E8E8E3]'
                                   }`}
-                                  onClick={() => { setSelectedBidDetail(bid); setSelectedBidJob(job); }}
+                                  onClick={() => {
+                                    setSelectedBidDetail(bid);
+                                    setSelectedBidJob(job);
+                                  }}
                                 >
                                   {bid.status === 'accepted' ? '✓ Accepted — View Details' : 'View Details'}
                                 </button>
@@ -1272,17 +1730,15 @@ const JobLeads = () => {
         </div>
       </div>
 
-      <EditJobModal
-        job={editJob}
-        onClose={() => setEditJob(null)}
-        onSaved={handleJobSaved}
-        onDeleted={handleJobDeleted}
-      />
+      <EditJobModal job={editJob} onClose={() => setEditJob(null)} onSaved={handleJobSaved} onDeleted={handleJobDeleted} />
 
       <BidDetailModal
         bid={selectedBidDetail}
         job={selectedBidJob}
-        onClose={() => { setSelectedBidDetail(null); setSelectedBidJob(null); }}
+        onClose={() => {
+          setSelectedBidDetail(null);
+          setSelectedBidJob(null);
+        }}
         onAccept={handleApprove}
       />
 

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Bell, User } from 'lucide-react';
 import DocsUploadDialog from '../docsUploadDialog';
 import Quote from '../topbar/Quote';
 
@@ -9,7 +8,6 @@ const TopHeader = () => {
 
   return (
     <>
-      {/* Hidden modals - keeping functionality */}
       <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} />
       <Quote open={quoteOpen} setOpen={setQuoteOpen} />
     </>

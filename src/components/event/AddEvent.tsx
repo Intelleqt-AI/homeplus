@@ -1,22 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Building,
   CreditCard,
@@ -28,10 +28,44 @@ import {
   Trash2,
   X,
   Zap,
-} from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { addNewEvent } from "@/lib/Api2";
-import { toast } from "sonner";
+} from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { usePost } from '@/hooks/usePost';
+import { addNewEvent } from '@/lib/Api2';
+import { toast } from '@/lib/toast';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import type { LucideIcon } from 'lucide-react';
+
+interface EventTemplate {
+  id: string;
+  icon: LucideIcon;
+  title: string;
+  type: string;
+  recurring: string;
+  cost: string;
+}
+
+const eventSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  date: z.string().min(1, 'Date is required'),
+  type: z.enum(['maintenance', 'repair', 'inspection', 'compliance', 'improvement', 'cleaning', 'admin', 'other'], {
+    required_error: 'Event type is required',
+  }),
+  priority: z.enum(['low', 'medium', 'high', 'urgent'], {
+    required_error: 'Priority is required',
+  }),
+  recurring: z.enum(['never', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annually'], {
+    required_error: 'Recurring is required',
+  }),
+  estimatedCost: z.string().optional(),
+  complianceType: z.enum(['gas_safety', 'eicr', 'epc', 'pat_testing', 'fire_safety', 'legionella', 'asbestos', 'other']).optional(),
+  requiresTrade: z.boolean().optional(),
+  description: z.string().optional(),
+});
+
+type EventFormValues = z.infer<typeof eventSchema>;
 
 interface AddEventProps {
   open?: boolean;
@@ -48,53 +82,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, hideTrigger }: AddEventProp
     if (!isControlled) setInternalOpen(next);
     onOpenChange?.(next);
   };
-  const [quickAddType, setQuickAddType] = useState<
-    "property" | "household" | null
-  >(null);
-  const [taskInput, setTaskInput] = useState("");
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
-  const [selectedEvents, setSelectedEvents] = useState<number[]>([]);
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Building, CreditCard, Flame, Home, Plus, Settings, Shield, Trash2, X, Zap } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
-import { usePost } from '@/hooks/usePost';
-import { addNewEvent } from '@/lib/Api2';
-import { toast } from '@/lib/toast';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 
-const eventSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  date: z.string().min(1, 'Date is required'),
-  type: z.enum(['maintenance', 'repair', 'inspection', 'compliance', 'improvement', 'cleaning', 'admin', 'other'], {
-    required_error: 'Event type is required',
-  }),
-  priority: z.enum(['low', 'medium', 'high', 'urgent'], {
-    required_error: 'Priority is required',
-  }),
-  recurring: z.enum(['never', 'weekly', 'monthly', 'quarterly', 'annually'], {
-    required_error: 'Recurring is required',
-  }),
-  estimatedCost: z.string().optional(),
-  complianceType: z.enum(['gas_safety', 'eicr', 'epc', 'pat_testing', 'fire_safety', 'legionella', 'asbestos', 'other'], {
-    required_error: 'Compliance type is required',
-  }),
-  requiresTrade: z.boolean().optional(),
-  description: z.string().optional(),
-});
-
-type EventFormValues = z.infer<typeof eventSchema>;
-
-const AddEvent = () => {
-  const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [quickAddType, setQuickAddType] = useState<'property' | 'household' | null>(null);
   const [taskInput, setTaskInput] = useState('');
   const queryClient = useQueryClient();
@@ -112,11 +100,10 @@ const AddEvent = () => {
 
   useEffect(() => {
     if (isAddEventOpen && initialDate) {
-      setNewEvent((prev) => ({ ...prev, date: initialDate }));
+      setValue('date', initialDate);
     }
-  }, [isAddEventOpen, initialDate]);
+  }, [isAddEventOpen, initialDate, setValue]);
 
-  const mutation = useMutation({
   const mutation = usePost({
     mutationFn: addNewEvent,
     onSuccess: () => {
@@ -128,7 +115,6 @@ const AddEvent = () => {
     },
   });
 
-  // Quick Add Task Templates
   const propertyMaintenanceTemplates = [
     { id: 'boiler', icon: Flame, title: 'Boiler Service', type: 'maintenance', recurring: 'annually', cost: '120' },
     { id: 'gutter', icon: Building, title: 'Gutter Clean', type: 'maintenance', recurring: 'annually', cost: '180' },
@@ -185,7 +171,7 @@ const AddEvent = () => {
     return null;
   };
 
-  const handleQuickAdd = (template: any) => {
+  const handleQuickAdd = (template: EventTemplate) => {
     setValue('title', template.title);
     setValue('type', template.type as EventFormValues['type']);
     setValue('recurring', template.recurring as EventFormValues['recurring']);
@@ -231,7 +217,7 @@ const AddEvent = () => {
       <div className="relative">
         {!hideTrigger && (
           <Button
-            onClick={() => setQuickAddType("property")}
+            onClick={() => setQuickAddType('property')}
             className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
           >
             <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
@@ -443,35 +429,37 @@ const AddEvent = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="recurring">Recurring</Label>
-                <Select
-                  value={newEvent.recurring}
-                  onValueChange={(value) =>
-                    setNewEvent({ ...newEvent, recurring: value })
-                  }>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="never">Never</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="biweekly">Biweekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                    <SelectItem value="quarterly">Quarterly</SelectItem>
-                    <SelectItem value="annually">Annually</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Controller
+                  name="recurring"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="never">Never</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="biweekly">Biweekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="quarterly">Quarterly</SelectItem>
+                        <SelectItem value="annually">Annually</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="complianceType">Compliance Type <span className="text-red-500">*</span></Label>
+                <Label htmlFor="complianceType">Compliance Type</Label>
                 <Controller
                   name="complianceType"
                   control={control}
                   render={({ field }) => (
                     <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                      <SelectTrigger className={errors.complianceType ? 'border-red-500' : ''}>
+                      <SelectTrigger>
                         <SelectValue placeholder="Select compliance type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -487,7 +475,6 @@ const AddEvent = () => {
                     </Select>
                   )}
                 />
-                {errors.complianceType && <p className="text-xs text-red-500">{errors.complianceType.message}</p>}
               </div>
 
               <div className="flex items-center space-x-2 pt-6">
