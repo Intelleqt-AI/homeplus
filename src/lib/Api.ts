@@ -74,6 +74,13 @@ const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
  *
  * publicUrl is set to the presigned download endpoint URL so Downloads work.
  */
+export type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
+
 export type NormDoc = {
   id: string;
   name: string;
@@ -301,6 +308,9 @@ const normLead = (job: any) => ({
   created_by: job.created_by || null,
   created_at: job.created_at,
   updated_at: job.updated_at,
+  todo_at: job.todo_at ?? null,
+  started_at: job.started_at ?? null,
+  completed_at: job.completed_at ?? null,
   bids: (job.bids || []).map((b: any) => ({
     id: b.id,
     proposedValue: parseFloat(b.amount ?? 0),

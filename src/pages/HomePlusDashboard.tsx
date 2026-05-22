@@ -33,6 +33,7 @@ import { getEvents, uploadCover, getCoverImage } from '@/lib/Api2';
 import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { listFilesWithMetadata } from '@/lib/Api';
+import { useQuery } from '@tanstack/react-query';
 
 const HomePlusDashboard = () => {
   const [showSmartMatches, setShowSmartMatches] = useState(false);
@@ -67,6 +68,8 @@ const HomePlusDashboard = () => {
     queryFn: getEvents,
   });
 
+  const { data: apiDocs } = useFetch<unknown[]>('/api/v1/documents/');
+
   const uploadMutation = usePost({
     mutationFn: uploadCover,
     onSuccess: () => {
@@ -74,7 +77,7 @@ const HomePlusDashboard = () => {
       setSelectedFile(null);
       refetch();
     },
-    onError: (e) => {
+    onError: e => {
       console.log(e);
       toast.error('Failed to upload document.');
     },
@@ -147,9 +150,7 @@ const HomePlusDashboard = () => {
 
   // Sample events for calendar display when no API data exists - dates from Jan 27, 2026
 
-  const dashEvents: DashEvent[] = Array.isArray(rawEvents) && rawEvents.length > 0
-    ? mapToDashEvents(rawEvents)
-    : [];
+  const dashEvents: DashEvent[] = Array.isArray(rawEvents) && rawEvents.length > 0 ? mapToDashEvents(rawEvents) : [];
 
   // Calculate event counts for next 2 weeks and next 6 weeks
   const now = new Date();
@@ -386,10 +387,8 @@ const HomePlusDashboard = () => {
     },
   ];
 
-
   // Use API data if available, otherwise show sample tasks
   const displayTasks = eventData?.data?.length > 0 ? eventData.data : [];
-
 
   return (
     <DashboardLayout>
@@ -415,7 +414,10 @@ const HomePlusDashboard = () => {
               {/* Quick Actions - Cleaner button style */}
               <div className="flex items-center gap-3">
                 <Link to="/dashboard/calendar">
-                  <Button variant="outline" className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white transition-all text-sm font-medium h-10 px-4 rounded-full">
+                  <Button
+                    variant="outline"
+                    className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white transition-all text-sm font-medium h-10 px-4 rounded-full"
+                  >
                     Get started
                   </Button>
                 </Link>
@@ -431,7 +433,7 @@ const HomePlusDashboard = () => {
                     <FolderOpen className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                   </div>
                 </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">{apiDocs?.length}</p>
+                <p className="text-[#1A1A1A] text-2xl font-semibold">{apiDocs?.count}</p>
                 <p className="text-[#8B8B8B] text-xs mt-1">Stored safely</p>
               </div>
 
@@ -501,7 +503,10 @@ const HomePlusDashboard = () => {
                   </div>
                 </div>
                 <Link to="/dashboard/calendar">
-                  <Button variant="outline" className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] text-sm font-medium h-10 px-4 rounded-full">
+                  <Button
+                    variant="outline"
+                    className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] text-sm font-medium h-10 px-4 rounded-full"
+                  >
                     View Calendar
                   </Button>
                 </Link>
@@ -544,14 +549,12 @@ const HomePlusDashboard = () => {
                           isCurrentDay
                             ? 'bg-[#FBBF24] text-[#1A1A1A] font-semibold'
                             : eventsForDay.length > 0
-                            ? 'bg-[#FEF9E7] text-[#1A1A1A] hover:bg-[#FEF3C7]'
-                            : 'text-[#4B5563] hover:bg-[#F5F5F0]'
+                              ? 'bg-[#FEF9E7] text-[#1A1A1A] hover:bg-[#FEF3C7]'
+                              : 'text-[#4B5563] hover:bg-[#F5F5F0]'
                         }`}
                       >
                         <span>{dayNumber}</span>
-                        {dotStatus && (
-                          <div className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full ${getDotColor(dotStatus)}`}></div>
-                        )}
+                        {dotStatus && <div className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full ${getDotColor(dotStatus)}`}></div>}
                       </div>
                     );
                   })}
@@ -633,10 +636,10 @@ const HomePlusDashboard = () => {
                             {diffDays < 0
                               ? `Overdue by ${Math.abs(diffDays)} days`
                               : diffDays === 0
-                              ? 'Due today'
-                              : diffDays === 1
-                              ? 'Due tomorrow'
-                              : `${diffDays} days left`}
+                                ? 'Due today'
+                                : diffDays === 1
+                                  ? 'Due tomorrow'
+                                  : `${diffDays} days left`}
                           </p>
                         </div>
                       </div>
