@@ -97,6 +97,8 @@ export type NormDoc = {
   updated_at: string;
   property: string | null;
   property_address: string | null;
+  /** Event id auto-created at upload time when expires_at was set. */
+  created_event: string | null;
   _docId: string;
   // Legacy compat — homePack.tsx and HomePlusDashboard.tsx use these
   publicUrl: null;
@@ -122,6 +124,7 @@ const normDoc = (doc: any): NormDoc => ({
   updated_at: doc.updated_at,
   property: doc.property ?? null,
   property_address: doc.property_address ?? null,
+  created_event: doc.created_event ?? null,
   _docId: doc.id,
   publicUrl: null,
   metadata: {
@@ -248,6 +251,51 @@ export const deleteFile = async ({ id }: { id: string; fileName?: string }): Pro
 export const getDocumentDownloadUrl = async (docId: string): Promise<string> => {
   const { data: res } = await apiClient.get(`/api/v1/documents/${docId}/download/`);
   return res.data.url as string;
+};
+
+// ─── Notification preferences ─────────────────────────────────────────────────
+
+export type NotificationPreferences = {
+  email_notifications: boolean;
+  sms_notifications: boolean;
+  calendar_reminders: boolean;
+  marketing_emails: boolean;
+  updated_at?: string;
+};
+
+export const getNotificationPreferences = async (): Promise<NotificationPreferences> => {
+  const { data: res } = await apiClient.get('/api/v1/auth/notification-preferences/');
+  return res.data as NotificationPreferences;
+};
+
+export const updateNotificationPreferences = async (
+  patch: Partial<NotificationPreferences>,
+): Promise<NotificationPreferences> => {
+  const { data: res } = await apiClient.patch('/api/v1/auth/notification-preferences/', patch);
+  return res.data as NotificationPreferences;
+};
+
+export type ConfirmReminderPayload = {
+  expires_on: string;            // 'YYYY-MM-DD' — the document's due/expiry date
+  remind_days_before: number;    // lead time in days; email fires expires_on - N
+  trade?: string | null;         // 'plumbing' | 'gas_engineer' | 'roofing' | 'electrical' | null
+  recurring?: 'never' | 'weekly' | 'monthly' | 'quarterly' | 'annually';
+  title?: string;
+};
+
+/**
+ * Confirm a document's expiry and create a calendar reminder for it.
+ * Called from <ExpiryConfirmDialog /> right after the upload succeeds.
+ */
+export const confirmDocumentReminder = async (
+  docId: string,
+  payload: ConfirmReminderPayload,
+): Promise<{ event_id: string; document: any }> => {
+  const { data: res } = await apiClient.post(
+    `/api/v1/documents/${docId}/confirm-reminder/`,
+    payload,
+  );
+  return res.data;
 };
 
 // ─── User ─────────────────────────────────────────────────────────────────────

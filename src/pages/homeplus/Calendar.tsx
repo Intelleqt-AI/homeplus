@@ -25,6 +25,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddEvent from "@/components/event/AddEvent";
+import EventDetailDialog, { type CalendarEventDetail } from "@/components/event/EventDetailDialog";
+import Quote, { type QuotePrefill } from "@/components/topbar/Quote";
+import { inferTradeFromTitle } from "@/lib/tradeInference";
+import { TRADE_OPTIONS, getTradeCategoryLabel } from "@/lib/tradeCategories";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getEvents } from "@/lib/Api2";
 import usePatch from "@/hooks/usePatch";
@@ -43,13 +47,46 @@ const Calendar = () => {
     | "household"
     | "custom";
   const [filterType, setFilterType] = useState<FilterType>("all");
-  const [selectedEvents, setSelectedEvents] = useState<Array<string | number>>(
-    []
-  );
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addDialogDate, setAddDialogDate] = useState<string | undefined>(undefined);
   const [dragOverDateKey, setDragOverDateKey] = useState<string | null>(null);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quotePrefill, setQuotePrefill] = useState<QuotePrefill | undefined>(undefined);
+  const [detailEvent, setDetailEvent] = useState<CalendarEventDetail | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const openDetail = (event: CalendarEventDetail) => {
+    setDetailEvent(event);
+    setDetailOpen(true);
+  };
+
+  const openQuoteFor = (event: {
+    title: string;
+    property?: string | null;
+    trade?: string | null;
+    tradeCategory?: string | null;
+  }) => {
+    // Quote.tsx's `service` is the *display label* ('Gas Engineer'),
+    // and `category` is the subcategory's display label ('Boilers').
+    // Convert slugs → labels here. Fall back to title inference for legacy
+    // events created before Phase 1.8.
+    const tradeOption = event.trade
+      ? TRADE_OPTIONS.find(o => o.value === event.trade)
+      : undefined;
+    const serviceLabel = tradeOption?.label ?? inferTradeFromTitle(event.title);
+    const categoryLabel = event.tradeCategory
+      ? getTradeCategoryLabel(event.tradeCategory)
+      : undefined;
+
+    setQuotePrefill({
+      title: event.title,
+      service: serviceLabel,
+      category: categoryLabel,
+      property: event.property ?? undefined,
+    });
+    setQuoteOpen(true);
+  };
 
   const moveEventMutation = usePatch({
     onSuccess: () => {
@@ -158,7 +195,6 @@ const Calendar = () => {
     type?: string;
     description?: string;
     contractor?: string;
-    cost?: number | string;
     priority?: string;
     complianceType?: string;
     hasDocument?: boolean;
@@ -168,17 +204,14 @@ const Calendar = () => {
     photosRequired?: boolean;
     user_id?: string;
     recurring?: string;
+    property?: string | null;
+    trade?: string | null;
+    tradeCategory?: string | null;
   };
 
   const mappedRemoteEvents = Array.isArray(remoteRaw)
     ? (remoteRaw as RawEvent[]).map((ev: RawEvent) => {
         const parsedDate = ev?.date ? new Date(ev.date) : null;
-        const costField =
-          typeof ev?.cost === "number"
-            ? ev.cost === 0
-              ? "Free"
-              : `£${ev.cost}`
-            : ev?.cost ?? "Free";
 
         return {
           id: ev.id,
@@ -190,7 +223,6 @@ const Calendar = () => {
           status: computeStatusFromDate(parsedDate),
           description: ev.description ?? "",
           contractor: ev.contractor ?? "",
-          cost: costField,
           priority: ev.priority ?? "medium",
           complianceType: ev.complianceType ?? "none",
           hasDocument: !!ev.hasDocument,
@@ -199,35 +231,14 @@ const Calendar = () => {
           photosRequired: !!ev.photosRequired,
           user_id: ev.user_id,
           recurring: ev.recurring ?? "never",
+          property: ev.property ?? null,
+          trade: ev.trade ?? null,
+          tradeCategory: ev.tradeCategory ?? null,
         };
       })
     : [];
 
-  const fallbackEvents = [
-    {
-      id: "ca206a4f-db58-41e0-afc7-3ac7308d7666",
-      created_at: "2025-10-09T10:27:19.130604+00:00",
-      title: "Test",
-      date: null,
-      time: "",
-      type: "maintenance",
-      status: computeStatusFromDate(null),
-      description: "",
-      contractor: "",
-      cost: "Free",
-      priority: "medium",
-      complianceType: "none",
-      hasDocument: false,
-      hasQuotes: false,
-      tradeConfirmed: false,
-      photosRequired: false,
-      user_id: "2aa3c70e-c10c-4a31-9654-3e37adcd9cdd",
-    },
-  ];
-
-  const events = mappedRemoteEvents.length
-    ? mappedRemoteEvents
-    : [];
+  const events = mappedRemoteEvents;
 
   // Enhanced filtering and data processing
   const filteredEvents = events.filter((event) => {
@@ -285,24 +296,6 @@ const Calendar = () => {
         event.date.toDateString() !== new Date().toDateString()
     )
     .slice(0, 5);
-
-  // Cost calculations
-  const thisMonthCost = filteredEvents
-    .filter((event) => {
-      const eventDate = new Date(event?.date);
-      const now = new Date();
-      return (
-        eventDate.getMonth() === now.getMonth() &&
-        eventDate.getFullYear() === now.getFullYear()
-      );
-    })
-    .reduce((total, event) => {
-      const cost = event.cost.replace(/[£,-]/g, "");
-      const numCost = parseInt(cost) || 0;
-      return total + numCost;
-    }, 0);
-
-  const yearlySpent = 2847; // This would come from backend
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -474,32 +467,9 @@ const Calendar = () => {
     return getTypeIcon(type);
   };
 
-  const formatCost = (cost: string, status: string) => {
-    if (status === "quotes_ready") {
-      const cleanCost = cost.replace(/[£,-]/g, "");
-      if (cleanCost.includes("-")) {
-        return `£${cleanCost.split("-")[0]} (3 quotes)`;
-      }
-      return `${cost} (3 quotes)`;
-    }
-    if (cost === "Free") return cost;
-    if (status === "overdue" || status === "action_required") {
-      return "Get quote";
-    }
-    return cost;
-  };
-
   const getEventsForDate = (date: Date) => {
     return filteredEvents.filter(
       (event) => getEventDateString(event) === date.toDateString()
-    );
-  };
-
-  const toggleEventSelection = (eventId: string | number) => {
-    setSelectedEvents((prev) =>
-      prev.includes(eventId)
-        ? prev.filter((id) => id !== eventId)
-        : [...prev, eventId]
     );
   };
 
@@ -748,21 +718,20 @@ const Calendar = () => {
                                 onDragStart={(e) => handleEventDragStart(e, event.id)}
                                 className={`text-xs px-2 py-2 rounded border ${getStatusBorder(
                                   event.status
-                                )} cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow`}
-                                title={`${event.time} - ${event.title}\n${event.description}\n(drag to another day to reschedule)`}
+                                )} cursor-pointer hover:shadow-sm transition-shadow`}
+                                title={`${event.time ? event.time + ' - ' : ''}${event.title}${event.description ? '\n' + event.description : ''}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleEventSelection(event.id);
+                                  openDetail(event as unknown as CalendarEventDetail);
                                 }}>
                                 <div className="font-medium text-gray-900 truncate">
                                   {event.title}
                                 </div>
-                                <div className="text-xs text-gray-600 flex items-center justify-between mt-1">
-                                  <span>
-                                    {event.time} •{" "}
-                                    {formatCost(event.cost, event.status)}
-                                  </span>
-                                </div>
+                                {event.time && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    {event.time}
+                                  </div>
+                                )}
                                 <div className="text-xs text-gray-500 mt-1">
                                   {getStatusIcon(event.status)}
                                 </div>
@@ -795,9 +764,10 @@ const Calendar = () => {
                   {filteredEvents.map((event) => (
                     <Card
                       key={event.id}
+                      onClick={() => openDetail(event as unknown as CalendarEventDetail)}
                       className={`${getStatusBorder(
                         event.status
-                      )} hover:shadow-sm transition-shadow`}>
+                      )} hover:shadow-sm transition-shadow cursor-pointer`}>
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -805,10 +775,11 @@ const Calendar = () => {
                               <h3 className="text-sm font-medium text-black">
                                 {event.title}
                               </h3>
-                              <span className="text-xs text-gray-600">
-                                {event.time} •{" "}
-                                {formatCost(event.cost, event.status)}
-                              </span>
+                              {event.time && (
+                                <span className="text-xs text-gray-600">
+                                  {event.time}
+                                </span>
+                              )}
                             </div>
 
                             <div className="text-xs text-gray-600 mb-2 flex items-center">
@@ -835,36 +806,21 @@ const Calendar = () => {
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-2 ml-4">
-                            {event.status === "quotes_ready" ? (
+                          <div className="flex flex-col gap-2 ml-4" onClick={e => e.stopPropagation()}>
+                            {event.tradeConfirmed && (
                               <Button
                                 size="sm"
-                                variant="secondary"
-                                className="px-3 py-1.5 h-7 text-xs bg-gray-100 hover:bg-gray-200">
-                                View quotes
+                                onClick={() => openQuoteFor(event)}
+                                className="px-3 py-1.5 h-7 text-xs bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B]">
+                                Get Quotes
                               </Button>
-                            ) : event.status === "overdue" ||
-                              event.status === "action_required" ||
-                              event.status === "due_this_week" ? (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="px-3 py-1.5 h-7 text-xs bg-gray-100 hover:bg-gray-200">
-                                Get quotes
-                              </Button>
-                            ) : event.status === "confirmed" ? (
+                            )}
+                            {event.status === "confirmed" && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="px-3 py-1.5 h-7 text-xs">
                                 Reschedule
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="px-3 py-1.5 h-7 text-xs">
-                                Complete
                               </Button>
                             )}
                           </div>
@@ -890,26 +846,31 @@ const Calendar = () => {
                         {overdueEvents.map((event) => (
                           <Card
                             key={event.id}
+                            onClick={() => openDetail(event as unknown as CalendarEventDetail)}
                             className={`${getBoardStatusBorder(
                               event.status
-                            )} shadow-sm`}>
+                            )} shadow-sm cursor-pointer hover:shadow transition-shadow`}>
                             <CardContent className="p-3">
                               <h4 className="text-sm font-medium mb-1">
                                 {event.title}
                               </h4>
-                              <p className="text-xs text-gray-600 mb-2">
-                                {event.time} •{" "}
-                                {formatCost(event.cost, event.status)}
-                              </p>
+                              {event.time && (
+                                <p className="text-xs text-gray-600 mb-2">{event.time}</p>
+                              )}
                               <div className="text-xs text-red-600 mb-3 flex items-center">
                                 {getStatusIcon(event.status)}
                               </div>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="w-full text-xs px-2 py-1.5 h-7 bg-gray-100 hover:bg-gray-200">
-                                Get quotes
-                              </Button>
+                              {event.tradeConfirmed && (
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openQuoteFor(event);
+                                  }}
+                                  className="w-full text-xs px-2 py-1.5 h-7 bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B]">
+                                  Get Quotes
+                                </Button>
+                              )}
                             </CardContent>
                           </Card>
                         ))}
@@ -928,28 +889,31 @@ const Calendar = () => {
                         {thisWeekEvents.map((event) => (
                           <Card
                             key={event.id}
+                            onClick={() => openDetail(event as unknown as CalendarEventDetail)}
                             className={`${getBoardStatusBorder(
                               event.status
-                            )} shadow-sm`}>
+                            )} shadow-sm cursor-pointer hover:shadow transition-shadow`}>
                             <CardContent className="p-3">
                               <h4 className="text-sm font-medium mb-1">
                                 {event.title}
                               </h4>
-                              <p className="text-xs text-gray-600 mb-2">
-                                {event.time} •{" "}
-                                {formatCost(event.cost, event.status)}
-                              </p>
+                              {event.time && (
+                                <p className="text-xs text-gray-600 mb-2">{event.time}</p>
+                              )}
                               <div className="text-xs text-yellow-600 mb-3 flex items-center">
                                 {getStatusIcon(event.status)}
                               </div>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="w-full text-xs px-2 py-1.5 h-7 bg-gray-100 hover:bg-gray-200">
-                                {event.status === "quotes_ready"
-                                  ? "View quotes"
-                                  : "Get quotes"}
-                              </Button>
+                              {event.tradeConfirmed && (
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openQuoteFor(event);
+                                  }}
+                                  className="w-full text-xs px-2 py-1.5 h-7 bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B]">
+                                  Get Quotes
+                                </Button>
+                              )}
                             </CardContent>
                           </Card>
                         ))}
@@ -976,16 +940,17 @@ const Calendar = () => {
                           .map((event) => (
                             <Card
                               key={event.id}
+                              onClick={() => openDetail(event as unknown as CalendarEventDetail)}
                               className={`${getBoardStatusBorder(
                                 event.status
-                              )} shadow-sm`}>
+                              )} shadow-sm cursor-pointer hover:shadow transition-shadow`}>
                               <CardContent className="p-3">
                                 <h4 className="text-sm font-medium mb-1">
                                   {event.title}
                                 </h4>
-                                <p className="text-xs text-gray-600 mb-2">
-                                  {event.time} • {event.cost}
-                                </p>
+                                {event.time && (
+                                  <p className="text-xs text-gray-600 mb-2">{event.time}</p>
+                                )}
                                 <div className="text-xs text-green-600 mb-3 flex items-center">
                                   <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
                                   {event.contractor}
@@ -1022,16 +987,17 @@ const Calendar = () => {
                           .map((event) => (
                             <Card
                               key={event.id}
+                              onClick={() => openDetail(event as unknown as CalendarEventDetail)}
                               className={`${getBoardStatusBorder(
                                 event.status
-                              )} shadow-sm opacity-75`}>
+                              )} shadow-sm opacity-75 cursor-pointer hover:opacity-90 transition-opacity`}>
                               <CardContent className="p-3">
                                 <h4 className="text-sm font-medium text-gray-600 mb-1">
                                   {event.title}
                                 </h4>
-                                <p className="text-xs text-gray-500 mb-2">
-                                  {event.time} • {event.cost}
-                                </p>
+                                {event.time && (
+                                  <p className="text-xs text-gray-500 mb-2">{event.time}</p>
+                                )}
                                 <div className="text-xs text-gray-500 flex items-center">
                                   <CheckCircle className="w-3 h-3 text-gray-600 mr-1" />
                                   Completed
@@ -1085,6 +1051,7 @@ const Calendar = () => {
                   <div
                     className={`${urgencyBg} border ${urgencyBorder} rounded-[12px] p-4 hover:shadow-sm transition-all cursor-pointer`}
                     key={item?.id || idx}
+                    onClick={() => openDetail(item as unknown as CalendarEventDetail)}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`h-8 w-8 rounded-[8px] flex items-center justify-center bg-white border border-[#E5E7EB]`}>
@@ -1124,6 +1091,24 @@ const Calendar = () => {
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         initialDate={addDialogDate}
+      />
+
+      {/* Post-a-Job dialog opened from "Get Quotes" buttons on trade events */}
+      <Quote open={quoteOpen} setOpen={setQuoteOpen} prefill={quotePrefill} />
+
+      {/* Task / Reminder details popup — opens when any event card is clicked */}
+      <EventDetailDialog
+        event={detailEvent}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onGetQuotes={ev =>
+          openQuoteFor({
+            title: ev.title,
+            property: ev.property ?? null,
+            trade: ev.trade ?? null,
+            tradeCategory: ev.tradeCategory ?? null,
+          })
+        }
       />
     </DashboardLayout>
   );
