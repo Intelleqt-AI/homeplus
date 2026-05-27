@@ -4,7 +4,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Button } from '../ui/button';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/lib/toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -13,8 +12,9 @@ import useFetch from '@/hooks/useFetch';
 import { createJob, postData } from '@/lib/Api';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { categoryConfig } from '@/lib/jobCategories';
-import { Check, ChevronsUpDown, Building2, Upload, File as FileIcon, X, Loader2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Upload, File as FileIcon, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
 
 const MAX_FILES = 3;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -23,6 +23,8 @@ export type QuotePrefill = {
   title?: string;
   service?: string;
   category?: string;
+  /** Pre-select a property by id. Postcode + area auto-fill once it resolves. */
+  property?: string;
 };
 
 interface QuoteProps {
@@ -37,7 +39,6 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
 
   // Property
   const [propertyId, setPropertyId] = useState('');
-  const [propertyOpen, setPropertyOpen] = useState(false);
 
   // Job details
   const [title, setTitle] = useState('');
@@ -62,18 +63,12 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Fetch user's properties
-  interface PropertyData {
-    id: string;
-    address: string;
-    postcode: string;
-    location: string;
-    name?: string;
-    latitude: number | null;
-    longitude: number | null;
-  }
-  const { data: propertiesRes } = useFetch<{ results?: PropertyData[]; data?: PropertyData[] }>('/api/v1/properties/');
-  const properties: PropertyData[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
+  // Selected property (used for location autofill + map-pin validation).
+  // The full list of properties is fetched inside <PropertySelect />.
+  const { data: propertiesRes } = useFetch<{ results?: PropertyOption[]; data?: PropertyOption[] }>(
+    '/api/v1/properties/',
+  );
+  const properties: PropertyOption[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
   const selectedProperty = properties.find(p => p.id === propertyId);
 
   const reset = () => {
@@ -110,7 +105,17 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
       setAnswers({});
     }
     if (prefill.category) setCategory(prefill.category);
-  }, [open, prefill?.title, prefill?.service, prefill?.category]);
+    if (prefill.property) setPropertyId(prefill.property);
+  }, [open, prefill?.title, prefill?.service, prefill?.category, prefill?.property]);
+
+  // Whenever the selected property changes (from either the picker or a
+  // prefill), populate the location fields from it. Without this, prefilled
+  // property IDs would leave the user with an empty postcode.
+  useEffect(() => {
+    if (!propertyId || !selectedProperty) return;
+    setLocationArea(selectedProperty.location ?? '');
+    setLocationPostcode(selectedProperty.postcode ?? '');
+  }, [propertyId, selectedProperty]);
 
   const { mutate: submitJob, isPending } = usePost({
     mutationFn: (vars: Record<string, unknown>) => createJob(vars),
@@ -220,81 +225,11 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
             <p className={sectionTitle}>
               Property <span className="text-red-500">*</span>
             </p>
-            <Popover open={propertyOpen} onOpenChange={setPropertyOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    'w-full min-h-10 px-3 py-2 rounded-lg border text-sm flex items-center justify-between gap-2 bg-white border-gray-200 hover:bg-gray-50 transition-colors',
-                    !propertyId && 'text-gray-400',
-                  )}
-                >
-                  <span className="flex items-center gap-2 min-w-0 flex-1">
-                    <Building2 className="h-4 w-4 shrink-0 text-gray-400" />
-                    {selectedProperty ? (
-                      <span className="flex flex-col min-w-0 text-left">
-                        <span className="truncate font-medium max-w-[300px] text-gray-900 leading-tight">
-                          {selectedProperty.name || selectedProperty.address}
-                        </span>
-                        {selectedProperty.name && (
-                          <span className="truncate text-xs text-gray-400 max-w-[300px] leading-tight">
-                            {selectedProperty.address}
-                            {selectedProperty.postcode ? ` · ${selectedProperty.postcode}` : ''}
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span>Select a property</span>
-                    )}
-                  </span>
-                  <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[500px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search properties…" />
-                  <CommandList>
-                    <CommandEmpty>No properties found.</CommandEmpty>
-                    <CommandGroup>
-                      {properties.map(p => (
-                        <CommandItem
-                          key={p.id}
-                          value={`${p.name ?? ''} ${p.address}`}
-                          onSelect={() => {
-                            setPropertyId(p.id);
-                            setLocationArea(p.location ?? '');
-                            setLocationPostcode(p.postcode ?? '');
-                            setPropertyOpen(false);
-                          }}
-                        >
-                          <Check className={cn('mr-2 h-3.5 w-3.5 shrink-0', propertyId === p.id ? 'opacity-100' : 'opacity-0')} />
-                          <span className="flex flex-col min-w-0 flex-1">
-                            <span className="truncate font-medium text-gray-900 text-sm leading-tight">{p.name || p.address}</span>
-                            {p.name && (
-                              <span className="truncate text-xs text-gray-400 leading-tight">
-                                {p.address}
-                                {p.postcode ? ` · ${p.postcode}` : ''}
-                              </span>
-                            )}
-                          </span>
-                          {p.postcode && !p.name && (
-                            <Badge variant="outline" className="ml-auto text-xs shrink-0">
-                              {p.postcode}
-                            </Badge>
-                          )}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            {selectedProperty && (selectedProperty.latitude === null || selectedProperty.longitude === null) && (
-              <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
-                ⚠ This property has no map pin yet. Go to <strong>Settings → Properties</strong> and drag the pin to its exact location
-                before posting the job.
-              </p>
-            )}
+            <PropertySelect
+              value={propertyId}
+              onChange={id => setPropertyId(id)}
+              requireMapPin
+            />
           </div>
 
           {/* ── Job Details ───────────────────────────────────── */}

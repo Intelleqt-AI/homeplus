@@ -15,12 +15,22 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
+import ExpiryConfirmDialog from '@/components/docsUploadDialog/ExpiryConfirmDialog';
 
 interface Props {
   openForm: boolean;
   setOpenForm: (v: boolean) => void;
   refetch?: () => void;
 }
+
+type UploadedDoc = {
+  id: string;
+  name: string;
+  doc_type?: string | null;
+  expires_at?: string | null;
+  /** Set when the backend auto-created the reminder on upload. */
+  created_event?: string | null;
+};
 
 const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
   const [documentType, setDocumentType] = useState('');
@@ -32,6 +42,9 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+
+  const [reminderDoc, setReminderDoc] = useState<UploadedDoc | null>(null);
+  const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -62,10 +75,26 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
 
   const uploadMutation = useMutation({
     mutationFn: uploadFileWithMetadata,
-    onSuccess: () => {
+    onSuccess: doc => {
       queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/'] });
       queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/expiring/'] });
       refetch?.();
+      // Hand the user off to the confirm-reminder dialog before closing the
+      // upload modal. If `created_event` is already set, the backend
+      // auto-scheduled the reminder at upload time — the dialog enters
+      // "update" mode so the user can fine-tune lead time / trade without
+      // creating a duplicate. Users can still Skip and keep the defaults.
+      // Also invalidate the events query so the calendar shows the new
+      // reminder immediately.
+      queryClient.invalidateQueries({ queryKey: ['event'] });
+      setReminderDoc({
+        id: doc.id,
+        name: doc.name,
+        doc_type: doc.doc_type ?? null,
+        expires_at: doc.expires_at ?? null,
+        created_event: doc.created_event ?? null,
+      });
+      setReminderDialogOpen(true);
       reset();
       setOpenForm(false);
     },
@@ -106,6 +135,15 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
   };
 
   return (
+    <>
+    <ExpiryConfirmDialog
+      doc={reminderDoc}
+      open={reminderDialogOpen}
+      onOpenChange={v => {
+        setReminderDialogOpen(v);
+        if (!v) setReminderDoc(null);
+      }}
+    />
     <Dialog open={openForm} onOpenChange={setOpenForm}>
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -259,6 +297,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 };
 

@@ -2,22 +2,14 @@ import apiClient from '@/lib/apiClient';
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
-/**
- * Normalize a Django Event to the legacy shape used by the calendar/dashboard.
- * Legacy: { id, title, date, time, eventType, type, priority, cost, recurring,
- *           description, isRequireTrade, complianceType, status }
- */
 const normEvent = (ev: any) => ({
   id: ev.id,
   title: ev.title,
-  // Keep ISO date string — components already parse this
   date: ev.date ? new Date(ev.date).toISOString() : null,
   time: ev.time ?? null,
-  // Legacy components use `eventType` (PascalCase display value)
   eventType: ev.event_type
     ? ev.event_type.charAt(0).toUpperCase() + ev.event_type.slice(1)
     : 'Maintenance',
-  // Legacy `type` field (reminder / service / compliance)
   type: ev.compliance_type && ev.compliance_type !== 'none'
     ? 'compliance'
     : ev.requires_trade
@@ -25,13 +17,15 @@ const normEvent = (ev: any) => ({
     : 'reminder',
   priority: ev.priority ?? 'medium',
   status: ev.status ?? 'pending',
-  cost: ev.estimated_cost ? parseFloat(ev.estimated_cost) : 0,
-  actual_cost: ev.actual_cost ? parseFloat(ev.actual_cost) : null,
   recurring: ev.recurring ?? 'never',
   compliance_type: ev.compliance_type ?? 'none',
   complianceType: ev.compliance_type ?? 'none',
   isRequireTrade: ev.requires_trade ?? false,
   requires_trade: ev.requires_trade ?? false,
+  // Trade taxonomy (slug form, e.g. 'gas_engineer', 'gas_engineer_boilers').
+  // Empty for reminders + legacy events with no trade set.
+  trade: ev.trade ?? '',
+  tradeCategory: ev.trade_category ?? '',
   description: ev.description ?? '',
   notes: ev.notes ?? '',
   property: ev.property ?? null,
@@ -47,10 +41,11 @@ export const addNewEvent = async (event: any) => {
       : new Date().toISOString().split('T')[0],
     event_type: (event.eventType || event.event_type || 'maintenance').toLowerCase(),
     priority: event.priority ?? 'medium',
-    estimated_cost: event.cost ?? event.estimated_cost ?? 0,
     recurring: event.recurring ?? 'never',
     compliance_type: event.complianceType || event.compliance_type || 'none',
     requires_trade: event.isRequireTrade ?? event.requires_trade ?? false,
+    trade: event.trade ?? '',
+    trade_category: event.tradeCategory ?? event.trade_category ?? '',
     description: event.description ?? '',
   };
 
@@ -65,6 +60,29 @@ export const getEvents = async () => {
   const { data: res } = await apiClient.get('/api/v1/events/');
   const events: any[] = res.data ?? res.results ?? [];
   return { data: events.map(normEvent) };
+};
+
+/**
+ * Delete an event.
+ *
+ * For recurring events the caller chooses what to delete:
+ *   - 'this'             — only this occurrence (chain auto-promotes if root)
+ *   - 'this_and_future'  — this + all later non-completed siblings; stops the series
+ *   - 'all'              — root + every non-completed sibling (completed history preserved)
+ *
+ * Non-recurring events ignore the scope.
+ */
+export type DeleteScope = 'this' | 'this_and_future' | 'all';
+
+export const deleteEvent = async (eventId: string, scope: DeleteScope = 'this') => {
+  await apiClient.delete(`/api/v1/events/${eventId}/?scope=${scope}`);
+  return { ok: true };
+};
+
+/** Mark an event completed. Optional actual_cost/notes (we don't surface them yet). */
+export const completeEvent = async (eventId: string) => {
+  const { data: res } = await apiClient.post(`/api/v1/events/${eventId}/complete/`, {});
+  return { data: res?.data ? normEvent(res.data) : null };
 };
 
 // ─── Properties ──────────────────────────────────────────────────────────────
