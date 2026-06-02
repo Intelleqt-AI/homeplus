@@ -33,6 +33,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getEvents } from "@/lib/Api2";
 import usePatch from "@/hooks/usePatch";
 import { toast } from "sonner";
+import { getMotTasks } from "@/lib/motTasks";
+import { getTemplate } from "@/lib/taskTemplates";
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -238,7 +240,68 @@ const Calendar = () => {
       })
     : [];
 
-  const events = mappedRemoteEvents;
+  // Merge in MOT-generated tasks (from the Home MOT wizard). These live in
+  // localStorage and carry a trade route so the existing Find-a-Trade flow
+  // picks them up automatically.
+  const motSourcedEvents = getMotTasks().map((t) => {
+    const tmpl = getTemplate(t.templateId);
+    const parsedDate = t.date ? new Date(t.date) : null;
+    const typeForFilter =
+      t.category === 'Safety'
+        ? 'safety'
+        : t.category === 'Maintenance'
+          ? 'maintenance'
+          : t.category === 'Financial'
+            ? 'admin'
+            : 'maintenance';
+
+    // Surface the reminder window: a task within its lead time should look
+    // urgent ("Book now / Get quotes"), not just "confirmed". This is what
+    // turns the 20-day reminder into a visible call-to-action.
+    let motStatus = computeStatusFromDate(parsedDate);
+    if (parsedDate && tmpl) {
+      const daysUntil = Math.ceil(
+        (parsedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysUntil < 0) motStatus = 'overdue';
+      else if (daysUntil <= tmpl.reminderLeadDays) motStatus = 'action_required';
+    }
+
+    return {
+      id: t.id,
+      created_at: t.createdAt,
+      title: t.title,
+      date: parsedDate,
+      time: '',
+      type: typeForFilter,
+      status: motStatus,
+      description: tmpl?.hint ?? 'Auto-generated from Home MOT',
+      contractor: '',
+      priority: 'medium',
+      complianceType: 'none',
+      hasDocument: false,
+      hasQuotes: false,
+      tradeConfirmed: !!t.tradeRoute,
+      photosRequired: false,
+      user_id: undefined,
+      recurring:
+        t.frequencyMonths === 1
+          ? 'monthly'
+          : t.frequencyMonths === 12
+            ? 'annually'
+            : t.frequencyMonths === 120
+              ? 'every-10-years'
+              : 'never',
+      property: null,
+      trade: t.tradeRoute?.trade ?? null,
+      tradeCategory: t.tradeRoute?.tradeCategory ?? null,
+      // Marker so we can style / badge MOT-sourced rows distinctively.
+      motSourceTemplate: t.templateId,
+      motReminderDate: t.reminderDate,
+    };
+  });
+
+  const events = [...mappedRemoteEvents, ...motSourcedEvents];
 
   // Enhanced filtering and data processing
   const filteredEvents = events.filter((event) => {
@@ -494,7 +557,9 @@ const Calendar = () => {
       1
     );
     const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    // Week starts on Monday: shift Sunday (getDay=0) back 6 days, everything else (getDay-1).
+    const mondayOffset = (firstDay.getDay() + 6) % 7;
+    startDate.setDate(startDate.getDate() - mondayOffset);
     const days: Date[] = [];
     for (let i = 0; i < 42; i++) {
       const day = new Date(startDate);
@@ -648,7 +713,7 @@ const Calendar = () => {
 
                 <>
                   <div className="grid grid-cols-7 gap-1 mb-4">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
                       (day) => (
                         <div
                           key={day}
