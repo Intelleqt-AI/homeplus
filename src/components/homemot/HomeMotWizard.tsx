@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Shield, FileText, Wrench, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { templatesForStep, getTemplate, type TaskTemplate } from '@/lib/taskTemplates';
-import { buildTask, persistGeneratedTasks, removeMotTaskByTemplate } from '@/lib/motTasks';
-import { useQueryClient } from '@tanstack/react-query';
+import { templatesForStep, type TaskTemplate } from '@/lib/taskTemplates';
+import {
+  deleteMotTask,
+  fetchMotTemplates,
+  updateMotScore,
+  upsertMotTask,
+} from '@/lib/Api2';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export type HomeMotStep = 'A' | 'B' | 'C';
 
@@ -112,41 +117,77 @@ const HomeMotWizard = ({
   const config = step ? STEP_CONFIG[step] : null;
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
   const [dates, setDates] = useState<Record<string, string>>({});
-  const wizardQueryClient = useQueryClient();
+  const qc = useQueryClient();
 
+  // Canonical templates from the backend (network-visible). Falls back to the
+  // bundled static catalog while loading / on error — same data as the seed.
+  const { data: tplData } = useQuery({
+    queryKey: ['mot-templates'],
+    queryFn: fetchMotTemplates,
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+  });
+  const templates = useMemo<TaskTemplate[]>(() => {
+    const fetched = tplData?.data;
+    if (Array.isArray(fetched) && fetched.length) return fetched as TaskTemplate[];
+    return [...templatesForStep('A'), ...templatesForStep('C')];
+  }, [tplData]);
+
+  // Active-step questions: A/C are template-driven; B keeps static placeholders.
+  const questions = useMemo<WizardQuestion[]>(() => {
+    if (!step) return [];
+    if (step === 'B') return STEP_CONFIG.B.questions;
+    return templates
+      .filter((t) => t.motStep === step)
+      .map((t) => ({ id: t.id, text: t.question, hint: t.hint, templateId: t.id }));
+  }, [step, templates]);
+
+  // Hold the latest initial values without making them effect deps. Otherwise
+  // the dashboard recreating these objects (`?? {}`) or refetching after a
+  // mutation would re-run the reset and wipe an in-progress tick (auto-untick).
+  const initialAnswersRef = useRef(initialAnswers);
+  const initialDatesRef = useRef(initialDates);
+  initialAnswersRef.current = initialAnswers;
+  initialDatesRef.current = initialDates;
+
+  // Hydrate only when the dialog opens or the step changes — not on prop identity.
   useEffect(() => {
     if (open) {
-      setAnswers(initialAnswers ?? {});
-      setDates(initialDates ?? {});
+      setAnswers(initialAnswersRef.current ?? {});
+      setDates(initialDatesRef.current ?? {});
     }
-  }, [open, step, initialAnswers, initialDates]);
+  }, [open, step]);
 
-  // Live-sync MOT-generated tasks whenever the user toggles a tick or changes
-  // a date. Persisting on Save still happens via handleSave, but we no longer
-  // require it — the task lands on the calendar the moment a date is added.
-  useEffect(() => {
-    if (!config || !step) return;
-    for (const q of config.questions) {
-      if (!q.templateId) continue;
-      const template = getTemplate(q.templateId);
-      if (!template) continue;
-      const date = dates[q.id];
-      if (answers[q.id] && date) {
-        persistGeneratedTasks([buildTask(template, date)]);
-      } else {
-        removeMotTaskByTemplate(q.templateId);
-      }
-    }
-    // Refresh anything that lists events (calendar grid, upcoming list, etc).
-    wizardQueryClient.invalidateQueries({ queryKey: ['event'] });
-  }, [answers, dates, config, step, wizardQueryClient]);
+  // Refresh everything that depends on MOT data after a task mutation: the
+  // calendar/dashboard events (linked Event), the task list, and hydration dates.
+  const invalidateTasks = () => {
+    ['event', 'mot-tasks', 'mot-last-completed'].forEach((key) =>
+      qc.invalidateQueries({ queryKey: [key] })
+    );
+  };
+
+  const upsertMut = useMutation({
+    mutationFn: upsertMotTask,
+    onSuccess: invalidateTasks,
+    onError: () => toast.error("Couldn't schedule that task"),
+  });
+  const deleteMut = useMutation({
+    mutationFn: deleteMotTask,
+    onSuccess: invalidateTasks,
+    onError: () => toast.error("Couldn't remove that task"),
+  });
+  const scoreMut = useMutation({
+    mutationFn: ({ step: s, answers: a }: { step: HomeMotStep; answers: Record<string, boolean> }) =>
+      updateMotScore(s, a),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mot-score'] }),
+  });
 
   const yesCount = useMemo(
     () => Object.values(answers).filter(Boolean).length,
     [answers]
   );
 
-  if (!config) return null;
+  if (!config || !step) return null;
 
   const Icon = config.icon;
   const estimatedPoints = Math.min(
@@ -154,51 +195,43 @@ const HomeMotWizard = ({
     Math.round(yesCount * config.pointsPerYes * 10) / 10
   );
 
-  const tickedTemplateQuestions = config.questions.filter(
+  const tickedTemplateQuestions = questions.filter(
     (q) => answers[q.id] && q.templateId
   );
   const tasksToGenerate = tickedTemplateQuestions.length;
 
+  // Tick/untick a question. Template-backed items POST (upsert) on tick and
+  // DELETE on untick — one precise API call per user action.
   const toggle = (id: string, templateId?: string) => {
-    setAnswers((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      // When ticking a template-backed item with no date yet, seed today.
-      if (next[id] && templateId && !dates[id]) {
-        setDates((d) => ({ ...d, [id]: todayIso() }));
-      }
-      return next;
-    });
+    const willCheck = !answers[id];
+    setAnswers((prev) => ({ ...prev, [id]: !prev[id] }));
+    if (!templateId) return; // Step B placeholders are scoring-only.
+    if (willCheck) {
+      const date = dates[id] ?? todayIso();
+      if (!dates[id]) setDates((prev) => ({ ...prev, [id]: date }));
+      upsertMut.mutate({ templateId, lastCompletedDate: date });
+    } else {
+      deleteMut.mutate(templateId);
+    }
   };
 
-  const setDate = (id: string, value: string) =>
+  // Change the last-completed date → re-upsert (server recomputes next-due).
+  const setDate = (id: string, value: string, templateId?: string) => {
     setDates((prev) => ({ ...prev, [id]: value }));
+    if (templateId && answers[id]) {
+      upsertMut.mutate({ templateId, lastCompletedDate: value });
+    }
+  };
 
   const handleSave = () => {
-    if (!step) return;
-
-    // Generate + persist recurring tasks from the ticked template-backed answers.
-    const generated = tickedTemplateQuestions
-      .map((q) => {
-        const template = templatesForStep(step === 'B' ? 'A' : step).find(
-          (t) => t.id === q.templateId
-        ) as TaskTemplate | undefined;
-        if (!template) return null;
-        return buildTask(template, dates[q.id] ?? todayIso());
-      })
-      .filter(Boolean) as ReturnType<typeof buildTask>[];
-
-    if (generated.length) persistGeneratedTasks(generated);
+    // Tasks are already persisted live on tick/date-change; Save just commits
+    // the step's answers to the score.
+    scoreMut.mutate({ step, answers });
     onSave?.(step, answers, dates);
 
     const label =
       step === 'A' ? 'Compliance' : step === 'B' ? 'Documents' : 'Maintenance';
-    if (generated.length) {
-      toast.success(
-        `${label} check saved — +${estimatedPoints} pts · ${generated.length} task${generated.length === 1 ? '' : 's'} scheduled`
-      );
-    } else {
-      toast.success(`${label} check saved — +${estimatedPoints} pts`);
-    }
+    toast.success(`${label} check saved — +${estimatedPoints} pts`);
     onOpenChange(false);
   };
 
@@ -221,10 +254,10 @@ const HomeMotWizard = ({
         </DialogHeader>
 
         <div className="space-y-2 py-2">
-          {config.questions.map((q) => {
+          {questions.map((q) => {
             const checked = !!answers[q.id];
             const template = q.templateId
-              ? templatesForStep('A').concat(templatesForStep('C')).find((t) => t.id === q.templateId)
+              ? templates.find((t) => t.id === q.templateId)
               : null;
             return (
               <div
@@ -270,7 +303,7 @@ const HomeMotWizard = ({
                       <Input
                         type="date"
                         value={dates[q.id] ?? todayIso()}
-                        onChange={(e) => setDate(q.id, e.target.value)}
+                        onChange={(e) => setDate(q.id, e.target.value, q.templateId)}
                         className="h-9 text-sm"
                       />
                       <div className="mt-2 text-[11px] text-[#6B6B6B] flex items-start gap-1.5">
@@ -318,7 +351,7 @@ const HomeMotWizard = ({
         <div className="flex items-center justify-between border-t border-[#E8E8E3] pt-4">
           <div className="text-sm text-[#6B6B6B]">
             <span className="text-[#1A1A1A] font-semibold">{yesCount}</span> of{' '}
-            {config.questions.length} ticked
+            {questions.length} ticked
             <span className="mx-2 text-[#E8E8E3]">·</span>
             <span className="text-[#1A1A1A] font-semibold">
               +{estimatedPoints}
@@ -330,7 +363,7 @@ const HomeMotWizard = ({
                 <span className="text-[#1A1A1A] font-semibold">
                   {tasksToGenerate}
                 </span>{' '}
-                task{tasksToGenerate === 1 ? '' : 's'} to schedule
+                task{tasksToGenerate === 1 ? '' : 's'} scheduled
               </>
             )}
           </div>

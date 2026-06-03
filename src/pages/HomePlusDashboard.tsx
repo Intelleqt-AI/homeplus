@@ -29,15 +29,19 @@ import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import useFetch from '@/hooks/useFetch';
 import { usePost } from '@/hooks/usePost';
-import { getEvents, uploadCover, getCoverImage } from '@/lib/Api2';
+import {
+  getEvents,
+  uploadCover,
+  getCoverImage,
+  fetchMotScore,
+  fetchLastCompleted,
+  fetchDocumentSummary,
+} from '@/lib/Api2';
 import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { listFilesWithMetadata } from '@/lib/Api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import HomeMotWizard, { STEP_CONFIG, type HomeMotStep } from '@/components/homemot/HomeMotWizard';
-import { getLastCompletedDates, getMotTasks } from '@/lib/motTasks';
-import { getTemplate } from '@/lib/taskTemplates';
-import { SAMPLE_DOCUMENTS } from '@/lib/sampleDocuments';
 
 const HomePlusDashboard = () => {
   const [showSmartMatches, setShowSmartMatches] = useState(false);
@@ -45,42 +49,41 @@ const HomePlusDashboard = () => {
   const [motStep, setMotStep] = useState<HomeMotStep | null>(null);
   const openMotStep = (step: HomeMotStep) => setMotStep(step);
   const motQueryClient = useQueryClient();
-  // Per-step answers persisted across wizard openings (in-memory mock).
-  // TODO: hydrate from backend once the scoring API is live.
-  const [motAnswers, setMotAnswers] = useState<Record<HomeMotStep, Record<string, boolean>>>({
-    A: {},
-    B: {},
-    C: {},
+  // Score + per-step answers now come from the backend (apps.homemot). The pie
+  // ring + rail read these; the wizard PUTs answers and we invalidate to refresh.
+  const { data: scoreResp } = useFetch('/api/v1/mot/score/', {
+    queryKey: ['mot-score'],
+    queryFn: fetchMotScore,
   });
-  const [motDates, setMotDates] = useState<Record<string, string>>(() =>
-    getLastCompletedDates()
-  );
-  const handleMotSave = (
-    step: HomeMotStep,
-    answers: Record<string, boolean>,
-    dates: Record<string, string>
-  ) => {
-    setMotAnswers((prev) => ({ ...prev, [step]: answers }));
-    setMotDates((prev) => ({ ...prev, ...dates }));
-    // Re-fetch events so MOT-generated tasks show up on Calendar / Upcoming.
-    motQueryClient.invalidateQueries({ queryKey: ['event'] });
+  const motScore = (scoreResp?.data ?? null) as {
+    score: number;
+    breakdown?: Record<string, number>;
+    answers?: Record<HomeMotStep, Record<string, boolean>>;
+  } | null;
+  const motAnswers: Record<HomeMotStep, Record<string, boolean>> =
+    motScore?.answers ?? { A: {}, B: {}, C: {} };
+
+  // Last-completed dates (keyed by template slug) hydrate the wizard inputs.
+  const { data: lastCompletedResp } = useFetch('/api/v1/mot/last-completed/', {
+    queryKey: ['mot-last-completed'],
+    queryFn: fetchLastCompleted,
+  });
+  const motDates: Record<string, string> = lastCompletedResp?.data ?? {};
+
+  const handleMotSave = () => {
+    // Tasks + score already persisted by the wizard; refresh the derived views.
+    ['mot-score', 'mot-last-completed', 'event'].forEach((key) =>
+      motQueryClient.invalidateQueries({ queryKey: [key] })
+    );
   };
-  // Energy declarations from the existing onboarding wizard contribute a baseline.
-  // TODO: read this from the user's onboarding response.
+
   const HOME_MOT_BASE_SCORE = 8;
   const yesCountFor = (step: HomeMotStep) =>
-    Object.values(motAnswers[step]).filter(Boolean).length;
+    Object.values(motAnswers[step] ?? {}).filter(Boolean).length;
   const earnedFor = (step: HomeMotStep) =>
-    Math.min(
-      STEP_CONFIG[step].maxPoints,
-      yesCountFor(step) * STEP_CONFIG[step].pointsPerYes
-    );
-  const homeMotScore = Math.min(
-    100,
-    Math.round(
-      HOME_MOT_BASE_SCORE + earnedFor('A') + earnedFor('B') + earnedFor('C')
-    )
-  );
+    motScore?.breakdown?.[step] ??
+    Math.min(STEP_CONFIG[step].maxPoints, yesCountFor(step) * STEP_CONFIG[step].pointsPerYes);
+  const homeMotScore = motScore?.score ?? HOME_MOT_BASE_SCORE;
   const { user } = useAuth();
 
   const navigate = useNavigate();
@@ -111,7 +114,10 @@ const HomePlusDashboard = () => {
     queryFn: getEvents,
   });
 
-  const { data: apiDocs } = useFetch<unknown[]>('/api/v1/documents/');
+  const { data: docSummaryResp } = useFetch('/api/v1/documents/summary/', {
+    queryKey: ['documents-summary'],
+    queryFn: fetchDocumentSummary,
+  });
 
   const uploadMutation = usePost({
     mutationFn: uploadCover,
@@ -191,31 +197,10 @@ const HomePlusDashboard = () => {
       description: r.description || '',
     }));
 
-  // Map MOT-generated tasks (localStorage) into the dashboard event shape so
-  // the schedule grid + stat tiles surface them alongside API events.
-  const motDashEvents: DashEvent[] = getMotTasks().map(t => ({
-    id: t.id,
-    title: t.title,
-    date: t.date ? new Date(t.date) : null,
-    time: '',
-    type: t.category.toLowerCase(),
-    priority: 'medium',
-    cost: 0,
-    recurring:
-      t.frequencyMonths === 12
-        ? 'annually'
-        : t.frequencyMonths === 1
-          ? 'monthly'
-          : 'never',
-    complianceType: 'none',
-    isRequireTrade: !!t.tradeRoute,
-    description: getTemplate(t.templateId)?.hint ?? 'From Home MOT',
-  }));
-
-  const dashEvents: DashEvent[] = [
-    ...(Array.isArray(rawEvents) && rawEvents.length > 0 ? mapToDashEvents(rawEvents) : []),
-    ...motDashEvents,
-  ];
+  // MOT tasks now arrive as linked Events through /api/v1/events/, so the
+  // schedule grid + stat tiles pick them up here — no separate client merge.
+  const dashEvents: DashEvent[] =
+    Array.isArray(rawEvents) && rawEvents.length > 0 ? mapToDashEvents(rawEvents) : [];
 
   // Calculate event counts for the next 30 days + the longer 6-week horizon.
   const now = new Date();
@@ -496,21 +481,12 @@ const HomePlusDashboard = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Combined Saved Documents + Next 30 days tile (spans 2 columns on lg) */}
               {(() => {
-                // Use sample fixture as fallback when API hasn't seeded the demo account.
-                const docsForStats =
-                  Array.isArray(apiDocs) && apiDocs.length > 0
-                    ? (apiDocs as unknown as Array<{ expires_at?: string | null; is_expired?: boolean }>)
-                    : SAMPLE_DOCUMENTS;
-                const totalDocs = docsForStats.length;
-                const expiredDocs = docsForStats.filter(d => d.is_expired).length;
-                const expiringDocs = docsForStats.filter(d => {
-                  if (!d.expires_at || d.is_expired) return false;
-                  const days = Math.ceil(
-                    (new Date(d.expires_at).getTime() - now.getTime()) / 86_400_000
-                  );
-                  return days >= 0 && days <= 30;
-                }).length;
-                const validDocs = totalDocs - expiredDocs - expiringDocs;
+                // Real counts from /documents/summary/ — backend only, no demo data.
+                const summary = docSummaryResp?.data;
+                const totalDocs = summary?.total ?? 0;
+                const expiredDocs = summary?.expired ?? 0;
+                const expiringDocs = summary?.expiring ?? 0;
+                const validDocs = summary?.valid ?? 0;
 
                 const next = eventsNext30DaysList[0];
                 const nextDays = next
@@ -932,7 +908,7 @@ const HomePlusDashboard = () => {
         step={motStep}
         open={motStep !== null}
         onOpenChange={(o) => !o && setMotStep(null)}
-        initialAnswers={motStep ? motAnswers[motStep] : undefined}
+        initialAnswers={motStep ? (motAnswers[motStep] ?? {}) : undefined}
         initialDates={motDates}
         onSave={handleMotSave}
       />

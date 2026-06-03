@@ -33,7 +33,6 @@ import DocsUploadDialog from '@/components/docsUploadDialog';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
 import { cn } from '@/lib/utils';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType, getTradeCategoryLabel } from '@/lib/tradeCategories';
-import { SAMPLE_DOCUMENTS } from '@/lib/sampleDocuments';
 
 const CATEGORY_TABS = [{ id: 'all', label: 'All' }, ...DISCIPLINE_OPTIONS.map(d => ({ id: d.value, label: d.label }))];
 
@@ -104,27 +103,11 @@ const Documents = () => {
   };
 
   const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL);
-  // DEV BYPASS: fall back to fixtures so the page shows something when the
-  // backend is unreachable or hasn't been seeded. See src/lib/sampleDocuments.ts.
-  const allDocs = useMemo<NormDoc[]>(() => {
-    const remote = docsPage?.results ?? [];
-    return remote.length ? remote : SAMPLE_DOCUMENTS;
-  }, [docsPage]);
+  // Backend is the single source of truth — no demo/sample fallback.
+  const allDocs = useMemo<NormDoc[]>(() => docsPage?.results ?? [], [docsPage]);
 
   const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL);
-  const expiringDocs = useMemo<NormDoc[]>(() => {
-    const remote = expiringPage?.results ?? [];
-    if (remote.length) return remote;
-    // Derive an "expiring soon / expired" list from the fixture for the stat tile.
-    return SAMPLE_DOCUMENTS.filter((d) => {
-      if (!d.expires_at) return false;
-      if (d.is_expired) return true;
-      const days = Math.ceil(
-        (new Date(d.expires_at).getTime() - Date.now()) / 86_400_000
-      );
-      return days <= 30;
-    });
-  }, [expiringPage]);
+  const expiringDocs = useMemo<NormDoc[]>(() => expiringPage?.results ?? [], [expiringPage]);
 
   const deleteMutation = useDelete({
     mutationFn: deleteFile,

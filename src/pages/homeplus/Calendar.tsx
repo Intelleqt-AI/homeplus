@@ -33,8 +33,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getEvents } from "@/lib/Api2";
 import usePatch from "@/hooks/usePatch";
 import { toast } from "sonner";
-import { getMotTasks } from "@/lib/motTasks";
-import { getTemplate } from "@/lib/taskTemplates";
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -209,6 +207,8 @@ const Calendar = () => {
     property?: string | null;
     trade?: string | null;
     tradeCategory?: string | null;
+    actionStatus?: string;
+    reminderDate?: string | null;
   };
 
   const mappedRemoteEvents = Array.isArray(remoteRaw)
@@ -222,7 +222,12 @@ const Calendar = () => {
           date: parsedDate,
           time: ev.time ?? "",
           type: ev.eventType ?? ev.type ?? "maintenance",
-          status: computeStatusFromDate(parsedDate),
+          // Prefer the server's date-aware escalation (action_required/overdue);
+          // fall back to the local date check for legacy events.
+          status:
+            ev.actionStatus && ev.actionStatus !== "scheduled"
+              ? ev.actionStatus
+              : computeStatusFromDate(parsedDate),
           description: ev.description ?? "",
           contractor: ev.contractor ?? "",
           priority: ev.priority ?? "medium",
@@ -240,68 +245,9 @@ const Calendar = () => {
       })
     : [];
 
-  // Merge in MOT-generated tasks (from the Home MOT wizard). These live in
-  // localStorage and carry a trade route so the existing Find-a-Trade flow
-  // picks them up automatically.
-  const motSourcedEvents = getMotTasks().map((t) => {
-    const tmpl = getTemplate(t.templateId);
-    const parsedDate = t.date ? new Date(t.date) : null;
-    const typeForFilter =
-      t.category === 'Safety'
-        ? 'safety'
-        : t.category === 'Maintenance'
-          ? 'maintenance'
-          : t.category === 'Financial'
-            ? 'admin'
-            : 'maintenance';
-
-    // Surface the reminder window: a task within its lead time should look
-    // urgent ("Book now / Get quotes"), not just "confirmed". This is what
-    // turns the 20-day reminder into a visible call-to-action.
-    let motStatus = computeStatusFromDate(parsedDate);
-    if (parsedDate && tmpl) {
-      const daysUntil = Math.ceil(
-        (parsedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (daysUntil < 0) motStatus = 'overdue';
-      else if (daysUntil <= tmpl.reminderLeadDays) motStatus = 'action_required';
-    }
-
-    return {
-      id: t.id,
-      created_at: t.createdAt,
-      title: t.title,
-      date: parsedDate,
-      time: '',
-      type: typeForFilter,
-      status: motStatus,
-      description: tmpl?.hint ?? 'Auto-generated from Home MOT',
-      contractor: '',
-      priority: 'medium',
-      complianceType: 'none',
-      hasDocument: false,
-      hasQuotes: false,
-      tradeConfirmed: !!t.tradeRoute,
-      photosRequired: false,
-      user_id: undefined,
-      recurring:
-        t.frequencyMonths === 1
-          ? 'monthly'
-          : t.frequencyMonths === 12
-            ? 'annually'
-            : t.frequencyMonths === 120
-              ? 'every-10-years'
-              : 'never',
-      property: null,
-      trade: t.tradeRoute?.trade ?? null,
-      tradeCategory: t.tradeRoute?.tradeCategory ?? null,
-      // Marker so we can style / badge MOT-sourced rows distinctively.
-      motSourceTemplate: t.templateId,
-      motReminderDate: t.reminderDate,
-    };
-  });
-
-  const events = [...mappedRemoteEvents, ...motSourcedEvents];
+  // MOT tasks now arrive as linked Events via /api/v1/events/, already carrying
+  // the trade route + server-computed action_status — no localStorage merge.
+  const events = mappedRemoteEvents;
 
   // Enhanced filtering and data processing
   const filteredEvents = events.filter((event) => {
