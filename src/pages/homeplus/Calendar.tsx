@@ -207,6 +207,8 @@ const Calendar = () => {
     property?: string | null;
     trade?: string | null;
     tradeCategory?: string | null;
+    actionStatus?: string;
+    reminderDate?: string | null;
   };
 
   const mappedRemoteEvents = Array.isArray(remoteRaw)
@@ -220,7 +222,12 @@ const Calendar = () => {
           date: parsedDate,
           time: ev.time ?? "",
           type: ev.eventType ?? ev.type ?? "maintenance",
-          status: computeStatusFromDate(parsedDate),
+          // Prefer the server's date-aware escalation (action_required/overdue);
+          // fall back to the local date check for legacy events.
+          status:
+            ev.actionStatus && ev.actionStatus !== "scheduled"
+              ? ev.actionStatus
+              : computeStatusFromDate(parsedDate),
           description: ev.description ?? "",
           contractor: ev.contractor ?? "",
           priority: ev.priority ?? "medium",
@@ -238,6 +245,8 @@ const Calendar = () => {
       })
     : [];
 
+  // MOT tasks now arrive as linked Events via /api/v1/events/, already carrying
+  // the trade route + server-computed action_status — no localStorage merge.
   const events = mappedRemoteEvents;
 
   // Enhanced filtering and data processing
@@ -494,7 +503,9 @@ const Calendar = () => {
       1
     );
     const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    // Week starts on Monday: shift Sunday (getDay=0) back 6 days, everything else (getDay-1).
+    const mondayOffset = (firstDay.getDay() + 6) % 7;
+    startDate.setDate(startDate.getDate() - mondayOffset);
     const days: Date[] = [];
     for (let i = 0; i < 42; i++) {
       const day = new Date(startDate);
@@ -648,7 +659,7 @@ const Calendar = () => {
 
                 <>
                   <div className="grid grid-cols-7 gap-1 mb-4">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
                       (day) => (
                         <div
                           key={day}

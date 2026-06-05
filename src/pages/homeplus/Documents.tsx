@@ -103,10 +103,11 @@ const Documents = () => {
   };
 
   const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL);
-  const allDocs = useMemo(() => docsPage?.results ?? [], [docsPage]);
+  // Backend is the single source of truth — no demo/sample fallback.
+  const allDocs = useMemo<NormDoc[]>(() => docsPage?.results ?? [], [docsPage]);
 
   const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL);
-  const expiringDocs = useMemo(() => expiringPage?.results ?? [], [expiringPage]);
+  const expiringDocs = useMemo<NormDoc[]>(() => expiringPage?.results ?? [], [expiringPage]);
 
   const deleteMutation = useDelete({
     mutationFn: deleteFile,

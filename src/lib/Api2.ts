@@ -17,6 +17,10 @@ const normEvent = (ev: any) => ({
     : 'reminder',
   priority: ev.priority ?? 'medium',
   status: ev.status ?? 'pending',
+  // Server-computed, date-aware escalation (action_required/overdue/scheduled)
+  // and the reminder fire date. Drives the calendar highlight + Get Quotes.
+  actionStatus: ev.action_status ?? ev.status ?? 'pending',
+  reminderDate: ev.reminder_date ?? null,
   recurring: ev.recurring ?? 'never',
   compliance_type: ev.compliance_type ?? 'none',
   complianceType: ev.compliance_type ?? 'none',
@@ -189,4 +193,83 @@ export const getCoverImage = async (propertyId: string) => {
   } catch {
     return [];
   }
+};
+
+// ─── Home MOT ──────────────────────────────────────────────────────────────────
+// All MOT data now comes from the backend (apps.homemot). Tasks also create a
+// linked calendar Event server-side, so the calendar/dashboard pick them up via
+// getEvents() — no separate client merge needed.
+
+/** GET /api/v1/mot/templates/ — the 12 canonical task templates (camelCase). */
+export const fetchMotTemplates = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/templates/');
+  const templates: unknown[] = res.data ?? res.results ?? [];
+  return { data: templates };
+};
+
+/** GET /api/v1/mot/tasks/ — the user's generated MOT tasks. */
+export const fetchMotTasks = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/tasks/');
+  const tasks: unknown[] = res.data ?? res.results ?? [];
+  return { data: tasks };
+};
+
+/**
+ * POST /api/v1/mot/tasks/ — upsert a MOT task (replace by template id). The
+ * server computes next-due + reminder and syncs the linked calendar Event.
+ */
+export const upsertMotTask = async (payload: {
+  templateId: string;
+  lastCompletedDate: string;
+  property?: string | null;
+}) => {
+  const body: Record<string, unknown> = {
+    templateId: payload.templateId,
+    lastCompletedDate: payload.lastCompletedDate,
+  };
+  if (payload.property) body.property = payload.property;
+  const { data: res } = await apiClient.post('/api/v1/mot/tasks/', body);
+  return { data: res.data };
+};
+
+/** DELETE /api/v1/mot/tasks/{templateId}/ — remove the task + its linked event. */
+export const deleteMotTask = async (templateId: string) => {
+  await apiClient.delete(`/api/v1/mot/tasks/${templateId}/`);
+  return { ok: true };
+};
+
+/** GET /api/v1/mot/last-completed/ — { templateId: 'YYYY-MM-DD' } for hydration. */
+export const fetchLastCompleted = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/last-completed/');
+  return { data: (res.data ?? {}) as Record<string, string> };
+};
+
+/** GET /api/v1/mot/score/ — { score, baseScore, max, breakdown, answers }. */
+export const fetchMotScore = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/score/');
+  return { data: res.data };
+};
+
+/** PUT /api/v1/mot/score/ — persist a step's answers, returns recomputed score. */
+export const updateMotScore = async (
+  step: 'A' | 'B' | 'C',
+  answers: Record<string, boolean>
+) => {
+  const { data: res } = await apiClient.put('/api/v1/mot/score/', { step, answers });
+  return { data: res.data };
+};
+
+// ─── Documents summary ───────────────────────────────────────────────────────
+
+export type DocumentSummary = {
+  total: number;
+  valid: number;
+  expiring: number;
+  expired: number;
+};
+
+/** GET /api/v1/documents/summary/ — counts for the dashboard status mini-cards. */
+export const fetchDocumentSummary = async () => {
+  const { data: res } = await apiClient.get('/api/v1/documents/summary/');
+  return { data: (res.data ?? {}) as DocumentSummary };
 };

@@ -29,15 +29,61 @@ import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import useFetch from '@/hooks/useFetch';
 import { usePost } from '@/hooks/usePost';
-import { getEvents, uploadCover, getCoverImage } from '@/lib/Api2';
+import {
+  getEvents,
+  uploadCover,
+  getCoverImage,
+  fetchMotScore,
+  fetchLastCompleted,
+  fetchDocumentSummary,
+} from '@/lib/Api2';
 import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { listFilesWithMetadata } from '@/lib/Api';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import HomeMotWizard, { STEP_CONFIG, type HomeMotStep } from '@/components/homemot/HomeMotWizard';
 
 const HomePlusDashboard = () => {
   const [showSmartMatches, setShowSmartMatches] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [motStep, setMotStep] = useState<HomeMotStep | null>(null);
+  const openMotStep = (step: HomeMotStep) => setMotStep(step);
+  const motQueryClient = useQueryClient();
+  // Score + per-step answers now come from the backend (apps.homemot). The pie
+  // ring + rail read these; the wizard PUTs answers and we invalidate to refresh.
+  const { data: scoreResp } = useFetch('/api/v1/mot/score/', {
+    queryKey: ['mot-score'],
+    queryFn: fetchMotScore,
+  });
+  const motScore = (scoreResp?.data ?? null) as {
+    score: number;
+    breakdown?: Record<string, number>;
+    answers?: Record<HomeMotStep, Record<string, boolean>>;
+  } | null;
+  const motAnswers: Record<HomeMotStep, Record<string, boolean>> =
+    motScore?.answers ?? { A: {}, B: {}, C: {} };
+
+  // Last-completed dates (keyed by template slug) hydrate the wizard inputs.
+  const { data: lastCompletedResp } = useFetch('/api/v1/mot/last-completed/', {
+    queryKey: ['mot-last-completed'],
+    queryFn: fetchLastCompleted,
+  });
+  const motDates: Record<string, string> = lastCompletedResp?.data ?? {};
+
+  const handleMotSave = () => {
+    // Tasks + score already persisted by the wizard; refresh the derived views.
+    ['mot-score', 'mot-last-completed', 'event'].forEach((key) =>
+      motQueryClient.invalidateQueries({ queryKey: [key] })
+    );
+  };
+
+  const HOME_MOT_BASE_SCORE = 8;
+  const yesCountFor = (step: HomeMotStep) =>
+    Object.values(motAnswers[step] ?? {}).filter(Boolean).length;
+  const earnedFor = (step: HomeMotStep) =>
+    motScore?.breakdown?.[step] ??
+    Math.min(STEP_CONFIG[step].maxPoints, yesCountFor(step) * STEP_CONFIG[step].pointsPerYes);
+  const homeMotScore = motScore?.score ?? HOME_MOT_BASE_SCORE;
   const { user } = useAuth();
 
   const navigate = useNavigate();
@@ -68,7 +114,10 @@ const HomePlusDashboard = () => {
     queryFn: getEvents,
   });
 
-  const { data: apiDocs } = useFetch<unknown[]>('/api/v1/documents/');
+  const { data: docSummaryResp } = useFetch('/api/v1/documents/summary/', {
+    queryKey: ['documents-summary'],
+    queryFn: fetchDocumentSummary,
+  });
 
   const uploadMutation = usePost({
     mutationFn: uploadCover,
@@ -148,19 +197,23 @@ const HomePlusDashboard = () => {
       description: r.description || '',
     }));
 
-  // Sample events for calendar display when no API data exists - dates from Jan 27, 2026
+  // MOT tasks now arrive as linked Events through /api/v1/events/, so the
+  // schedule grid + stat tiles pick them up here — no separate client merge.
+  const dashEvents: DashEvent[] =
+    Array.isArray(rawEvents) && rawEvents.length > 0 ? mapToDashEvents(rawEvents) : [];
 
-  const dashEvents: DashEvent[] = Array.isArray(rawEvents) && rawEvents.length > 0 ? mapToDashEvents(rawEvents) : [];
-
-  // Calculate event counts for next 2 weeks and next 6 weeks
+  // Calculate event counts for the next 30 days + the longer 6-week horizon.
   const now = new Date();
-  const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const sixWeeksFromNow = new Date(now.getTime() + 42 * 24 * 60 * 60 * 1000);
 
-  const eventsNextTwoWeeks = dashEvents.filter(event => {
-    if (!event.date) return false;
-    return event.date >= now && event.date <= twoWeeksFromNow;
-  }).length;
+  const eventsNext30DaysList = dashEvents
+    .filter(event => {
+      if (!event.date) return false;
+      return event.date >= now && event.date <= thirtyDaysFromNow;
+    })
+    .sort((a, b) => (a.date!.getTime() - b.date!.getTime()));
+  const eventsNext30Days = eventsNext30DaysList.length;
 
   const eventsNextSixWeeks = dashEvents.filter(event => {
     if (!event.date) return false;
@@ -426,66 +479,196 @@ const HomePlusDashboard = () => {
 
             {/* Stats Row - Inside the welcome block */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[#6B6B6B] text-sm">Saved Documents</span>
-                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
-                    <FolderOpen className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">{apiDocs?.count}</p>
-                <p className="text-[#8B8B8B] text-xs mt-1">Stored safely</p>
-              </div>
+              {/* Combined Saved Documents + Next 30 days tile (spans 2 columns on lg) */}
+              {(() => {
+                // Real counts from /documents/summary/ — backend only, no demo data.
+                const summary = docSummaryResp?.data;
+                const totalDocs = summary?.total ?? 0;
+                const expiredDocs = summary?.expired ?? 0;
+                const expiringDocs = summary?.expiring ?? 0;
+                const validDocs = summary?.valid ?? 0;
 
-              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[#6B6B6B] text-sm">Next two weeks</span>
-                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
-                    <CheckCircle className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">{eventsNextTwoWeeks}</p>
-                <p className="text-[#8B8B8B] text-xs mt-1">Tasks and reminders</p>
-              </div>
+                const next = eventsNext30DaysList[0];
+                const nextDays = next
+                  ? Math.ceil((next.date!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                  : 0;
+                const nextUrgent = !!next && nextDays <= 14;
 
-              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[#6B6B6B] text-sm">Next 6 weeks</span>
-                  <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <p className="text-[#1A1A1A] text-2xl font-semibold">{eventsNextSixWeeks}</p>
-                <p className="text-[#8B8B8B] text-xs mt-1">Tasks and reminders</p>
-              </div>
+                return (
+                  <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4 lg:col-span-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 h-full">
+                      {/* ── Saved Documents ─────────────────────────── */}
+                      <Link to="/dashboard/documents" className="flex flex-col group">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <p className="text-[#6B6B6B] text-sm">Saved Documents</p>
+                            <p className="text-[#1A1A1A] text-base font-semibold mt-0.5">
+                              Stored safely
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center shrink-0">
+                            <FolderOpen className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                          </div>
+                        </div>
+                        <p className="text-[#1A1A1A] text-3xl font-semibold leading-none mb-3">
+                          {totalDocs}
+                          <span className="text-[#8B8B8B] text-sm font-medium ml-1.5">
+                            docs
+                          </span>
+                        </p>
+                        <div className="grid grid-cols-3 gap-1.5 mt-auto">
+                          <div className="rounded-[10px] px-2.5 py-1.5 bg-[#ECFDF5] border border-[#A7F3D0]/70">
+                            <p className="text-[14px] font-semibold text-[#047857] leading-none">
+                              {validDocs}
+                            </p>
+                            <p className="text-[10px] text-[#047857]/80 mt-0.5">
+                              Valid
+                            </p>
+                          </div>
+                          <div className="rounded-[10px] px-2.5 py-1.5 bg-[#FFFBEB] border border-[#FDE68A]/70">
+                            <p className="text-[14px] font-semibold text-[#B45309] leading-none">
+                              {expiringDocs}
+                            </p>
+                            <p className="text-[10px] text-[#B45309]/80 mt-0.5">
+                              Expiring
+                            </p>
+                          </div>
+                          <div className="rounded-[10px] px-2.5 py-1.5 bg-[#FEF2F2] border border-[#FECACA]/70">
+                            <p className="text-[14px] font-semibold text-[#B91C1C] leading-none">
+                              {expiredDocs}
+                            </p>
+                            <p className="text-[10px] text-[#B91C1C]/80 mt-0.5">
+                              Expired
+                            </p>
+                          </div>
+                        </div>
+                      </Link>
 
-              <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[#6B6B6B] text-sm">Quick Actions</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Link to="/dashboard/documents">
-                    <button className="flex items-center gap-3 px-4 py-3 text-[#4A4A4A] text-sm font-medium rounded-full hover:bg-[#E8E8E3] hover:text-[#1A1A1A] transition-all duration-200">
-                      <FileText className="w-[18px] h-[18px]" strokeWidth={1.5} />
-                      Add Document
-                    </button>
-                  </Link>
-                  <button
-                    onClick={() => navigate('/dashboard/calendar')}
-                    className="flex items-center gap-3 px-4 py-3 text-[#4A4A4A] text-sm font-medium rounded-full hover:bg-[#E8E8E3] hover:text-[#1A1A1A] transition-all duration-200"
-                  >
-                    <ClipboardList className="w-[18px] h-[18px]" strokeWidth={1.5} />
-                    Add Task
-                  </button>
-                  <button
-                    onClick={() => navigate('/dashboard/calendar')}
-                    className="flex items-center gap-3 px-4 py-3 text-[#4A4A4A] text-sm font-medium rounded-full hover:bg-[#E8E8E3] hover:text-[#1A1A1A] transition-all duration-200"
-                  >
-                    <Bell className="w-[18px] h-[18px]" strokeWidth={1.5} />
-                    Add Reminder
-                  </button>
-                </div>
-              </div>
+                      {/* ── Next 30 days ────────────────────────────── */}
+                      <Link
+                        to="/dashboard/calendar"
+                        className="flex flex-col sm:border-l sm:border-[#E8E8E3] sm:pl-5"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <p className="text-[#6B6B6B] text-sm">Next 30 days</p>
+                            <p className="text-[#1A1A1A] text-base font-semibold mt-0.5">
+                              Tasks and reminders
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                          </div>
+                        </div>
+                        <p className="text-[#1A1A1A] text-3xl font-semibold leading-none mb-3">
+                          {eventsNext30Days}
+                        </p>
+
+                        {next ? (
+                          <div
+                            className={`mt-auto rounded-[10px] px-3 py-2 border ${
+                              nextUrgent
+                                ? 'bg-[#FEF9E7] border-[#FBBF24]/40'
+                                : 'bg-white border-[#E8E8E3]'
+                            }`}
+                          >
+                            <p className="text-[11px] text-[#6B6B6B]">Coming up</p>
+                            <div className="flex items-baseline justify-between gap-2">
+                              <p className="text-[12px] font-medium text-[#1A1A1A] truncate leading-snug">
+                                {next.title}
+                              </p>
+                              <span
+                                className={`text-[11px] font-medium shrink-0 ${
+                                  nextUrgent ? 'text-[#D97706]' : 'text-[#6B6B6B]'
+                                }`}
+                              >
+                                {nextDays === 0
+                                  ? 'Today'
+                                  : nextDays === 1
+                                    ? 'Tomorrow'
+                                    : `in ${nextDays}d · ${format(next.date!, 'd MMM')}`}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-auto text-[#8B8B8B] text-xs">
+                            Nothing in the next 30 days
+                          </p>
+                        )}
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Home MOT tile (spans 2 columns on lg) */}
+              {(() => {
+                const homeMotMax = 100;
+                const radius = 42;
+                const circumference = 2 * Math.PI * radius;
+                const progress = (homeMotScore / homeMotMax) * circumference;
+                return (
+                  <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4 lg:col-span-2 flex flex-col">
+                    <div className="flex items-center gap-5 flex-1">
+                      {/* Pie */}
+                      <div className="relative h-[110px] w-[110px] flex items-center justify-center shrink-0">
+                        <svg width="110" height="110" viewBox="0 0 110 110" className="-rotate-90">
+                          <circle
+                            cx="55"
+                            cy="55"
+                            r={radius}
+                            fill="none"
+                            stroke="#E8E8E3"
+                            strokeWidth="10"
+                          />
+                          <circle
+                            cx="55"
+                            cy="55"
+                            r={radius}
+                            fill="none"
+                            stroke="#FBBF24"
+                            strokeWidth="10"
+                            strokeLinecap="round"
+                            strokeDasharray={`${progress} ${circumference}`}
+                            style={{ transition: 'stroke-dasharray 400ms ease-out' }}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-[#1A1A1A] text-2xl font-semibold leading-none">
+                            {homeMotScore}
+                          </span>
+                          <span className="text-[#8B8B8B] text-[11px] mt-0.5">
+                            / {homeMotMax}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[#6B6B6B] text-sm">Home MOT</p>
+                        <p className="text-[#1A1A1A] text-base font-semibold mt-0.5">
+                          Your home score
+                        </p>
+                        <p className="text-[#8B8B8B] text-xs mt-1 max-w-[260px]">
+                          Updated by your activity — complete the steps in <em>Build your home MOT score</em> to grow it.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Footer strip: Next 6 weeks stat */}
+                    <div className="mt-4 pt-3 border-t border-[#E8E8E3] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
+                        <span className="text-[#6B6B6B] text-sm">Next 6 weeks</span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[#1A1A1A] text-lg font-semibold">
+                          {eventsNextSixWeeks}
+                        </span>
+                        <span className="text-[#8B8B8B] text-xs">Tasks and reminders</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
           {/* Calendar Front and Center + Tasks Side Panel */}
@@ -582,80 +765,77 @@ const HomePlusDashboard = () => {
               </div>
             </div>
 
-            {/* Tasks - Side Panel (max 3 per spec) */}
+            {/* Build your home MOT score - Side Panel */}
             <div className="bg-white lg:col-span-1 rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
                     <ClipboardList className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
                   </div>
-                  <h3 className="text-[#1A1A1A] text-lg font-semibold">Upcoming tasks and reminders</h3>
+                  <h3 className="text-[#1A1A1A] text-lg font-semibold">Build your home MOT score</h3>
                 </div>
               </div>
-              <p className="text-[#6B6B6B] text-sm mb-4">Next 3 items</p>
+              <p className="text-[#6B6B6B] text-sm mb-4">Three 60-second checks. Each one grows your score.</p>
 
-              {/* Task List - Max 3 items per spec */}
               <div className="space-y-3">
-                {displayTasks.slice(0, 3).map((item, id) => {
-                  const dueDate = new Date(item?.date);
-                  const today = new Date();
-                  const diffTime = dueDate - today;
-                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                  let urgencyColor = 'text-[#6B7280]';
-                  let urgencyBg = 'bg-[#F9FAFB]';
-                  let urgencyBorder = 'border-[#E5E7EB]';
-                  if (diffDays < 0) {
-                    urgencyColor = 'text-[#DC2626]';
-                    urgencyBg = 'bg-[#FEF2F2]';
-                    urgencyBorder = 'border-[#FECACA]';
-                  } else if (diffDays <= 3) {
-                    urgencyColor = 'text-[#D97706]';
-                    urgencyBg = 'bg-[#FFFBEB]';
-                    urgencyBorder = 'border-[#FDE68A]';
-                  } else if (diffDays <= 7) {
-                    urgencyColor = 'text-[#1F2937]';
-                    urgencyBg = 'bg-[#FEF3C7]/50';
-                    urgencyBorder = 'border-[#FDE68A]/50';
-                  }
-
+                {(['A', 'B', 'C'] as const).map((s) => {
+                  const cfg = STEP_CONFIG[s];
+                  const StepIcon = cfg.icon;
+                  const ticked = yesCountFor(s);
+                  const total = cfg.questions.length;
+                  const earned = Math.round(earnedFor(s) * 10) / 10;
+                  const complete = ticked > 0 && ticked === total;
+                  const label =
+                    s === 'A' ? 'Compliance' : s === 'B' ? 'Documents' : 'Maintenance';
                   return (
-                    <div
-                      className={`${urgencyBg} border ${urgencyBorder} rounded-[12px] p-4 hover:shadow-sm transition-all cursor-pointer`}
-                      key={item?.id || id}
-                      onClick={() => navigate('/dashboard/calendar')}
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => openMotStep(s)}
+                      className={`w-full text-left rounded-[12px] border p-4 transition-all hover:shadow-sm ${
+                        complete
+                          ? 'bg-[#FEF9E7] border-[#FBBF24]'
+                          : 'bg-white border-[#E8E8E3] hover:bg-[#F5F5F0]'
+                      }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={`h-8 w-8 rounded-[8px] flex items-center justify-center bg-white border border-[#E5E7EB]`}>
-                          <Clock size={14} className={urgencyColor} />
+                        <div className="h-8 w-8 rounded-[8px] flex items-center justify-center bg-white border border-[#E5E7EB] shrink-0">
+                          <StepIcon size={16} className="text-[#1A1A1A]" strokeWidth={1.5} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-[#1F2937] text-sm font-medium truncate">{item?.title}</h4>
-                          <p className="text-[#9CA3AF] capitalize text-[11px] mt-0.5">{item?.eventType}</p>
-                          <p className={`text-xs mt-2 font-medium ${urgencyColor}`}>
-                            {diffDays < 0
-                              ? `Overdue by ${Math.abs(diffDays)} days`
-                              : diffDays === 0
-                                ? 'Due today'
-                                : diffDays === 1
-                                  ? 'Due tomorrow'
-                                  : `${diffDays} days left`}
+                          <div className="flex items-baseline justify-between gap-2">
+                            <h4 className="text-[#1F2937] text-sm font-semibold">
+                              Step {s} · {label}
+                            </h4>
+                            <span className="text-[11px] text-[#6B6B6B] shrink-0">
+                              {ticked}/{total}
+                            </span>
+                          </div>
+                          <p className="text-[#9CA3AF] text-[11px] mt-0.5">
+                            60 seconds · up to {cfg.maxPoints} pts
+                          </p>
+                          {/* progress bar */}
+                          <div className="mt-2 h-1.5 w-full bg-[#F1F1EC] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#FBBF24] rounded-full transition-all duration-300"
+                              style={{
+                                width: `${total ? (ticked / total) * 100 : 0}%`,
+                              }}
+                            />
+                          </div>
+                          <p className="text-xs mt-2 font-medium text-[#1F2937]">
+                            {complete
+                              ? `Complete · +${earned} pts`
+                              : ticked > 0
+                                ? `+${earned} pts so far`
+                                : 'Not started'}
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
-
-              {eventData?.data?.length > 3 && (
-                <Link
-                  to="/dashboard/calendar"
-                  className="text-[#FBBF24] text-sm mt-4 block text-center hover:text-[#D4A017] transition-colors font-medium"
-                >
-                  View all {eventData.data.length} tasks →
-                </Link>
-              )}
             </div>
           </div>
 
@@ -723,6 +903,15 @@ const HomePlusDashboard = () => {
           </div>
         </main>
       </div>
+
+      <HomeMotWizard
+        step={motStep}
+        open={motStep !== null}
+        onOpenChange={(o) => !o && setMotStep(null)}
+        initialAnswers={motStep ? (motAnswers[motStep] ?? {}) : undefined}
+        initialDates={motDates}
+        onSave={handleMotSave}
+      />
     </DashboardLayout>
   );
 };
