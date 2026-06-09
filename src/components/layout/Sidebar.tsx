@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X, Bell } from 'lucide-react';
+import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X, Bell, Zap } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { fetchData } from '@/lib/Api';
@@ -26,11 +26,11 @@ const Sidebar = () => {
 
   const sidebarItems = [
     { icon: Home, label: 'My Home', path: '/dashboard' },
+    { icon: Search, label: 'Find a Trade', path: '/dashboard/job-leads' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
     { icon: ClipboardList, label: 'Tasks & Reminders', path: '/dashboard/calendar' },
-    { icon: Search, label: 'Find a Trade', path: '/dashboard/job-leads' },
+    { icon: Zap, label: 'Energy & EPC', path: '/dashboard/energy' },
     { icon: Bell, label: 'Notifications', path: '/dashboard/notifications', badge: unreadCount },
-    { icon: HelpCircle, label: 'How it Works', path: '/dashboard/how-it-works' },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
   ];
 
@@ -82,6 +82,18 @@ const Sidebar = () => {
             );
           })}
         </ul>
+      </div>
+
+      {/* Help / FAQ */}
+      <div className="mb-3">
+        <Link
+          to="/dashboard/how-it-works"
+          onClick={() => setMobileOpen(false)}
+          className="flex items-center gap-2 px-4 py-2 text-xs text-[#6B6B6B] hover:text-[#1A1A1A] transition-colors"
+        >
+          <HelpCircle className="w-4 h-4" strokeWidth={1.5} />
+          <span>Help / FAQ</span>
+        </Link>
       </div>
 
       {/* User Info */}

@@ -12,7 +12,8 @@ import useFetch from '@/hooks/useFetch';
 import { createJob, postData } from '@/lib/Api';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { categoryConfig } from '@/lib/jobCategories';
-import { Check, ChevronsUpDown, Upload, File as FileIcon, X, Loader2 } from 'lucide-react';
+import { TRADE_OPTIONS } from '@/lib/tradeCategories';
+import { Check, ChevronsUpDown, Upload, File as FileIcon, X, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
 
@@ -62,6 +63,9 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Phone verification state
+  const [showPhoneVerifyPrompt, setShowPhoneVerifyPrompt] = useState(false);
 
   // Selected property (used for location autofill + map-pin validation).
   // The full list of properties is fetched inside <PropertySelect />.
@@ -182,6 +186,18 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
       return;
     }
 
+    // Soft-prompt: photos improve quote accuracy and response speed
+    if (pendingFiles.length === 0) {
+      toast.warning('Add at least one photo to get faster, more accurate quotes');
+      return;
+    }
+
+    // Phone verify guard — trades need a callback number
+    const phoneVerified = (user as { profile?: { phone_verified?: boolean } } | null)?.profile?.phone_verified;
+    if (phoneVerified === false) {
+      setShowPhoneVerifyPrompt(true);
+    }
+
     submitJob({
       property: propertyId,
       title,
@@ -261,10 +277,9 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                     }}
                     className={selectCls}
                   >
-                    <option value="Plumbing">Plumbing</option>
-                    <option value="Gas Engineer">Gas Engineer</option>
-                    <option value="Roofing">Roofing</option>
-                    <option value="Electrical">Electrical</option>
+                    {TRADE_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.label}>{opt.label}</option>
+                    ))}
                   </select>
                 </div>
                 {serviceCategories.length > 0 && (
@@ -449,9 +464,23 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
             </div>
           )}
 
+          {/* ── Phone verify banner ─────────────────────────── */}
+          {showPhoneVerifyPrompt && (
+            <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
+              <div className="flex-1">
+                <span className="font-medium">Add your phone number</span> so trades can contact you directly.{' '}
+                <a href="/dashboard/settings" className="underline text-amber-700 hover:text-amber-900">Go to Settings</a>
+              </div>
+              <button type="button" onClick={() => setShowPhoneVerifyPrompt(false)} className="shrink-0 text-amber-500 hover:text-amber-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           {/* ── Attachments ──────────────────────────────────── */}
           <div>
-            <p className={sectionTitle}>Attachments ({pendingFiles.length}/{MAX_FILES}) <span className="normal-case font-normal text-gray-400">— optional, uploaded after job is created</span></p>
+            <p className={sectionTitle}>Photos <span className="text-red-400">*</span> ({pendingFiles.length}/{MAX_FILES}) <span className="normal-case font-normal text-gray-400">— add at least one photo for faster, more accurate quotes</span></p>
 
             {pendingFiles.length > 0 && (
               <div className="space-y-2 mb-3">

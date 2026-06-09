@@ -14,7 +14,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { confirmDocumentReminder, type ConfirmReminderPayload } from '@/lib/Api';
 import { TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { toast } from '@/lib/toast';
-import { Bell, CalendarClock } from 'lucide-react';
+import { Bell, CalendarClock, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type LeadTime = '30' | '14' | '7' | 'custom';
@@ -28,6 +28,8 @@ interface UploadedDoc {
   expires_at?: string | null;
   /** Event id when the backend already auto-scheduled the reminder. */
   created_event?: string | null;
+  /** OCR-suggested expiry date — user must confirm before saving. */
+  suggested_expiry?: string | null;
 }
 
 interface Props {
@@ -77,13 +79,14 @@ const ExpiryConfirmDialog = ({ doc, open, onOpenChange }: Props) => {
   // Reset state every time we open for a new document.
   useEffect(() => {
     if (!open || !doc) return;
-    setExpiresOn(doc.expires_at ?? '');
+    // Prefer the user-entered expiry; fall back to OCR suggestion if available
+    setExpiresOn(doc.expires_at ?? doc.suggested_expiry ?? '');
     setLeadTime('30');
     setCustomRemindOn('');
     setTrade(doc.doc_type ?? '');
     setRecurring('annually');
     setTitle(`Renew: ${doc.name}`);
-  }, [open, doc?.id, doc?.expires_at, doc?.doc_type, doc?.name]);
+  }, [open, doc?.id, doc?.expires_at, doc?.suggested_expiry, doc?.doc_type, doc?.name]);
 
   // Lead time in days. For 'custom' we derive it from the picked date.
   const remindDaysBefore = useMemo<number>(() => {
@@ -173,6 +176,12 @@ const ExpiryConfirmDialog = ({ doc, open, onOpenChange }: Props) => {
               value={expiresOn}
               onChange={e => setExpiresOn(e.target.value)}
             />
+            {doc.suggested_expiry && !doc.expires_at && (
+              <p className="text-xs text-amber-700 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                Date extracted from document — please confirm before saving.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

@@ -42,6 +42,7 @@ import Quote from '@/components/topbar/Quote';
 import { toast } from '@/lib/toast';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { categoryConfig } from '@/lib/jobCategories';
+import { TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { cn } from '@/lib/utils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -193,7 +194,14 @@ interface EditJobModalProps {
   onDeleted: () => void;
 }
 
-const TRADES = ['Plumbing', 'Gas Engineer', 'Roofing', 'Electrical'];
+const TRADE_LABELS = TRADE_OPTIONS.map(t => t.label);
+
+const URGENCY_BADGE: Record<string, { label: string; color: string }> = {
+  emergency: { label: 'Emergency',  color: 'bg-red-100 text-red-700 border-red-200' },
+  urgent:    { label: 'Urgent',     color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  normal:    { label: 'This Month', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  flexible:  { label: 'Flexible',   color: 'bg-gray-100 text-gray-600 border-gray-200' },
+};
 
 const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) => {
   const queryClient = useQueryClient();
@@ -276,9 +284,9 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
     setPropertyId(job.property ?? '');
     setTitle(job.name ?? '');
     setDescription(job.description ?? '');
-    // service is stored capitalized (e.g. "Plumbing")
-    const svc = job.service ? job.service.charAt(0).toUpperCase() + job.service.slice(1).toLowerCase() : 'Plumbing';
-    setService(TRADES.includes(svc) ? svc : 'Plumbing');
+    // service is stored as a label (e.g. "Gas Engineer")
+    const svc = job.service ?? 'Plumbing';
+    setService(TRADE_LABELS.includes(svc) ? svc : 'Plumbing');
     setCategory(job.category ?? '');
     setUrgency(job.urgency ?? 'normal');
     setPriority(job.priority ?? 'medium');
@@ -498,7 +506,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                     disabled={locked}
                     className={selectCls(locked)}
                   >
-                    {TRADES.map(t => (
+                    {TRADE_LABELS.map(t => (
                       <option key={t} value={t}>
                         {t}
                       </option>
@@ -1302,6 +1310,22 @@ const JobLeads = () => {
     setRateBidTarget(null);
   };
 
+  // Auto-open rating modal when a job transitions to completed and has an unrated accepted bid
+  const autoRatedRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!leads.length) return;
+    const candidate = leads.find(job =>
+      job.status === 'completed' &&
+      job.approved_bid &&
+      !job.approved_bid.rating &&
+      !autoRatedRef.current.has(job.id),
+    );
+    if (candidate && candidate.approved_bid) {
+      autoRatedRef.current.add(candidate.id);
+      setRateBidTarget({ job: candidate, bid: candidate.approved_bid });
+    }
+  }, [leads]);
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -1379,7 +1403,7 @@ const JobLeads = () => {
           {/* Jobs list */}
           <div className="lg:col-span-3">
             <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-1">
                 <h2 className="text-[#1A1A1A] text-lg font-semibold">Your Jobs</h2>
                 <button
                   onClick={() => setFilterOpen(v => !v)}
@@ -1398,6 +1422,9 @@ const JobLeads = () => {
                   )}
                 </button>
               </div>
+              <p className="text-xs text-[#8B8B8B] mb-4">
+                Trades searching within ~25 miles of your property postcode
+              </p>
 
               {filterOpen && (
                 <div className="mb-4 p-4 bg-[#F5F5F0] rounded-[12px] border border-[#E8E8E3]">
@@ -1508,6 +1535,12 @@ const JobLeads = () => {
                                       : { cls: 'bg-gray-50 text-gray-600', label: 'Awaiting quotes' };
                           return <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${cfg.cls}`}>{cfg.label}</span>;
                         })()}
+
+                        {job.urgency && URGENCY_BADGE[job.urgency] && (
+                          <span className={`px-2.5 py-1 text-xs font-medium rounded-full border ${URGENCY_BADGE[job.urgency].color}`}>
+                            {URGENCY_BADGE[job.urgency].label}
+                          </span>
+                        )}
 
                         {job.status === 'completed' &&
                           job.bids.some(b => b.status === 'accepted') &&

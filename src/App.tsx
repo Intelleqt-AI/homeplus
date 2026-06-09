@@ -27,6 +27,7 @@ import Calendar from './pages/homeplus/Calendar';
 import Settings from './pages/homeplus/Settings';
 import HowItWorks from './pages/homeplus/HowItWorks';
 import NotificationsPage from './pages/homeplus/Notifications';
+import EnergyEPC from './pages/homeplus/EnergyEPC';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 
@@ -138,6 +139,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <HowItWorks />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/energy"
+              element={
+                <ProtectedRoute>
+                  <EnergyEPC />
                 </ProtectedRoute>
               }
             />

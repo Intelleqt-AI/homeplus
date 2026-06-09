@@ -505,9 +505,9 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                       <Select
                         onValueChange={v => {
                           field.onChange(v);
-                          // Reset subcategory whenever the parent trade changes
-                          // so an invalid pair can't be submitted.
                           setValue('tradeCategory', '');
+                          // Any task with a trade selected should show Get Quotes
+                          if (v) setValue('requiresTrade', true);
                         }}
                         value={field.value ?? ''}
                       >

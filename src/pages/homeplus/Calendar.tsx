@@ -1,4 +1,20 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
+
+const SEASONAL_TIPS: Record<number, string[]> = {
+  0:  ['Lag outdoor pipes to prevent freezing', 'Check boiler pressure and bleed radiators'],
+  1:  ['Check roof for winter damage after storms', 'Boiler service due — book before spring demand peaks'],
+  2:  ['External paintwork check — good weather coming', 'Service boiler before you stop needing heating'],
+  3:  ['Clear gutters of winter debris', 'Check window seals and draught-proofing'],
+  4:  ['Check outdoor taps and irrigation systems', 'Inspect eaves and roof for pest entry points'],
+  5:  ['Check loft ventilation before summer heat builds', 'Test smoke and CO alarms'],
+  6:  ['Water garden during heat — check for hose bans', 'Check if flat roof needs resealing'],
+  7:  ['Review home insurance renewal if due', 'Book boiler service now before October rush'],
+  8:  ['Service boiler before heating season', 'Check chimney if you have a fireplace'],
+  9:  ['Clean gutters — autumn leaves block drainage', 'Lag exposed pipes before first frost', 'Bleed radiators for efficient heating'],
+  10: ['Draught-proof doors and windows', 'Check boiler pressure and top up if low'],
+  11: ['Test smoke and CO alarms before Christmas gatherings', 'Check boiler has enough pressure for the holiday period'],
+};
 import {
   ChevronLeft,
   ChevronRight,
@@ -19,10 +35,11 @@ import {
   Flame,
   ClipboardList,
   Bell,
+  Settings,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddEvent from "@/components/event/AddEvent";
 import EventDetailDialog, { type CalendarEventDetail } from "@/components/event/EventDetailDialog";
@@ -36,7 +53,7 @@ import { toast } from "sonner";
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"month" | "week" | "list" | "board">(
+  const [viewMode, setViewMode] = useState<"month" | "list">(
     "month"
   );
   type FilterType =
@@ -312,7 +329,7 @@ const Calendar = () => {
         return (
           <>
             <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
-            Confirmed
+            Done
           </>
         );
       case "action_required":
@@ -382,22 +399,6 @@ const Calendar = () => {
   };
 
   const getStatusBorder = (status: string) => {
-    switch (status) {
-      case "overdue":
-        return "bg-red-50 border border-red-200";
-      case "due_this_week":
-      case "action_required":
-        return "bg-yellow-50 border border-yellow-200";
-      case "confirmed":
-        return "bg-green-50 border border-green-200";
-      case "completed":
-        return "bg-gray-50 border border-gray-200";
-      default:
-        return "bg-white border border-gray-200";
-    }
-  };
-
-  const getBoardStatusBorder = (status: string) => {
     switch (status) {
       case "overdue":
         return "bg-red-50 border border-red-200";
@@ -564,18 +565,18 @@ const Calendar = () => {
 
             <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Confirmed</span>
+                <span className="text-[#6B6B6B] text-sm">Done</span>
                 <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                   <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#10B981] text-2xl font-semibold">{filteredEvents.filter(e => e.status === 'confirmed').length}</p>
-              <p className="text-[#8B8B8B] text-xs mt-1">Tasks confirmed</p>
+              <p className="text-[#10B981] text-2xl font-semibold">{filteredEvents.filter(e => e.status === 'completed').length}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">Completed</p>
             </div>
 
             <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Action Required</span>
+                <span className="text-[#6B6B6B] text-sm">Needs attention</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF2F2] flex items-center justify-center">
                   <AlertTriangle className="w-4 h-4 text-[#DC2626]" strokeWidth={1.5} />
                 </div>
@@ -586,6 +587,32 @@ const Calendar = () => {
           </div>
         </div>
 
+        {/* Manage templates shortcut */}
+        <div className="flex justify-end">
+          <Link to="/dashboard/settings?tab=tasks">
+            <Button variant="outline" size="sm" className="flex items-center gap-2 text-[#4A4A4A] border-[#E8E8E3] hover:border-[#1A1A1A]">
+              <Settings className="w-4 h-4" />
+              Manage task templates
+            </Button>
+          </Link>
+        </div>
+
+        {/* Seasonal nudges */}
+        {(SEASONAL_TIPS[currentDate.getMonth()] ?? []).length > 0 && (
+          <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[20px] p-5">
+            <p className="text-sm font-semibold text-[#1A1A1A] mb-3">
+              Seasonal tips for {currentDate.toLocaleString('default', { month: 'long' })}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(SEASONAL_TIPS[currentDate.getMonth()] ?? []).map((tip, i) => (
+                <div key={i} className="bg-white border border-[#FDE68A] rounded-full px-3 py-1.5 text-xs text-[#1A1A1A]">
+                  {tip}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* View Mode & Filters */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
           <div className="flex items-center justify-between">
@@ -594,11 +621,10 @@ const Calendar = () => {
               {[
                 { value: "month", label: "Calendar" },
                 { value: "list", label: "List" },
-                { value: "board", label: "Board" },
               ].map((mode) => (
                 <button
                   key={mode.value}
-                  onClick={() => setViewMode(mode.value as "month" | "list" | "board")}
+                  onClick={() => setViewMode(mode.value as "month" | "list")}
                   className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-all duration-200 ${
                     viewMode === mode.value
                       ? 'bg-[#1A1A1A] text-white'
@@ -841,186 +867,7 @@ const Calendar = () => {
                   ))}
                 </div>
               </div>
-            ) : (
-              <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-                <h2 className="text-[#1A1A1A] text-lg font-semibold mb-6">Board View</h2>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    {/* Overdue Column */}
-                    <Card className="bg-white border border-gray-200">
-                      <CardHeader className="pb-3 border-b border-gray-100">
-                        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-red-600" />{" "}
-                          Overdue ({overdueEvents.length})
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {overdueEvents.map((event) => (
-                          <Card
-                            key={event.id}
-                            onClick={() => openDetail(event as unknown as CalendarEventDetail)}
-                            className={`${getBoardStatusBorder(
-                              event.status
-                            )} shadow-sm cursor-pointer hover:shadow transition-shadow`}>
-                            <CardContent className="p-3">
-                              <h4 className="text-sm font-medium mb-1">
-                                {event.title}
-                              </h4>
-                              {event.time && (
-                                <p className="text-xs text-gray-600 mb-2">{event.time}</p>
-                              )}
-                              <div className="text-xs text-red-600 mb-3 flex items-center">
-                                {getStatusIcon(event.status)}
-                              </div>
-                              {event.tradeConfirmed && (
-                                <Button
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openQuoteFor(event);
-                                  }}
-                                  className="w-full text-xs px-2 py-1.5 h-7 bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B]">
-                                  Get Quotes
-                                </Button>
-                              )}
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    {/* Due This Week Column */}
-                    <Card className="bg-white border border-gray-200">
-                      <CardHeader className="pb-3 border-b border-gray-100">
-                        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <Clock className="w-5 h-5 text-orange-600" /> This
-                          Week ({thisWeekEvents.length})
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {thisWeekEvents.map((event) => (
-                          <Card
-                            key={event.id}
-                            onClick={() => openDetail(event as unknown as CalendarEventDetail)}
-                            className={`${getBoardStatusBorder(
-                              event.status
-                            )} shadow-sm cursor-pointer hover:shadow transition-shadow`}>
-                            <CardContent className="p-3">
-                              <h4 className="text-sm font-medium mb-1">
-                                {event.title}
-                              </h4>
-                              {event.time && (
-                                <p className="text-xs text-gray-600 mb-2">{event.time}</p>
-                              )}
-                              <div className="text-xs text-yellow-600 mb-3 flex items-center">
-                                {getStatusIcon(event.status)}
-                              </div>
-                              {event.tradeConfirmed && (
-                                <Button
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openQuoteFor(event);
-                                  }}
-                                  className="w-full text-xs px-2 py-1.5 h-7 bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B]">
-                                  Get Quotes
-                                </Button>
-                              )}
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    {/* Confirmed Column */}
-                    <Card className="bg-white border border-gray-200">
-                      <CardHeader className="pb-3 border-b border-gray-100">
-                        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-green-600" />{" "}
-                          Confirmed (
-                          {
-                            filteredEvents.filter(
-                              (e) => e.status === "confirmed"
-                            ).length
-                          }
-                          )
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {filteredEvents
-                          .filter((e) => e.status === "confirmed")
-                          .map((event) => (
-                            <Card
-                              key={event.id}
-                              onClick={() => openDetail(event as unknown as CalendarEventDetail)}
-                              className={`${getBoardStatusBorder(
-                                event.status
-                              )} shadow-sm cursor-pointer hover:shadow transition-shadow`}>
-                              <CardContent className="p-3">
-                                <h4 className="text-sm font-medium mb-1">
-                                  {event.title}
-                                </h4>
-                                {event.time && (
-                                  <p className="text-xs text-gray-600 mb-2">{event.time}</p>
-                                )}
-                                <div className="text-xs text-green-600 mb-3 flex items-center">
-                                  <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
-                                  {event.contractor}
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="w-full text-xs px-2 py-1.5 h-7">
-                                  Reschedule
-                                </Button>
-                              </CardContent>
-                            </Card>
-                          ))}
-                      </CardContent>
-                    </Card>
-
-                    {/* Completed Column */}
-                    <Card className="bg-white border border-gray-200">
-                      <CardHeader className="pb-3 border-b border-gray-100">
-                        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-gray-600" />{" "}
-                          Completed (
-                          {
-                            filteredEvents.filter(
-                              (e) => e.status === "completed"
-                            ).length
-                          }
-                          )
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {filteredEvents
-                          .filter((e) => e.status === "completed")
-                          .map((event) => (
-                            <Card
-                              key={event.id}
-                              onClick={() => openDetail(event as unknown as CalendarEventDetail)}
-                              className={`${getBoardStatusBorder(
-                                event.status
-                              )} shadow-sm opacity-75 cursor-pointer hover:opacity-90 transition-opacity`}>
-                              <CardContent className="p-3">
-                                <h4 className="text-sm font-medium text-gray-600 mb-1">
-                                  {event.title}
-                                </h4>
-                                {event.time && (
-                                  <p className="text-xs text-gray-500 mb-2">{event.time}</p>
-                                )}
-                                <div className="text-xs text-gray-500 flex items-center">
-                                  <CheckCircle className="w-3 h-3 text-gray-600 mr-1" />
-                                  Completed
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                      </CardContent>
-                    </Card>
-                  </div>
-              </div>
-            )}
+            ) : null}
           </div>
 
           {/* Right Sidebar - Upcoming Tasks and Reminders */}
