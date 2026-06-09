@@ -89,6 +89,52 @@ export const completeEvent = async (eventId: string) => {
   return { data: res?.data ? normEvent(res.data) : null };
 };
 
+/** Snooze an event by pushing its date forward by 1, 7, or 14 days. */
+export const snoozeEvent = async (eventId: string, days: 1 | 7 | 14) => {
+  const { data: res } = await apiClient.post(`/api/v1/events/${eventId}/snooze/`, { days });
+  return { data: res?.data ? normEvent(res.data) : null };
+};
+
+export const exportDocumentPack = async (documentIds: string[]): Promise<void> => {
+  const response = await apiClient.post(
+    '/api/v1/documents/export-pack/',
+    { document_ids: documentIds },
+    { responseType: 'blob' },
+  );
+  const url = URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'homeplus-home-pack.zip';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
+// ─── MOT Templates & Tasks ───────────────────────────────────────────────────
+
+export const getMotTemplates = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/templates/');
+  return (res.data ?? res) as any[];
+};
+
+export const getMotTasks = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/tasks/');
+  return (res.data ?? res) as any[];
+};
+
+export const enableMotTemplate = async (templateId: string, lastCompletedDate: string) => {
+  const { data: res } = await apiClient.post('/api/v1/mot/tasks/', {
+    templateId,
+    lastCompletedDate,
+  });
+  return res.data ?? res;
+};
+
+export const disableMotTemplate = async (templateId: string) => {
+  await apiClient.delete(`/api/v1/mot/tasks/${templateId}/`);
+};
+
 // ─── Properties ──────────────────────────────────────────────────────────────
 
 /**

@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, getDay } from 'date-fns';
+import { useRef, useState, useEffect } from 'react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, getDay, addMonths, subMonths } from 'date-fns';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
@@ -143,11 +143,8 @@ const HomePlusDashboard = () => {
     }
   };
 
-  // Calendar setup
-  const currentDate = new Date();
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  // Calendar setup — default to current month, but auto-advance if it has no events
+  const [calendarMonth, setCalendarMonth] = useState<Date>(startOfMonth(new Date()));
 
   // Sample calendar events with colors matching the legend
   // Map remote event data into UI shape for dashboard use
@@ -186,7 +183,7 @@ const HomePlusDashboard = () => {
     rows.map(r => ({
       id: r.id as string,
       title: r.title || 'Untitled',
-      date: r.date ? new Date(r.date) : null,
+      date: r.date ? new Date(r.date.split('T')[0] + 'T00:00:00') : null,
       time: r.time || '',
       type: r.eventType || r.type || 'maintenance',
       priority: r.priority || 'medium',
@@ -201,6 +198,23 @@ const HomePlusDashboard = () => {
   // schedule grid + stat tiles pick them up here — no separate client merge.
   const dashEvents: DashEvent[] =
     Array.isArray(rawEvents) && rawEvents.length > 0 ? mapToDashEvents(rawEvents) : [];
+
+  // Auto-advance calendar to the first month that has events (up to 12 months ahead)
+  useEffect(() => {
+    if (!dashEvents.length) return;
+    const today = startOfMonth(new Date());
+    const hasEventsInMonth = (m: Date) =>
+      dashEvents.some(ev => ev.date && startOfMonth(ev.date).getTime() === m.getTime());
+    if (hasEventsInMonth(today)) return;
+    for (let i = 1; i <= 12; i++) {
+      const next = addMonths(today, i);
+      if (hasEventsInMonth(next)) { setCalendarMonth(next); break; }
+    }
+  }, [dashEvents.length]);
+
+  const monthStart = startOfMonth(calendarMonth);
+  const monthEnd = endOfMonth(calendarMonth);
+  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   // Calculate event counts for the next 30 days + the longer 6-week horizon.
   const now = new Date();
@@ -464,14 +478,14 @@ const HomePlusDashboard = () => {
                 </div>
               </div>
 
-              {/* Quick Actions - Cleaner button style */}
+              {/* Quick Actions */}
               <div className="flex items-center gap-3">
-                <Link to="/dashboard/calendar">
+                <Link to="/dashboard/job-leads">
                   <Button
                     variant="outline"
                     className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white transition-all text-sm font-medium h-10 px-4 rounded-full"
                   >
-                    Get started
+                    Find a Trade
                   </Button>
                 </Link>
               </div>
@@ -697,8 +711,22 @@ const HomePlusDashboard = () => {
 
               <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] p-6">
                 {/* Month Header */}
-                <div className="flex items-center justify-center mb-5">
-                  <h3 className="text-[18px] font-semibold text-[#1F2937]">{format(currentDate, 'MMMM yyyy')}</h3>
+                <div className="flex items-center justify-between mb-5">
+                  <button
+                    onClick={() => setCalendarMonth(m => subMonths(m, 1))}
+                    className="p-1.5 rounded-full hover:bg-[#F5F5F0] text-[#6B6B6B]"
+                    aria-label="Previous month"
+                  >
+                    &#8249;
+                  </button>
+                  <h3 className="text-[18px] font-semibold text-[#1F2937]">{format(calendarMonth, 'MMMM yyyy')}</h3>
+                  <button
+                    onClick={() => setCalendarMonth(m => addMonths(m, 1))}
+                    className="p-1.5 rounded-full hover:bg-[#F5F5F0] text-[#6B6B6B]"
+                    aria-label="Next month"
+                  >
+                    &#8250;
+                  </button>
                 </div>
 
                 {/* Calendar Grid */}
@@ -839,68 +867,124 @@ const HomePlusDashboard = () => {
             </div>
           </div>
 
-          {/* Recent Activity Feed - Per Spec (max 3 items) */}
-          <div className="bg-white rounded-[20px] p-6 border border-[#E8E8E3]">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
-                  <Activity className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
-                </div>
-                <div>
-                  <h3 className="text-[#1A1A1A] text-lg font-semibold">Recent Activity</h3>
-                  <p className="text-[#6B6B6B] text-sm">Your latest home updates</p>
-                </div>
-              </div>
-            </div>
+          {/* Prescriptive Feed — "What needs doing" — top 3 live actions */}
+          {(() => {
+            const summary = docSummaryResp?.data;
+            const totalDocs = summary?.total ?? 0;
+            const expiringDocCount = summary?.expiring ?? 0;
 
-            {/* Activity List - Max 3 items per spec */}
-            <div className="grid grid-cols-3 gap-4">
-              {/* Sample activity items - would come from API in production */}
-              <div className="bg-[#F5F5F0] rounded-[16px] p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center">
-                    <FileText className="w-4 h-4 text-[#1A1A1A]" strokeWidth={1.5} />
+            // Build feed items from real data, ordered by urgency
+            type FeedItem = { id: string; text: string; subtext: string; action: string; href?: string; priority: number };
+            const items: FeedItem[] = [];
+
+            // P1: Overdue events
+            dashEvents
+              .filter(e => e.date && e.date < now && e.status !== 'completed')
+              .slice(0, 2)
+              .forEach(e => {
+                items.push({
+                  id: `overdue-${e.id}`,
+                  text: `Overdue: ${e.title}`,
+                  subtext: `Was due ${e.date?.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`,
+                  action: 'View task',
+                  href: '/dashboard/calendar',
+                  priority: 1,
+                });
+              });
+
+            // P2: Expiring documents
+            if (expiringDocCount > 0) {
+              items.push({
+                id: 'expiring-docs',
+                text: `${expiringDocCount} document${expiringDocCount > 1 ? 's' : ''} expiring soon`,
+                subtext: 'Review and renew before they expire',
+                action: 'View documents',
+                href: '/dashboard/documents',
+                priority: 2,
+              });
+            }
+
+            // P3: No EPC band set
+            if (homeMotScore < 40 && totalDocs === 0) {
+              items.push({
+                id: 'epc-missing',
+                text: 'Add your EPC band to improve your MOT score',
+                subtext: 'Takes 30 seconds — we can look it up from your postcode',
+                action: 'Add EPC',
+                href: '/dashboard/energy',
+                priority: 3,
+              });
+            }
+
+            // P4: No documents at all
+            if (totalDocs === 0) {
+              items.push({
+                id: 'no-docs',
+                text: 'Upload your first document — start with your boiler manual',
+                subtext: 'Helps us personalise your maintenance reminders',
+                action: 'Upload document',
+                href: '/dashboard/documents',
+                priority: 4,
+              });
+            }
+
+            // P5: Events this week
+            eventsNext30DaysList
+              .slice(0, 2)
+              .forEach(e => {
+                if (items.some(i => i.id === `overdue-${e.id}`)) return;
+                items.push({
+                  id: `upcoming-${e.id}`,
+                  text: e.title,
+                  subtext: `Due ${e.date?.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+                  action: 'View',
+                  href: '/dashboard/calendar',
+                  priority: 5,
+                });
+              });
+
+            const topItems = items.sort((a, b) => a.priority - b.priority).slice(0, 3);
+
+            return (
+              <div className="bg-white rounded-[20px] p-6 border border-[#E8E8E3]">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                      <Activity className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+                    </div>
+                    <div>
+                      <h3 className="text-[#1A1A1A] text-lg font-semibold">What needs doing</h3>
+                      <p className="text-[#6B6B6B] text-sm">Your top 3 actions right now</p>
+                    </div>
                   </div>
-                  <span className="text-[#8B8B8B] text-xs">2 hours ago</span>
                 </div>
-                <p className="text-[#1A1A1A] text-sm font-medium">Document uploaded</p>
-                <p className="text-[#6B6B6B] text-xs mt-1">Boiler service certificate added</p>
-              </div>
 
-              <div className="bg-[#F5F5F0] rounded-[16px] p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center">
-                    <CheckCircle className="w-4 h-4 text-[#1A1A1A]" strokeWidth={1.5} />
+                {topItems.length === 0 ? (
+                  <div className="text-center py-6">
+                    <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" strokeWidth={1.5} />
+                    <p className="text-[#1A1A1A] text-sm font-medium">All caught up!</p>
+                    <p className="text-[#6B6B6B] text-xs mt-1">No urgent actions needed right now</p>
                   </div>
-                  <span className="text-[#8B8B8B] text-xs">Yesterday</span>
-                </div>
-                <p className="text-[#1A1A1A] text-sm font-medium">Task completed</p>
-                <p className="text-[#6B6B6B] text-xs mt-1">Smoke alarm test marked done</p>
-              </div>
-
-              <div className="bg-[#F5F5F0] rounded-[16px] p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center">
-                    <Bell className="w-4 h-4 text-[#1A1A1A]" strokeWidth={1.5} />
+                ) : (
+                  <div className="space-y-3">
+                    {topItems.map(item => (
+                      <div key={item.id} className="flex items-center justify-between bg-[#F5F5F0] rounded-[16px] px-4 py-3.5">
+                        <div>
+                          <p className="text-[#1A1A1A] text-sm font-medium">{item.text}</p>
+                          <p className="text-[#6B6B6B] text-xs mt-0.5">{item.subtext}</p>
+                        </div>
+                        <Link to={item.href ?? '#'}>
+                          <Button size="sm" variant="outline" className="shrink-0 ml-3 text-xs h-8 px-3 rounded-full">
+                            {item.action}
+                          </Button>
+                        </Link>
+                      </div>
+                    ))}
                   </div>
-                  <span className="text-[#8B8B8B] text-xs">3 days ago</span>
-                </div>
-                <p className="text-[#1A1A1A] text-sm font-medium">Reminder set</p>
-                <p className="text-[#6B6B6B] text-xs mt-1">Gutter cleaning scheduled</p>
+                )}
               </div>
-            </div>
-
-            {/* Empty state for activity */}
-            {false && (
-              <div className="text-center py-6">
-                <div className="h-10 w-10 rounded-full bg-[#FEF9E7] flex items-center justify-center mx-auto mb-3">
-                  <Activity className="w-4 h-4 text-[#FBBF24]" />
-                </div>
-                <p className="text-[#1A1A1A] text-sm font-medium">No recent activity</p>
-                <p className="text-[#6B6B6B] text-xs mt-1">Start by uploading a document or setting a reminder</p>
-              </div>
-            )}
-          </div>
+            );
+          })()}
         </main>
       </div>
 

@@ -1043,4 +1043,252 @@ export const categoryConfig: CategoryConfig[] = [
       },
     ],
   },
+  // ─── Builder ───────────────────────────────────────────────────────────────
+  {
+    category: 'General Building',
+    category_description: 'Extensions, conversions, structural work, brickwork.',
+    trade: 'Builder',
+    questions: [
+      {
+        question_order: 1,
+        question_text: 'What type of building work is needed?',
+        question_type: 'multiple_choice',
+        options: ['Extension', 'Loft conversion', 'Structural repair', 'Brickwork / pointing', 'Garage conversion', 'Other'],
+        required: true,
+        output_key: 'builder_q1',
+      },
+      {
+        question_order: 2,
+        question_text: 'Approximate scale of the work?',
+        question_type: 'multiple_choice',
+        options: ['Small (under £5k)', 'Medium (£5k–£20k)', 'Large (over £20k)', 'Not sure'],
+        required: true,
+        output_key: 'builder_q2',
+      },
+      {
+        question_order: 3,
+        question_text: 'Add a short description of the job.',
+        question_type: 'text',
+        required: false,
+        output_key: 'description',
+      },
+    ],
+  },
+  // ─── Decorator / Painter ───────────────────────────────────────────────────
+  {
+    category: 'Interior Decorating',
+    category_description: 'Interior and exterior painting, wallpapering.',
+    trade: 'Decorator / Painter',
+    questions: [
+      {
+        question_order: 1,
+        question_text: 'What needs decorating?',
+        question_type: 'multiple_choice',
+        options: ['Interior walls & ceilings', 'Woodwork / skirting / doors', 'Exterior painting', 'Wallpapering', 'Full room(s)', 'Whole property'],
+        required: true,
+        output_key: 'decorator_q1',
+      },
+      {
+        question_order: 2,
+        question_text: 'How many rooms / how much area?',
+        question_type: 'multiple_choice',
+        options: ['1 room', '2–3 rooms', '4+ rooms', 'Whole house'],
+        required: true,
+        output_key: 'decorator_q2',
+      },
+      {
+        question_order: 3,
+        question_text: 'Add a short description (colours, finish, any prep needed).',
+        question_type: 'text',
+        required: false,
+        output_key: 'description',
+      },
+    ],
+  },
+  // ─── Carpenter / Joiner ────────────────────────────────────────────────────
+  {
+    category: 'Carpentry & Joinery',
+    category_description: 'Doors, floors, fitted furniture, staircases.',
+    trade: 'Carpenter / Joiner',
+    questions: [
+      {
+        question_order: 1,
+        question_text: 'What carpentry work is needed?',
+        question_type: 'multiple_choice',
+        options: ['Door fitting / repair', 'Floor fitting / repair', 'Fitted wardrobe / storage', 'Staircase repair', 'Window frames', 'Decking / garden'],
+        required: true,
+        output_key: 'carpenter_q1',
+      },
+      {
+        question_order: 2,
+        question_text: 'Are materials being supplied by you or the tradesperson?',
+        question_type: 'multiple_choice',
+        options: ['Trade to supply', 'I will supply', 'Not sure yet'],
+        required: false,
+        output_key: 'carpenter_q2',
+      },
+      {
+        question_order: 3,
+        question_text: 'Add a short description of the job.',
+        question_type: 'text',
+        required: false,
+        output_key: 'description',
+      },
+    ],
+  },
+  // ─── Kitchen Installer ─────────────────────────────────────────────────────
+  {
+    category: 'Kitchen Installation',
+    category_description: 'New kitchens, refits, worktops, appliances.',
+    trade: 'Kitchen Installer',
+    questions: [
+      {
+        question_order: 1,
+        question_text: 'What kitchen work is required?',
+        question_type: 'multiple_choice',
+        options: ['Full new kitchen', 'Replace doors / worktops only', 'Refit existing units', 'Appliance installation', 'Splashback / tiling'],
+        required: true,
+        output_key: 'kitchen_q1',
+      },
+      {
+        question_order: 2,
+        question_text: 'Is the kitchen already purchased?',
+        question_type: 'multiple_choice',
+        options: ['Yes — supply and fit', 'No — fit only', 'Not yet decided'],
+        required: true,
+        output_key: 'kitchen_q2',
+      },
+      {
+        question_order: 3,
+        question_text: 'Add a short description.',
+        question_type: 'text',
+        required: false,
+        output_key: 'description',
+      },
+    ],
+  },
+  // ─── Bathroom Fitter ───────────────────────────────────────────────────────
+  {
+    category: 'Bathroom Fitting',
+    category_description: 'New bathrooms, showers, tiling, wetrooms.',
+    trade: 'Bathroom Fitter',
+    questions: [
+      {
+        question_order: 1,
+        question_text: 'What bathroom work is needed?',
+        question_type: 'multiple_choice',
+        options: ['Full bathroom refit', 'Shower installation', 'Bath replacement', 'Tiling only', 'Wetroom conversion', 'En-suite addition'],
+        required: true,
+        output_key: 'bathroom_q1',
+      },
+      {
+        question_order: 2,
+        question_text: 'Is the bathroom suite already purchased?',
+        question_type: 'multiple_choice',
+        options: ['Yes — supply and fit', 'No — fit only', 'Not yet decided'],
+        required: true,
+        output_key: 'bathroom_q2',
+      },
+      {
+        question_order: 3,
+        question_text: 'Add a short description.',
+        question_type: 'text',
+        required: false,
+        output_key: 'description',
+      },
+    ],
+  },
+  // ─── Plasterer ─────────────────────────────────────────────────────────────
+  {
+    category: 'Plastering',
+    category_description: 'Skimming, rendering, coving, dry lining.',
+    trade: 'Plasterer',
+    questions: [
+      {
+        question_order: 1,
+        question_text: 'What plastering work is required?',
+        question_type: 'multiple_choice',
+        options: ['Skim coat (walls/ceilings)', 'Full re-plaster', 'Patch repair', 'External render', 'Coving / cornices', 'Dry lining / stud walls'],
+        required: true,
+        output_key: 'plasterer_q1',
+      },
+      {
+        question_order: 2,
+        question_text: 'How many rooms / how much area?',
+        question_type: 'multiple_choice',
+        options: ['1 room', '2–3 rooms', '4+ rooms', 'Whole house'],
+        required: true,
+        output_key: 'plasterer_q2',
+      },
+      {
+        question_order: 3,
+        question_text: 'Add a short description.',
+        question_type: 'text',
+        required: false,
+        output_key: 'description',
+      },
+    ],
+  },
+  // ─── Locksmith ─────────────────────────────────────────────────────────────
+  {
+    category: 'Locksmith Services',
+    category_description: 'Lock changes, break-ins, security upgrades.',
+    trade: 'Locksmith',
+    questions: [
+      {
+        question_order: 1,
+        question_text: 'What locksmith service do you need?',
+        question_type: 'multiple_choice',
+        options: ['Locked out / emergency', 'Lock change / upgrade', 'Break-in repair', 'Key cutting / spare key', 'Multi-point lock repair'],
+        required: true,
+        output_key: 'locksmith_q1',
+      },
+      {
+        question_order: 2,
+        question_text: 'Is this urgent?',
+        question_type: 'multiple_choice',
+        options: ['Emergency — now', 'Today', 'This week', 'Flexible'],
+        required: true,
+        output_key: 'locksmith_q2',
+      },
+      {
+        question_order: 3,
+        question_text: 'Add a short description.',
+        question_type: 'text',
+        required: false,
+        output_key: 'description',
+      },
+    ],
+  },
+  // ─── Groundworks / Drainage ────────────────────────────────────────────────
+  {
+    category: 'Groundworks & Drainage',
+    category_description: 'Drains, driveways, patios, foundations.',
+    trade: 'Groundworks / Drainage',
+    questions: [
+      {
+        question_order: 1,
+        question_text: 'What groundwork is needed?',
+        question_type: 'multiple_choice',
+        options: ['Drain clearance / repair', 'New drainage installation', 'Driveway / paving', 'Patio / decking', 'Foundations / underpinning', 'Soakaway / SUDS'],
+        required: true,
+        output_key: 'groundworker_q1',
+      },
+      {
+        question_order: 2,
+        question_text: 'Is there a specific problem or is this planned work?',
+        question_type: 'multiple_choice',
+        options: ['Urgent problem', 'Planned improvement', 'Not sure'],
+        required: false,
+        output_key: 'groundworker_q2',
+      },
+      {
+        question_order: 3,
+        question_text: 'Add a short description.',
+        question_type: 'text',
+        required: false,
+        output_key: 'description',
+      },
+    ],
+  },
 ];

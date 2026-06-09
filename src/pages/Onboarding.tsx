@@ -93,6 +93,21 @@ function StepPhone({
   );
 }
 
+const HEATING_TYPES = [
+  { value: 'gas_combi', label: 'Gas Combi Boiler' },
+  { value: 'gas_system', label: 'Gas System Boiler' },
+  { value: 'electric', label: 'Electric Heating' },
+  { value: 'oil', label: 'Oil Boiler' },
+  { value: 'heat_pump', label: 'Heat Pump' },
+  { value: 'other', label: 'Other / Not sure' },
+];
+
+const TENURE_TYPES = [
+  { value: 'freehold', label: 'Freehold' },
+  { value: 'leasehold', label: 'Leasehold' },
+  { value: 'share_of_freehold', label: 'Share of Freehold' },
+];
+
 function StepProperty({
   name, setName,
   address, setAddress,
@@ -100,6 +115,11 @@ function StepProperty({
   location, setLocation,
   propertyType, setPropertyType,
   role, setRole,
+  bedrooms, setBedrooms,
+  bathrooms, setBathrooms,
+  heatingType, setHeatingType,
+  yearBuilt, setYearBuilt,
+  tenure, setTenure,
   coverPreview, onCoverClick,
   error,
 }: {
@@ -109,6 +129,11 @@ function StepProperty({
   location: string; setLocation: (v: string) => void;
   propertyType: string; setPropertyType: (v: string) => void;
   role: string; setRole: (v: string) => void;
+  bedrooms: string; setBedrooms: (v: string) => void;
+  bathrooms: string; setBathrooms: (v: string) => void;
+  heatingType: string; setHeatingType: (v: string) => void;
+  yearBuilt: string; setYearBuilt: (v: string) => void;
+  tenure: string; setTenure: (v: string) => void;
   coverPreview: string | null; onCoverClick: () => void;
   error: string;
 }) {
@@ -259,6 +284,78 @@ function StepProperty({
           ))}
         </div>
       </div>
+
+        {/* Bedrooms & Bathrooms */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Bedrooms</label>
+            <input
+              type="number"
+              min="0"
+              max="20"
+              value={bedrooms}
+              onChange={e => setBedrooms(e.target.value)}
+              placeholder="e.g. 3"
+              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Bathrooms</label>
+            <input
+              type="number"
+              min="0"
+              max="10"
+              value={bathrooms}
+              onChange={e => setBathrooms(e.target.value)}
+              placeholder="e.g. 1"
+              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Heating type */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Heating type</label>
+          <select
+            value={heatingType}
+            onChange={e => setHeatingType(e.target.value)}
+            className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground outline-none transition-colors"
+          >
+            <option value="">Select heating type (optional)</option>
+            {HEATING_TYPES.map(h => (
+              <option key={h.value} value={h.value}>{h.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Year built & Tenure */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Year built <span className="font-normal normal-case text-muted-foreground/60">(optional)</span></label>
+            <input
+              type="number"
+              min="1800"
+              max={new Date().getFullYear()}
+              value={yearBuilt}
+              onChange={e => setYearBuilt(e.target.value)}
+              placeholder="e.g. 1985"
+              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Tenure <span className="font-normal normal-case text-muted-foreground/60">(optional)</span></label>
+            <select
+              value={tenure}
+              onChange={e => setTenure(e.target.value)}
+              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground outline-none transition-colors"
+            >
+              <option value="">Select</option>
+              {TENURE_TYPES.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
     </div>
@@ -414,6 +511,11 @@ const Onboarding = () => {
   const [location, setLocation] = useState('');
   const [propertyType, setPropertyType] = useState('');
   const [role, setRole] = useState('homeowner');
+  const [bedrooms, setBedrooms] = useState('');
+  const [bathrooms, setBathrooms] = useState('');
+  const [heatingType, setHeatingType] = useState('');
+  const [yearBuilt, setYearBuilt] = useState('');
+  const [tenure, setTenure] = useState('');
   const [propertyError, setPropertyError] = useState('');
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
@@ -496,8 +598,11 @@ const Onboarding = () => {
         location:      location.trim() || undefined,
         property_type: propertyType,
         role,
-        bedrooms: 0,
-        bathrooms: 0,
+        bedrooms:  bedrooms  ? parseInt(bedrooms,  10) : 0,
+        bathrooms: bathrooms ? parseInt(bathrooms, 10) : 0,
+        ...(heatingType ? { heating_type: heatingType } : {}),
+        ...(yearBuilt   ? { year_built: parseInt(yearBuilt, 10) } : {}),
+        ...(tenure      ? { tenure } : {}),
       });
       const propertyId = res?.data?.id ?? res?.id;
       if (coverFile && propertyId) {
@@ -506,6 +611,24 @@ const Onboarding = () => {
         await apiClient.post(`/api/v1/properties/${propertyId}/cover-image/`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         }).catch(() => {});
+      }
+      // Auto-pull EPC band from the UK EPC Register (public API, no auth required)
+      if (propertyId && postcode.trim()) {
+        try {
+          const epcRes = await fetch(
+            `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encodeURIComponent(postcode.trim().toUpperCase())}&size=1`,
+            { headers: { Accept: 'application/json' } },
+          );
+          if (epcRes.ok) {
+            const epcData = await epcRes.json();
+            const band = epcData?.rows?.[0]?.['current-energy-rating'];
+            if (band) {
+              await apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {});
+            }
+          }
+        } catch {
+          // Non-critical — user can set EPC band manually in Settings
+        }
       }
     } catch {
       // non-critical, continue anyway
@@ -597,6 +720,11 @@ const Onboarding = () => {
               >
                 <StepProperty
                   name={propertyName} setName={setPropertyName}
+                  bedrooms={bedrooms} setBedrooms={setBedrooms}
+                  bathrooms={bathrooms} setBathrooms={setBathrooms}
+                  heatingType={heatingType} setHeatingType={setHeatingType}
+                  yearBuilt={yearBuilt} setYearBuilt={setYearBuilt}
+                  tenure={tenure} setTenure={setTenure}
                   address={address} setAddress={setAddress}
                   postcode={postcode} setPostcode={setPostcode}
                   location={location} setLocation={setLocation}

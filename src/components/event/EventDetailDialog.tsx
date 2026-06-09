@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { completeEvent, deleteEvent, type DeleteScope } from '@/lib/Api2';
+import { completeEvent, deleteEvent, snoozeEvent, type DeleteScope } from '@/lib/Api2';
 import { toast } from '@/lib/toast';
 import {
   AlertTriangle,
@@ -62,7 +62,19 @@ const statusColor: Record<string, string> = {
   action_required: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   due_this_week: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   confirmed: 'bg-green-50 text-green-700 border-green-200',
+  scheduled: 'bg-green-50 text-green-700 border-green-200',
   completed: 'bg-gray-50 text-gray-700 border-gray-200',
+  pending: 'bg-gray-50 text-gray-600 border-gray-200',
+};
+
+const statusLabel: Record<string, string> = {
+  overdue: 'Overdue',
+  action_required: 'Needs Attention',
+  due_this_week: 'Due This Week',
+  confirmed: 'Scheduled',
+  scheduled: 'Scheduled',
+  completed: 'Done',
+  pending: 'Upcoming',
 };
 
 const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) => {
@@ -99,6 +111,16 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
       onOpenChange(false);
     },
     onError: () => toast.error("Couldn't delete"),
+  });
+
+  const snoozeMut = useMutation({
+    mutationFn: ({ days }: { days: 1 | 7 | 14 }) => snoozeEvent(String(event!.id), days),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['event'] });
+      toast.success('Task snoozed');
+      onOpenChange(false);
+    },
+    onError: () => toast.error('Failed to snooze'),
   });
 
   if (!event) return null;
@@ -143,7 +165,7 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
             ) : (
               <Clock className="w-3 h-3 mr-1" />
             )}
-            {status.replace('_', ' ')}
+            {statusLabel[status] ?? status.replace(/_/g, ' ')}
           </Badge>
           {event.recurring && event.recurring !== 'never' && (
             <Badge variant="outline" className="text-xs">
@@ -244,6 +266,27 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
             <Trash2 className="w-4 h-4 mr-1.5" />
             Delete
           </Button>
+          {canComplete && event.date && (
+            <div className="flex items-center gap-1 w-full pt-1 border-t border-gray-100 mt-1">
+              <span className="text-xs text-gray-500 shrink-0 mr-1">Snooze:</span>
+              {([
+                { days: 1 as const, label: 'Tomorrow' },
+                { days: 7 as const, label: '1 week' },
+                { days: 14 as const, label: '2 weeks' },
+              ] as { days: 1 | 7 | 14; label: string }[]).map(opt => (
+                <Button
+                  key={opt.days}
+                  size="sm"
+                  variant="outline"
+                  disabled={snoozeMut.isPending}
+                  onClick={() => snoozeMut.mutate({ days: opt.days })}
+                  className="h-7 px-2.5 text-xs flex-1"
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
         </>) : (
           /* ── Confirm-delete view ───────────────────────────────────────── */

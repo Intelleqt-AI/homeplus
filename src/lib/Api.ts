@@ -99,6 +99,8 @@ export type NormDoc = {
   property_address: string | null;
   /** Event id auto-created at upload time when expires_at was set. */
   created_event: string | null;
+  /** OCR-suggested expiry date returned by the backend after upload. */
+  suggested_expiry?: string | null;
   _docId: string;
   // Legacy compat — homePack.tsx and HomePlusDashboard.tsx use these
   publicUrl: null;
@@ -125,6 +127,7 @@ const normDoc = (doc: any): NormDoc => ({
   property: doc.property ?? null,
   property_address: doc.property_address ?? null,
   created_event: doc.created_event ?? null,
+  suggested_expiry: doc.suggested_expiry ?? null,
   _docId: doc.id,
   publicUrl: null,
   metadata: {
@@ -215,6 +218,9 @@ export const uploadFileWithMetadata = async ({
     discipline?: string;
     name?: string;
     notes?: string;
+    appliance_model?: string;
+    appliance_serial?: string;
+    last_serviced?: string;
   };
 }): Promise<NormDoc> => {
   const form = new FormData();
@@ -224,6 +230,9 @@ export const uploadFileWithMetadata = async ({
   if (metadata?.category) form.append('category', metadata.category.toLowerCase());
   form.append('discipline', (metadata?.discipline || 'other').toLowerCase());
   if (metadata?.notes?.trim()) form.append('notes', metadata.notes.trim());
+  if (metadata?.appliance_model?.trim()) form.append('appliance_model', metadata.appliance_model.trim());
+  if (metadata?.appliance_serial?.trim()) form.append('appliance_serial', metadata.appliance_serial.trim());
+  if (metadata?.last_serviced?.trim()) form.append('last_serviced', metadata.last_serviced.trim());
   if (metadata?.status) {
     const d = metadata.status instanceof Date ? metadata.status : new Date(metadata.status);
     if (!isNaN(d.getTime())) form.append('expires_at', d.toISOString().split('T')[0]);

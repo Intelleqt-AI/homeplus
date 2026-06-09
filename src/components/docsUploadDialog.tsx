@@ -4,16 +4,14 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { toast } from '@/lib/toast';
-import { CalendarIcon, Upload } from 'lucide-react';
-import { useState } from 'react';
+import { Camera, Upload } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uploadFileWithMetadata } from '@/lib/Api';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
 import ExpiryConfirmDialog from '@/components/docsUploadDialog/ExpiryConfirmDialog';
 
@@ -21,6 +19,8 @@ interface Props {
   openForm: boolean;
   setOpenForm: (v: boolean) => void;
   refetch?: () => void;
+  /** Pre-fill the Discipline field (e.g. pass activeTab or a suggested doc's discipline). */
+  prefillDiscipline?: string;
 }
 
 type UploadedDoc = {
@@ -30,18 +30,25 @@ type UploadedDoc = {
   expires_at?: string | null;
   /** Set when the backend auto-created the reminder on upload. */
   created_event?: string | null;
+  /** OCR-suggested expiry date returned by the backend. */
+  suggested_expiry?: string | null;
 };
 
-const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
+const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }: Props) => {
   const [documentType, setDocumentType] = useState('');
   const [documentTradeCategory, setDocumentTradeCategory] = useState('');
   const [documentDiscipline, setDocumentDiscipline] = useState('other');
   const [documentName, setDocumentName] = useState('');
   const [documentNotes, setDocumentNotes] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [dateOpen, setDateOpen] = useState(false);
+  // Appliance-specific fields (visible when discipline = manuals_appliances)
+  const [applianceModel, setApplianceModel] = useState('');
+  const [applianceSerial, setApplianceSerial] = useState('');
+  const [lastServiced, setLastServiced] = useState('');
+
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
 
   const [reminderDoc, setReminderDoc] = useState<UploadedDoc | null>(null);
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
@@ -51,6 +58,14 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
 
   const tradeCategories = documentType ? tradeCategoriesByType[documentType] ?? [] : [];
 
+  // When the dialog opens, apply prefillDiscipline if provided
+  useEffect(() => {
+    if (openForm && prefillDiscipline) {
+      const valid = DISCIPLINE_OPTIONS.some(d => d.value === prefillDiscipline);
+      setDocumentDiscipline(valid ? prefillDiscipline : 'other');
+    }
+  }, [openForm, prefillDiscipline]);
+
   const reset = () => {
     setDocumentType('');
     setDocumentTradeCategory('');
@@ -58,7 +73,14 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
     setDocumentName('');
     setDocumentNotes('');
     setSelectedFile(null);
-    setSelectedDate(null);
+    setApplianceModel('');
+    setApplianceSerial('');
+    setLastServiced('');
+  };
+
+  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setSelectedFile(file);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -78,21 +100,15 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
     onSuccess: doc => {
       queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/'] });
       queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/expiring/'] });
-      refetch?.();
-      // Hand the user off to the confirm-reminder dialog before closing the
-      // upload modal. If `created_event` is already set, the backend
-      // auto-scheduled the reminder at upload time — the dialog enters
-      // "update" mode so the user can fine-tune lead time / trade without
-      // creating a duplicate. Users can still Skip and keep the defaults.
-      // Also invalidate the events query so the calendar shows the new
-      // reminder immediately.
       queryClient.invalidateQueries({ queryKey: ['event'] });
+      refetch?.();
       setReminderDoc({
         id: doc.id,
         name: doc.name,
         doc_type: doc.doc_type ?? null,
         expires_at: doc.expires_at ?? null,
         created_event: doc.created_event ?? null,
+        suggested_expiry: doc.suggested_expiry ?? null,
       });
       setReminderDialogOpen(true);
       reset();
@@ -109,7 +125,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
       toast.error('Please select a document type.');
       return;
     }
-    if (!documentTradeCategory) {
+    if (!documentTradeCategory && documentType !== 'other') {
       toast.error('Please select a category.');
       return;
     }
@@ -122,8 +138,10 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
           type: documentType,
           category: documentTradeCategory,
           discipline: documentDiscipline,
-          status: selectedDate,
           notes: documentNotes,
+          appliance_model: applianceModel,
+          appliance_serial: applianceSerial,
+          last_serviced: lastServiced,
         },
       }),
       {
@@ -150,20 +168,25 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
           <DialogTitle>Upload Document</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
+
           {/* Drop zone */}
           <div className="space-y-2">
             <Label htmlFor="file-upload">Document File</Label>
             <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCameraCapture} />
+            {isMobile && (
+              <Button type="button" variant="outline" className="w-full mb-2" onClick={() => cameraInputRef.current?.click()}>
+                <Camera className="w-4 h-4 mr-2" />
+                Take Photo
+              </Button>
+            )}
             <label htmlFor="file-upload">
               <div
                 className={cn(
                   'flex items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors',
                   isDragging ? 'border-primary bg-primary/10' : 'border-border hover:bg-secondary',
                 )}
-                onDragOver={e => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
+                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
               >
@@ -174,6 +197,12 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
                 </div>
               </div>
             </label>
+            {!isMobile && (
+              <p className="text-xs text-[#6B6B6B] flex items-center gap-1.5 mt-1">
+                <span role="img" aria-label="mobile phone">📱</span>
+                On your phone? Open Home+ in your mobile browser to scan directly with your camera.
+              </p>
+            )}
           </div>
 
           {/* Name */}
@@ -186,48 +215,6 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
               onChange={e => setDocumentName(e.target.value)}
             />
           </div>
-
-          {/* Type */}
-          <div className="space-y-2">
-            <Label>Document Type</Label>
-            <Select
-              value={documentType}
-              onValueChange={v => {
-                setDocumentType(v);
-                setDocumentTradeCategory('');
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                {TRADE_OPTIONS.map(t => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Category — appears only after Document Type is selected */}
-          {documentType && (
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={documentTradeCategory} onValueChange={setDocumentTradeCategory}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tradeCategories.map(c => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           {/* Discipline */}
           <div className="space-y-2">
@@ -246,31 +233,47 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
             </Select>
           </div>
 
-          {/* Expiry date */}
+          {/* Document Type */}
           <div className="space-y-2">
-            <Label>
-              Expiry Date <span className="text-muted-foreground text-xs">(optional)</span>
-            </Label>
-            <Popover open={dateOpen} onOpenChange={setDateOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn('w-full justify-start font-normal', !selectedDate && 'text-muted-foreground')}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? format(selectedDate, 'PPP') : 'No expiry date'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate ?? undefined}
-                  onSelect={d => {
-                    setSelectedDate(d ?? null);
-                    setDateOpen(false);
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <Label>Document Type</Label>
+            <Select
+              value={documentType || undefined}
+              onValueChange={v => {
+                setDocumentType(v);
+                setDocumentTradeCategory(v === 'other' ? 'other' : '');
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                {TRADE_OPTIONS.map(t => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          {/* Category — appears after Document Type is selected (hidden for Other — auto-set) */}
+          {documentType && documentType !== 'other' && (
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={documentTradeCategory || undefined} onValueChange={setDocumentTradeCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tradeCategories.map(c => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="space-y-2">
@@ -286,6 +289,27 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
             />
           </div>
 
+          {/* Appliance fields — shown when discipline is Manuals & Appliances */}
+          {documentDiscipline === 'manuals_appliances' && (
+            <div className="space-y-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Appliance Details (optional)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="appliance-model" className="text-xs">Model number</Label>
+                  <Input id="appliance-model" placeholder="e.g. EcoTec Plus" value={applianceModel} onChange={e => setApplianceModel(e.target.value)} className="text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="appliance-serial" className="text-xs">Serial number</Label>
+                  <Input id="appliance-serial" placeholder="e.g. GC9000i" value={applianceSerial} onChange={e => setApplianceSerial(e.target.value)} className="text-sm" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="last-serviced" className="text-xs">Last serviced</Label>
+                <Input id="last-serviced" type="date" value={lastServiced} onChange={e => setLastServiced(e.target.value)} className="text-sm" />
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <Button className="flex-1" onClick={handleSubmit} disabled={uploadMutation.isPending}>
               Upload
@@ -294,6 +318,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch }: Props) => {
               Cancel
             </Button>
           </div>
+
         </div>
       </DialogContent>
     </Dialog>

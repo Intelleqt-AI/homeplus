@@ -86,6 +86,10 @@ interface Property {
   cover_image_url: string | null;
   latitude: number | null;
   longitude: number | null;
+  year_built: number | null;
+  epc_band: string;
+  tenure: string;
+  heating_type: string;
 }
 
 export interface PropertyForm {
@@ -99,6 +103,10 @@ export interface PropertyForm {
   bathrooms: string;
   latitude: number | null;
   longitude: number | null;
+  year_built: string;
+  epc_band: string;
+  tenure: string;
+  heating_type: string;
 }
 
 export type FormErrors = Partial<Record<keyof PropertyForm, string>>;
@@ -132,6 +140,10 @@ export const EMPTY_FORM: PropertyForm = {
   bathrooms: '0',
   latitude: null,
   longitude: null,
+  year_built: '',
+  epc_band: '',
+  tenure: '',
+  heating_type: '',
 };
 
 function propertyToForm(p: Property): PropertyForm {
@@ -146,6 +158,10 @@ function propertyToForm(p: Property): PropertyForm {
     bathrooms: String(p.bathrooms ?? 0),
     latitude: p.latitude ?? null,
     longitude: p.longitude ?? null,
+    year_built: p.year_built != null ? String(p.year_built) : '',
+    epc_band: p.epc_band ?? '',
+    tenure: p.tenure ?? '',
+    heating_type: p.heating_type ?? '',
   };
 }
 
@@ -178,6 +194,10 @@ export function formToPayload(form: PropertyForm) {
     bathrooms: parseInt(form.bathrooms) || 0,
     latitude: form.latitude,
     longitude: form.longitude,
+    year_built: form.year_built ? parseInt(form.year_built) : null,
+    epc_band: form.epc_band || null,
+    tenure: form.tenure || null,
+    heating_type: form.heating_type || null,
   };
 }
 
@@ -390,6 +410,72 @@ export function PropertyFormFields({
         <div className="space-y-1.5">
           <Label>Bathrooms</Label>
           <Input type="number" min="0" max="20" value={form.bathrooms} onChange={set('bathrooms')} />
+        </div>
+      </div>
+
+      {/* Property Details — extra profile fields */}
+      <div className="pt-1 border-t border-[#E8E8E3]">
+        <p className="text-xs text-muted-foreground mb-3 mt-2">Property Details <span className="font-normal">(optional — helps with reminders &amp; compliance)</span></p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Year built</Label>
+            <Input
+              type="number"
+              min="1800"
+              max={new Date().getFullYear()}
+              value={form.year_built}
+              onChange={set('year_built')}
+              placeholder="e.g. 1985"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>EPC band</Label>
+            <Select value={form.epc_band || '_none'} onValueChange={v => setForm(prev => ({ ...prev, epc_band: v === '_none' ? '' : v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Not known" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">Not known</SelectItem>
+                {['A','B','C','D','E','F','G'].map(b => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="space-y-1.5">
+            <Label>Tenure</Label>
+            <Select value={form.tenure || '_none'} onValueChange={v => setForm(prev => ({ ...prev, tenure: v === '_none' ? '' : v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Not set" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">Not set</SelectItem>
+                <SelectItem value="freehold">Freehold</SelectItem>
+                <SelectItem value="leasehold">Leasehold</SelectItem>
+                <SelectItem value="share_of_freehold">Share of Freehold</SelectItem>
+                <SelectItem value="commonhold">Commonhold</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Heating type</Label>
+            <Select value={form.heating_type || '_none'} onValueChange={v => setForm(prev => ({ ...prev, heating_type: v === '_none' ? '' : v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Not set" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">Not set</SelectItem>
+                <SelectItem value="gas_combi">Gas combi boiler</SelectItem>
+                <SelectItem value="gas_system">Gas system boiler</SelectItem>
+                <SelectItem value="electric">Electric heating</SelectItem>
+                <SelectItem value="oil">Oil boiler</SelectItem>
+                <SelectItem value="heat_pump">Heat pump</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
     </div>
@@ -739,11 +825,15 @@ export default function Properties() {
                     { label: 'Postcode', value: selected.postcode },
                     { label: 'Bedrooms', value: selected.bedrooms > 0 ? String(selected.bedrooms) : undefined },
                     { label: 'Bathrooms', value: selected.bathrooms > 0 ? String(selected.bathrooms) : undefined },
+                    { label: 'Year Built', value: selected.year_built ? String(selected.year_built) : undefined },
+                    { label: 'EPC Band', value: selected.epc_band || undefined },
+                    { label: 'Tenure', value: selected.tenure || undefined },
+                    { label: 'Heating', value: selected.heating_type ? selected.heating_type.replace(/_/g, ' ') : undefined },
                   ].map(({ label, value }) =>
                     value ? (
                       <div key={label}>
                         <dt className="text-xs text-muted-foreground">{label}</dt>
-                        <dd className="font-medium text-[#1A1A1A]">{value}</dd>
+                        <dd className="font-medium text-[#1A1A1A] capitalize">{value}</dd>
                       </div>
                     ) : null,
                   )}
