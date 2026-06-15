@@ -485,7 +485,7 @@ const HomePlusDashboard = () => {
                     variant="outline"
                     className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white transition-all text-sm font-medium h-10 px-4 rounded-full"
                   >
-                    Find a Trade
+                    Home Improvements & Maintenance
                   </Button>
                 </Link>
               </div>
@@ -617,7 +617,7 @@ const HomePlusDashboard = () => {
 
               {/* Home MOT tile (spans 2 columns on lg) */}
               {(() => {
-                const homeMotMax = 100;
+                const homeMotMax = 53;
                 const radius = 42;
                 const circumference = 2 * Math.PI * radius;
                 const progress = (homeMotScore / homeMotMax) * circumference;

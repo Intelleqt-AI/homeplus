@@ -1338,7 +1338,7 @@ const JobLeads = () => {
               </div>
               <div>
                 <p className="text-[#6B6B6B] text-sm mb-0.5">Find tradespeople</p>
-                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Find a Trade</h1>
+                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Home Improvements & Maintenance</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
