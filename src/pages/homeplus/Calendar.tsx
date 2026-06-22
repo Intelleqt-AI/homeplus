@@ -1,4 +1,20 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
+
+const SEASONAL_TIPS: Record<number, string[]> = {
+  0:  ['Lag outdoor pipes to prevent freezing', 'Check boiler pressure and bleed radiators'],
+  1:  ['Check roof for winter damage after storms', 'Boiler service due — book before spring demand peaks'],
+  2:  ['External paintwork check — good weather coming', 'Service boiler before you stop needing heating'],
+  3:  ['Clear gutters of winter debris', 'Check window seals and draught-proofing'],
+  4:  ['Check outdoor taps and irrigation systems', 'Inspect eaves and roof for pest entry points'],
+  5:  ['Check loft ventilation before summer heat builds', 'Test smoke and CO alarms'],
+  6:  ['Water garden during heat — check for hose bans', 'Check if flat roof needs resealing'],
+  7:  ['Review home insurance renewal if due', 'Book boiler service now before October rush'],
+  8:  ['Service boiler before heating season', 'Check chimney if you have a fireplace'],
+  9:  ['Clean gutters — autumn leaves block drainage', 'Lag exposed pipes before first frost', 'Bleed radiators for efficient heating'],
+  10: ['Draught-proof doors and windows', 'Check boiler pressure and top up if low'],
+  11: ['Test smoke and CO alarms before Christmas gatherings', 'Check boiler has enough pressure for the holiday period'],
+};
 import {
   ChevronLeft,
   ChevronRight,
@@ -19,12 +35,17 @@ import {
   Flame,
   ClipboardList,
   Bell,
+  Settings,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddEvent from "@/components/event/AddEvent";
+import EventDetailDialog, { type CalendarEventDetail } from "@/components/event/EventDetailDialog";
+import Quote, { type QuotePrefill } from "@/components/topbar/Quote";
+import { inferTradeFromTitle } from "@/lib/tradeInference";
+import { TRADE_OPTIONS, getTradeCategoryLabel } from "@/lib/tradeCategories";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getEvents } from "@/lib/Api2";
 import usePatch from "@/hooks/usePatch";
@@ -32,7 +53,7 @@ import { toast } from "sonner";
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"month" | "week" | "list" | "board">(
+  const [viewMode, setViewMode] = useState<"month" | "list">(
     "month"
   );
   type FilterType =
@@ -43,13 +64,46 @@ const Calendar = () => {
     | "household"
     | "custom";
   const [filterType, setFilterType] = useState<FilterType>("all");
-  const [selectedEvents, setSelectedEvents] = useState<Array<string | number>>(
-    []
-  );
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addDialogDate, setAddDialogDate] = useState<string | undefined>(undefined);
   const [dragOverDateKey, setDragOverDateKey] = useState<string | null>(null);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quotePrefill, setQuotePrefill] = useState<QuotePrefill | undefined>(undefined);
+  const [detailEvent, setDetailEvent] = useState<CalendarEventDetail | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const openDetail = (event: CalendarEventDetail) => {
+    setDetailEvent(event);
+    setDetailOpen(true);
+  };
+
+  const openQuoteFor = (event: {
+    title: string;
+    property?: string | null;
+    trade?: string | null;
+    tradeCategory?: string | null;
+  }) => {
+    // Quote.tsx's `service` is the *display label* ('Gas Engineer'),
+    // and `category` is the subcategory's display label ('Boilers').
+    // Convert slugs → labels here. Fall back to title inference for legacy
+    // events created before Phase 1.8.
+    const tradeOption = event.trade
+      ? TRADE_OPTIONS.find(o => o.value === event.trade)
+      : undefined;
+    const serviceLabel = tradeOption?.label ?? inferTradeFromTitle(event.title);
+    const categoryLabel = event.tradeCategory
+      ? getTradeCategoryLabel(event.tradeCategory)
+      : undefined;
+
+    setQuotePrefill({
+      title: event.title,
+      service: serviceLabel,
+      category: categoryLabel,
+      property: event.property ?? undefined,
+    });
+    setQuoteOpen(true);
+  };
 
   const moveEventMutation = usePatch({
     onSuccess: () => {
@@ -158,7 +212,6 @@ const Calendar = () => {
     type?: string;
     description?: string;
     contractor?: string;
-    cost?: number | string;
     priority?: string;
     complianceType?: string;
     hasDocument?: boolean;
@@ -168,17 +221,16 @@ const Calendar = () => {
     photosRequired?: boolean;
     user_id?: string;
     recurring?: string;
+    property?: string | null;
+    trade?: string | null;
+    tradeCategory?: string | null;
+    actionStatus?: string;
+    reminderDate?: string | null;
   };
 
   const mappedRemoteEvents = Array.isArray(remoteRaw)
     ? (remoteRaw as RawEvent[]).map((ev: RawEvent) => {
         const parsedDate = ev?.date ? new Date(ev.date) : null;
-        const costField =
-          typeof ev?.cost === "number"
-            ? ev.cost === 0
-              ? "Free"
-              : `£${ev.cost}`
-            : ev?.cost ?? "Free";
 
         return {
           id: ev.id,
@@ -187,10 +239,14 @@ const Calendar = () => {
           date: parsedDate,
           time: ev.time ?? "",
           type: ev.eventType ?? ev.type ?? "maintenance",
-          status: computeStatusFromDate(parsedDate),
+          // Prefer the server's date-aware escalation (action_required/overdue);
+          // fall back to the local date check for legacy events.
+          status:
+            ev.actionStatus && ev.actionStatus !== "scheduled"
+              ? ev.actionStatus
+              : computeStatusFromDate(parsedDate),
           description: ev.description ?? "",
           contractor: ev.contractor ?? "",
-          cost: costField,
           priority: ev.priority ?? "medium",
           complianceType: ev.complianceType ?? "none",
           hasDocument: !!ev.hasDocument,
@@ -199,35 +255,16 @@ const Calendar = () => {
           photosRequired: !!ev.photosRequired,
           user_id: ev.user_id,
           recurring: ev.recurring ?? "never",
+          property: ev.property ?? null,
+          trade: ev.trade ?? null,
+          tradeCategory: ev.tradeCategory ?? null,
         };
       })
     : [];
 
-  const fallbackEvents = [
-    {
-      id: "ca206a4f-db58-41e0-afc7-3ac7308d7666",
-      created_at: "2025-10-09T10:27:19.130604+00:00",
-      title: "Test",
-      date: null,
-      time: "",
-      type: "maintenance",
-      status: computeStatusFromDate(null),
-      description: "",
-      contractor: "",
-      cost: "Free",
-      priority: "medium",
-      complianceType: "none",
-      hasDocument: false,
-      hasQuotes: false,
-      tradeConfirmed: false,
-      photosRequired: false,
-      user_id: "2aa3c70e-c10c-4a31-9654-3e37adcd9cdd",
-    },
-  ];
-
-  const events = mappedRemoteEvents.length
-    ? mappedRemoteEvents
-    : [];
+  // MOT tasks now arrive as linked Events via /api/v1/events/, already carrying
+  // the trade route + server-computed action_status — no localStorage merge.
+  const events = mappedRemoteEvents;
 
   // Enhanced filtering and data processing
   const filteredEvents = events.filter((event) => {
@@ -286,31 +323,13 @@ const Calendar = () => {
     )
     .slice(0, 5);
 
-  // Cost calculations
-  const thisMonthCost = filteredEvents
-    .filter((event) => {
-      const eventDate = new Date(event?.date);
-      const now = new Date();
-      return (
-        eventDate.getMonth() === now.getMonth() &&
-        eventDate.getFullYear() === now.getFullYear()
-      );
-    })
-    .reduce((total, event) => {
-      const cost = event.cost.replace(/[£,-]/g, "");
-      const numCost = parseInt(cost) || 0;
-      return total + numCost;
-    }, 0);
-
-  const yearlySpent = 2847; // This would come from backend
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "confirmed":
         return (
           <>
             <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
-            Confirmed
+            Done
           </>
         );
       case "action_required":
@@ -395,22 +414,6 @@ const Calendar = () => {
     }
   };
 
-  const getBoardStatusBorder = (status: string) => {
-    switch (status) {
-      case "overdue":
-        return "bg-red-50 border border-red-200";
-      case "due_this_week":
-      case "action_required":
-        return "bg-yellow-50 border border-yellow-200";
-      case "confirmed":
-        return "bg-green-50 border border-green-200";
-      case "completed":
-        return "bg-gray-50 border border-gray-200";
-      default:
-        return "bg-white border border-gray-200";
-    }
-  };
-
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
       case "high":
@@ -474,32 +477,9 @@ const Calendar = () => {
     return getTypeIcon(type);
   };
 
-  const formatCost = (cost: string, status: string) => {
-    if (status === "quotes_ready") {
-      const cleanCost = cost.replace(/[£,-]/g, "");
-      if (cleanCost.includes("-")) {
-        return `£${cleanCost.split("-")[0]} (3 quotes)`;
-      }
-      return `${cost} (3 quotes)`;
-    }
-    if (cost === "Free") return cost;
-    if (status === "overdue" || status === "action_required") {
-      return "Get quote";
-    }
-    return cost;
-  };
-
   const getEventsForDate = (date: Date) => {
     return filteredEvents.filter(
       (event) => getEventDateString(event) === date.toDateString()
-    );
-  };
-
-  const toggleEventSelection = (eventId: string | number) => {
-    setSelectedEvents((prev) =>
-      prev.includes(eventId)
-        ? prev.filter((id) => id !== eventId)
-        : [...prev, eventId]
     );
   };
 
@@ -524,7 +504,9 @@ const Calendar = () => {
       1
     );
     const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    // Week starts on Monday: shift Sunday (getDay=0) back 6 days, everything else (getDay-1).
+    const mondayOffset = (firstDay.getDay() + 6) % 7;
+    startDate.setDate(startDate.getDate() - mondayOffset);
     const days: Date[] = [];
     for (let i = 0; i < 42; i++) {
       const day = new Date(startDate);
@@ -583,18 +565,18 @@ const Calendar = () => {
 
             <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Confirmed</span>
+                <span className="text-[#6B6B6B] text-sm">Done</span>
                 <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                   <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#10B981] text-2xl font-semibold">{filteredEvents.filter(e => e.status === 'confirmed').length}</p>
-              <p className="text-[#8B8B8B] text-xs mt-1">Tasks confirmed</p>
+              <p className="text-[#10B981] text-2xl font-semibold">{filteredEvents.filter(e => e.status === 'completed').length}</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">Completed</p>
             </div>
 
             <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Action Required</span>
+                <span className="text-[#6B6B6B] text-sm">Needs attention</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF2F2] flex items-center justify-center">
                   <AlertTriangle className="w-4 h-4 text-[#DC2626]" strokeWidth={1.5} />
                 </div>
@@ -605,6 +587,32 @@ const Calendar = () => {
           </div>
         </div>
 
+        {/* Manage templates shortcut */}
+        <div className="flex justify-end">
+          <Link to="/dashboard/settings?tab=tasks">
+            <Button variant="outline" size="sm" className="flex items-center gap-2 text-[#4A4A4A] border-[#E8E8E3] hover:border-[#1A1A1A]">
+              <Settings className="w-4 h-4" />
+              Manage task templates
+            </Button>
+          </Link>
+        </div>
+
+        {/* Seasonal nudges */}
+        {(SEASONAL_TIPS[currentDate.getMonth()] ?? []).length > 0 && (
+          <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[20px] p-5">
+            <p className="text-sm font-semibold text-[#1A1A1A] mb-3">
+              Seasonal tips for {currentDate.toLocaleString('default', { month: 'long' })}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(SEASONAL_TIPS[currentDate.getMonth()] ?? []).map((tip, i) => (
+                <div key={i} className="bg-white border border-[#FDE68A] rounded-full px-3 py-1.5 text-xs text-[#1A1A1A]">
+                  {tip}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* View Mode & Filters */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
           <div className="flex items-center justify-between">
@@ -613,11 +621,10 @@ const Calendar = () => {
               {[
                 { value: "month", label: "Calendar" },
                 { value: "list", label: "List" },
-                { value: "board", label: "Board" },
               ].map((mode) => (
                 <button
                   key={mode.value}
-                  onClick={() => setViewMode(mode.value as "month" | "list" | "board")}
+                  onClick={() => setViewMode(mode.value as "month" | "list")}
                   className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-all duration-200 ${
                     viewMode === mode.value
                       ? 'bg-[#1A1A1A] text-white'
@@ -678,7 +685,7 @@ const Calendar = () => {
 
                 <>
                   <div className="grid grid-cols-7 gap-1 mb-4">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
                       (day) => (
                         <div
                           key={day}
@@ -748,21 +755,20 @@ const Calendar = () => {
                                 onDragStart={(e) => handleEventDragStart(e, event.id)}
                                 className={`text-xs px-2 py-2 rounded border ${getStatusBorder(
                                   event.status
-                                )} cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow`}
-                                title={`${event.time} - ${event.title}\n${event.description}\n(drag to another day to reschedule)`}
+                                )} cursor-pointer hover:shadow-sm transition-shadow`}
+                                title={`${event.time ? event.time + ' - ' : ''}${event.title}${event.description ? '\n' + event.description : ''}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleEventSelection(event.id);
+                                  openDetail(event as unknown as CalendarEventDetail);
                                 }}>
                                 <div className="font-medium text-gray-900 truncate">
                                   {event.title}
                                 </div>
-                                <div className="text-xs text-gray-600 flex items-center justify-between mt-1">
-                                  <span>
-                                    {event.time} •{" "}
-                                    {formatCost(event.cost, event.status)}
-                                  </span>
-                                </div>
+                                {event.time && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    {event.time}
+                                  </div>
+                                )}
                                 <div className="text-xs text-gray-500 mt-1">
                                   {getStatusIcon(event.status)}
                                 </div>
@@ -795,9 +801,10 @@ const Calendar = () => {
                   {filteredEvents.map((event) => (
                     <Card
                       key={event.id}
+                      onClick={() => openDetail(event as unknown as CalendarEventDetail)}
                       className={`${getStatusBorder(
                         event.status
-                      )} hover:shadow-sm transition-shadow`}>
+                      )} hover:shadow-sm transition-shadow cursor-pointer`}>
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -805,10 +812,11 @@ const Calendar = () => {
                               <h3 className="text-sm font-medium text-black">
                                 {event.title}
                               </h3>
-                              <span className="text-xs text-gray-600">
-                                {event.time} •{" "}
-                                {formatCost(event.cost, event.status)}
-                              </span>
+                              {event.time && (
+                                <span className="text-xs text-gray-600">
+                                  {event.time}
+                                </span>
+                              )}
                             </div>
 
                             <div className="text-xs text-gray-600 mb-2 flex items-center">
@@ -835,36 +843,21 @@ const Calendar = () => {
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-2 ml-4">
-                            {event.status === "quotes_ready" ? (
+                          <div className="flex flex-col gap-2 ml-4" onClick={e => e.stopPropagation()}>
+                            {event.tradeConfirmed && (
                               <Button
                                 size="sm"
-                                variant="secondary"
-                                className="px-3 py-1.5 h-7 text-xs bg-gray-100 hover:bg-gray-200">
-                                View quotes
+                                onClick={() => openQuoteFor(event)}
+                                className="px-3 py-1.5 h-7 text-xs bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B]">
+                                Get Quotes
                               </Button>
-                            ) : event.status === "overdue" ||
-                              event.status === "action_required" ||
-                              event.status === "due_this_week" ? (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="px-3 py-1.5 h-7 text-xs bg-gray-100 hover:bg-gray-200">
-                                Get quotes
-                              </Button>
-                            ) : event.status === "confirmed" ? (
+                            )}
+                            {event.status === "confirmed" && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="px-3 py-1.5 h-7 text-xs">
                                 Reschedule
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="px-3 py-1.5 h-7 text-xs">
-                                Complete
                               </Button>
                             )}
                           </div>
@@ -874,176 +867,7 @@ const Calendar = () => {
                   ))}
                 </div>
               </div>
-            ) : (
-              <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-                <h2 className="text-[#1A1A1A] text-lg font-semibold mb-6">Board View</h2>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    {/* Overdue Column */}
-                    <Card className="bg-white border border-gray-200">
-                      <CardHeader className="pb-3 border-b border-gray-100">
-                        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-red-600" />{" "}
-                          Overdue ({overdueEvents.length})
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {overdueEvents.map((event) => (
-                          <Card
-                            key={event.id}
-                            className={`${getBoardStatusBorder(
-                              event.status
-                            )} shadow-sm`}>
-                            <CardContent className="p-3">
-                              <h4 className="text-sm font-medium mb-1">
-                                {event.title}
-                              </h4>
-                              <p className="text-xs text-gray-600 mb-2">
-                                {event.time} •{" "}
-                                {formatCost(event.cost, event.status)}
-                              </p>
-                              <div className="text-xs text-red-600 mb-3 flex items-center">
-                                {getStatusIcon(event.status)}
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="w-full text-xs px-2 py-1.5 h-7 bg-gray-100 hover:bg-gray-200">
-                                Get quotes
-                              </Button>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    {/* Due This Week Column */}
-                    <Card className="bg-white border border-gray-200">
-                      <CardHeader className="pb-3 border-b border-gray-100">
-                        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <Clock className="w-5 h-5 text-orange-600" /> This
-                          Week ({thisWeekEvents.length})
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {thisWeekEvents.map((event) => (
-                          <Card
-                            key={event.id}
-                            className={`${getBoardStatusBorder(
-                              event.status
-                            )} shadow-sm`}>
-                            <CardContent className="p-3">
-                              <h4 className="text-sm font-medium mb-1">
-                                {event.title}
-                              </h4>
-                              <p className="text-xs text-gray-600 mb-2">
-                                {event.time} •{" "}
-                                {formatCost(event.cost, event.status)}
-                              </p>
-                              <div className="text-xs text-yellow-600 mb-3 flex items-center">
-                                {getStatusIcon(event.status)}
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="w-full text-xs px-2 py-1.5 h-7 bg-gray-100 hover:bg-gray-200">
-                                {event.status === "quotes_ready"
-                                  ? "View quotes"
-                                  : "Get quotes"}
-                              </Button>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    {/* Confirmed Column */}
-                    <Card className="bg-white border border-gray-200">
-                      <CardHeader className="pb-3 border-b border-gray-100">
-                        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-green-600" />{" "}
-                          Confirmed (
-                          {
-                            filteredEvents.filter(
-                              (e) => e.status === "confirmed"
-                            ).length
-                          }
-                          )
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {filteredEvents
-                          .filter((e) => e.status === "confirmed")
-                          .map((event) => (
-                            <Card
-                              key={event.id}
-                              className={`${getBoardStatusBorder(
-                                event.status
-                              )} shadow-sm`}>
-                              <CardContent className="p-3">
-                                <h4 className="text-sm font-medium mb-1">
-                                  {event.title}
-                                </h4>
-                                <p className="text-xs text-gray-600 mb-2">
-                                  {event.time} • {event.cost}
-                                </p>
-                                <div className="text-xs text-green-600 mb-3 flex items-center">
-                                  <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
-                                  {event.contractor}
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="w-full text-xs px-2 py-1.5 h-7">
-                                  Reschedule
-                                </Button>
-                              </CardContent>
-                            </Card>
-                          ))}
-                      </CardContent>
-                    </Card>
-
-                    {/* Completed Column */}
-                    <Card className="bg-white border border-gray-200">
-                      <CardHeader className="pb-3 border-b border-gray-100">
-                        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-gray-600" />{" "}
-                          Completed (
-                          {
-                            filteredEvents.filter(
-                              (e) => e.status === "completed"
-                            ).length
-                          }
-                          )
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {filteredEvents
-                          .filter((e) => e.status === "completed")
-                          .map((event) => (
-                            <Card
-                              key={event.id}
-                              className={`${getBoardStatusBorder(
-                                event.status
-                              )} shadow-sm opacity-75`}>
-                              <CardContent className="p-3">
-                                <h4 className="text-sm font-medium text-gray-600 mb-1">
-                                  {event.title}
-                                </h4>
-                                <p className="text-xs text-gray-500 mb-2">
-                                  {event.time} • {event.cost}
-                                </p>
-                                <div className="text-xs text-gray-500 flex items-center">
-                                  <CheckCircle className="w-3 h-3 text-gray-600 mr-1" />
-                                  Completed
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                      </CardContent>
-                    </Card>
-                  </div>
-              </div>
-            )}
+            ) : null}
           </div>
 
           {/* Right Sidebar - Upcoming Tasks and Reminders */}
@@ -1085,6 +909,7 @@ const Calendar = () => {
                   <div
                     className={`${urgencyBg} border ${urgencyBorder} rounded-[12px] p-4 hover:shadow-sm transition-all cursor-pointer`}
                     key={item?.id || idx}
+                    onClick={() => openDetail(item as unknown as CalendarEventDetail)}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`h-8 w-8 rounded-[8px] flex items-center justify-center bg-white border border-[#E5E7EB]`}>
@@ -1124,6 +949,24 @@ const Calendar = () => {
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         initialDate={addDialogDate}
+      />
+
+      {/* Post-a-Job dialog opened from "Get Quotes" buttons on trade events */}
+      <Quote open={quoteOpen} setOpen={setQuoteOpen} prefill={quotePrefill} />
+
+      {/* Task / Reminder details popup — opens when any event card is clicked */}
+      <EventDetailDialog
+        event={detailEvent}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onGetQuotes={ev =>
+          openQuoteFor({
+            title: ev.title,
+            property: ev.property ?? null,
+            trade: ev.trade ?? null,
+            tradeCategory: ev.tradeCategory ?? null,
+          })
+        }
       />
     </DashboardLayout>
   );

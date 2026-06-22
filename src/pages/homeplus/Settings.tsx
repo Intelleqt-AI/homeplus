@@ -1,32 +1,28 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  getMotTemplates,
+  getMotTasks,
+  enableMotTemplate,
+  disableMotTemplate,
+} from "@/lib/Api2";
 import {
   User,
   Bell,
   Shield,
   CreditCard,
-  Key,
   Building,
   Calendar,
   CheckCircle,
   Settings as SettingsIcon,
-  Zap,
   Clock,
   Plus,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import SetupWizard from "@/components/SetupWizard";
@@ -34,6 +30,69 @@ import Profile from "@/components/settings/profile";
 import Security from "@/components/settings/security";
 import Notifications from "@/components/settings/Notifications";
 import Properties from "@/components/settings/Properties";
+
+const CATEGORY_CONFIG: Record<string, {
+  label: string;
+  icon: React.ElementType;
+  headerColor: string;
+  cardBg: string;
+  cardBorder: string;
+  badge: string;
+  badgeVariant: 'destructive' | 'secondary' | 'outline';
+  desc: string;
+}> = {
+  Safety: {
+    label: 'UK Compliance (Required)',
+    icon: Shield,
+    headerColor: 'text-red-600',
+    cardBg: 'bg-red-50',
+    cardBorder: 'border-red-200',
+    badge: 'Mandatory',
+    badgeVariant: 'destructive',
+    desc: "These are pre-loaded and can't be deleted, only customised",
+  },
+  Maintenance: {
+    label: 'Recommended Maintenance',
+    icon: SettingsIcon,
+    headerColor: 'text-orange-600',
+    cardBg: 'bg-orange-50',
+    cardBorder: 'border-orange-200',
+    badge: 'Customisable',
+    badgeVariant: 'secondary',
+    desc: 'Pre-populated but fully customisable templates',
+  },
+  Financial: {
+    label: 'Financial Reminders',
+    icon: CreditCard,
+    headerColor: 'text-blue-600',
+    cardBg: 'bg-blue-50',
+    cardBorder: 'border-blue-200',
+    badge: 'Optional',
+    badgeVariant: 'outline',
+    desc: 'Track key financial dates and renewal deadlines',
+  },
+  Household: {
+    label: 'Household Management',
+    icon: Building,
+    headerColor: 'text-green-600',
+    cardBg: 'bg-green-50',
+    cardBorder: 'border-green-200',
+    badge: 'Optional',
+    badgeVariant: 'outline',
+    desc: 'Day-to-day household task reminders',
+  },
+};
+
+const CATEGORY_ORDER = ['Safety', 'Maintenance', 'Financial', 'Household'];
+
+const freqLabel = (months: number | null) => {
+  if (!months) return 'One-off';
+  if (months === 1) return 'Monthly';
+  if (months === 3) return 'Quarterly';
+  if (months === 12) return 'Annual';
+  if (months === 120) return 'Every 10 years';
+  return `Every ${months} months`;
+};
 
 const Settings = () => {
   const tabs = [
@@ -49,486 +108,137 @@ const Settings = () => {
   const setActiveTab = (id: typeof tabs[number]['id']) => setSearchParams({ tab: id }, { replace: true });
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
 
+  const queryClient = useQueryClient();
+
+  const { data: templates = [], isLoading: templatesLoading } = useQuery({
+    queryKey: ['motTemplates'],
+    queryFn: getMotTemplates,
+    enabled: activeTab === 'tasks',
+  });
+
+  const { data: activeTasks = [] } = useQuery({
+    queryKey: ['motTasks'],
+    queryFn: getMotTasks,
+    enabled: activeTab === 'tasks',
+  });
+
+  const activeTaskSlugs = new Set(
+    (activeTasks as any[]).map((t: any) => t.templateId ?? t.template_id ?? t.id)
+  );
+
+  const enableMut = useMutation({
+    mutationFn: (slug: string) =>
+      enableMotTemplate(slug, new Date().toISOString().split('T')[0]),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['motTasks'] });
+      queryClient.invalidateQueries({ queryKey: ['event'] });
+    },
+  });
+
+  const disableMut = useMutation({
+    mutationFn: (slug: string) => disableMotTemplate(slug),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['motTasks'] });
+      queryClient.invalidateQueries({ queryKey: ['event'] });
+    },
+  });
+
   const handleSetupComplete = () => {
     setIsSetupWizardOpen(false);
   };
 
-  const renderTaskTemplates = () => (
-    <div className="space-y-6">
-      {/* UK Compliance Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Shield className="w-5 h-5 text-red-600" />
-              UK Compliance (Required)
-            </CardTitle>
-            <Badge variant="destructive">Mandatory</Badge>
-          </div>
-          <p className="text-sm text-gray-600">
-            These are pre-loaded and can't be deleted, only customised
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-800 border-b pb-2">
-              Safety & Legal Compliance
-            </h4>
+  const renderTaskTemplates = () => {
+    if (templatesLoading) {
+      return (
+        <div className="py-12 text-center text-[#6B6B6B]">
+          <Clock className="w-6 h-6 mx-auto mb-2 animate-spin" />
+          <p className="text-sm">Loading templates…</p>
+        </div>
+      );
+    }
 
-            {[
-              {
-                name: "Gas Safety Certificate",
-                frequency: "Annual",
-                applies: "Landlords",
-                enabled: true,
-              },
-              {
-                name: "EICR Certificate",
-                frequency: "Every 5 years",
-                applies: "Landlords / 10 years Homeowners",
-                enabled: true,
-              },
-              {
-                name: "EPC Rating",
-                frequency: "Every 10 years",
-                applies: "All properties",
-                enabled: true,
-              },
-              {
-                name: "Smoke Alarms",
-                frequency: "Test monthly, battery annually",
-                applies: "All properties",
-                enabled: true,
-              },
-              {
-                name: "Carbon Monoxide",
-                frequency: "Test monthly, battery annually",
-                applies: "All properties",
-                enabled: true,
-              },
-              {
-                name: "Boiler Service",
-                frequency: "Annual",
-                applies: "Warranty requirement",
-                enabled: true,
-              },
-            ].map((item, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-4 h-4 text-red-600" />
-                  <div>
-                    <p className="font-medium text-sm">{item.name}</p>
-                    <p className="text-xs text-gray-600">
-                      {item.frequency} ({item.applies})
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Select defaultValue="90">
-                    <SelectTrigger className="w-20 h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30d</SelectItem>
-                      <SelectItem value="60">60d</SelectItem>
-                      <SelectItem value="90">90d</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs px-3 py-1.5 h-auto">
-                    Customise
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+    const grouped: Record<string, any[]> = {};
+    for (const t of (templates as any[])) {
+      const cat = (t.category as string) ?? 'Household';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(t);
+    }
 
-      {/* Recommended Maintenance */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <SettingsIcon className="w-5 h-5 text-orange-600" />
-              Recommended Maintenance
-            </CardTitle>
-            <Badge variant="secondary">Customisable</Badge>
-          </div>
-          <p className="text-sm text-gray-600">
-            Pre-populated but fully customisable templates
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Seasonal Maintenance */}
-          <div>
-            <h4 className="font-medium text-gray-800 border-b pb-2 mb-3">
-              Seasonal Maintenance
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                {
-                  season: "Spring",
-                  tasks: [
-                    "Gutter cleaning (after leaves)",
-                    "Roof inspection",
-                    "External painting check",
-                  ],
-                },
-                {
-                  season: "Summer",
-                  tasks: [
-                    "Garden maintenance",
-                    "Window cleaning",
-                    "Pest control check",
-                  ],
-                },
-                {
-                  season: "Autumn",
-                  tasks: [
-                    "Heating system check",
-                    "Gutter cleaning (before winter)",
-                    "Draught proofing",
-                  ],
-                },
-                {
-                  season: "Winter",
-                  tasks: [
-                    "Pipe insulation check",
-                    "Boiler pressure check",
-                    "Salt/grit supplies",
-                  ],
-                },
-              ].map((seasonGroup, index) => (
-                <div
-                  key={index}
-                  className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-                  <h5 className="font-medium text-orange-800 mb-2">
-                    {seasonGroup.season}
-                  </h5>
-                  <div className="space-y-1">
-                    {seasonGroup.tasks.map((task, taskIndex) => (
-                      <div key={taskIndex} className="flex items-center gap-2">
-                        <CheckCircle className="w-3 h-3 text-orange-600" />
-                        <span className="text-xs text-gray-700">{task}</span>
+    return (
+      <div className="space-y-6">
+        {CATEGORY_ORDER.filter(cat => (grouped[cat] ?? []).length > 0).map(cat => {
+          const cfg = CATEGORY_CONFIG[cat];
+          const IconComp = cfg.icon;
+          const isSafety = cat === 'Safety';
+          return (
+            <Card key={cat}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <IconComp className={`w-5 h-5 ${cfg.headerColor}`} />
+                    {cfg.label}
+                  </CardTitle>
+                  <Badge variant={cfg.badgeVariant}>{cfg.badge}</Badge>
+                </div>
+                <p className="text-sm text-gray-600">{cfg.desc}</p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {(grouped[cat] ?? []).map((tmpl: any) => {
+                  const slug = tmpl.id ?? tmpl.slug;
+                  const isEnabled = activeTaskSlugs.has(slug);
+                  return (
+                    <div
+                      key={slug}
+                      className={`flex items-center justify-between p-3 rounded-lg border ${cfg.cardBg} ${cfg.cardBorder}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {isSafety ? (
+                          <CheckCircle className={`w-4 h-4 ${cfg.headerColor}`} />
+                        ) : (
+                          <Switch
+                            checked={isEnabled}
+                            disabled={enableMut.isPending || disableMut.isPending}
+                            onCheckedChange={() => {
+                              if (isEnabled) disableMut.mutate(slug);
+                              else enableMut.mutate(slug);
+                            }}
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium text-sm">{tmpl.label}</p>
+                          <p className="text-xs text-gray-600">
+                            {freqLabel(tmpl.frequencyMonths)}
+                            {tmpl.hint ? ` · ${tmpl.hint}` : ''}
+                          </p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Regular Maintenance */}
-          <div>
-            <h4 className="font-medium text-gray-800 border-b pb-2 mb-3">
-              Regular Maintenance
-            </h4>
-            <div className="space-y-2">
-              {[
-                {
-                  name: "Chimney sweep",
-                  frequency: "Annual",
-                  condition: "if applicable",
-                },
-                {
-                  name: "Septic tank empty",
-                  frequency: "Every 2-3 years",
-                  condition: "if applicable",
-                },
-                {
-                  name: "Water softener service",
-                  frequency: "Annual",
-                  condition: "if applicable",
-                },
-                {
-                  name: "Air conditioning service",
-                  frequency: "Annual",
-                  condition: "if applicable",
-                },
-                {
-                  name: "Driveway sealing",
-                  frequency: "Every 3 years",
-                  condition: "if applicable",
-                },
-                {
-                  name: "External woodwork treatment",
-                  frequency: "Every 2 years",
-                  condition: "if applicable",
-                },
-              ].map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-3">
-                    <Switch defaultChecked />
-                    <div>
-                      <p className="font-medium text-sm">{item.name}</p>
-                      <p className="text-xs text-gray-600">
-                        {item.frequency} ({item.condition})
-                      </p>
                     </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs px-3 py-1.5 h-auto">
-                    Configure
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          );
+        })}
 
-      {/* Household Management */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Building className="w-5 h-5 text-blue-600" />
-              Household Management
-            </CardTitle>
-            <Badge variant="outline">Optional</Badge>
-          </div>
-          <p className="text-sm text-gray-600">
-            Templates users can activate for complete home management
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Council & Utilities */}
-          <div>
-            <h4 className="font-medium text-gray-800 border-b pb-2 mb-3">
-              Council & Utilities
-            </h4>
-            <div className="space-y-2">
-              {[
-                {
-                  name: "Bin day reminders",
-                  description: "link to council",
-                  enabled: false,
-                },
-                {
-                  name: "Council tax payment",
-                  description: "monthly reminder",
-                  enabled: false,
-                },
-                {
-                  name: "Water meter readings",
-                  description: "quarterly",
-                  enabled: false,
-                },
-                {
-                  name: "Energy meter readings",
-                  description: "monthly",
-                  enabled: false,
-                },
-                {
-                  name: "TV licence renewal",
-                  description: "annual",
-                  enabled: false,
-                },
-                {
-                  name: "MOT reminder",
-                  description: "for car",
-                  enabled: false,
-                },
-              ].map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <Switch defaultChecked={item.enabled} />
-                    <div>
-                      <p className="font-medium text-sm">{item.name}</p>
-                      <p className="text-xs text-gray-600">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs px-3 py-1.5 h-auto">
-                    Setup
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
+        <Separator />
 
-          {/* Financial */}
-          <div>
-            <h4 className="font-medium text-gray-800 border-b pb-2 mb-3">
-              Financial
-            </h4>
-            <div className="space-y-2">
-              {[
-                { name: "Mortgage payment", description: "monthly tracking" },
-                { name: "Rent payment", description: "tenants" },
-                { name: "Insurance renewals", description: "annual reminders" },
-                { name: "Service subscriptions", description: "various" },
-              ].map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center gap-3">
-                    <Switch />
-                    <div>
-                      <p className="font-medium text-sm">{item.name}</p>
-                      <p className="text-xs text-gray-600">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs px-3 py-1.5 h-auto">
-                    Configure
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Family & Lifestyle */}
-          <div>
-            <h4 className="font-medium text-gray-800 border-b pb-2 mb-3">
-              Family & Lifestyle
-            </h4>
-            <div className="space-y-2">
-              {[
-                { name: "School term dates", description: "academic calendar" },
-                { name: "Pet vaccinations", description: "annual reminders" },
-                {
-                  name: "Dentist appointments",
-                  description: "6-monthly check-ups",
-                },
-                {
-                  name: "Prescription renewals",
-                  description: "medication tracking",
-                },
-              ].map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="flex items-center gap-3">
-                    <Switch />
-                    <div>
-                      <p className="font-medium text-sm">{item.name}</p>
-                      <p className="text-xs text-gray-600">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs px-3 py-1.5 h-auto">
-                    Setup
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Automation Rules */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Zap className="w-5 h-5 text-yellow-600" />
-            Automation Rules
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-800 border-b pb-2">
-              Smart Scheduling
-            </h4>
-            {[
-              {
-                rule: "Auto-schedule annual services in same month as last year",
-                enabled: true,
-              },
-              {
-                rule: "Group similar trades (all electrical same day)",
-                enabled: true,
-              },
-              { rule: "Avoid bank holidays", enabled: true },
-              {
-                rule: "Weather-based scheduling (gutters when dry)",
-                enabled: false,
-              },
-            ].map((item, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <span className="text-sm">{item.rule}</span>
-                <Switch defaultChecked={item.enabled} />
-              </div>
-            ))}
-
-            <Separator className="my-4" />
-
-            <h4 className="font-medium text-gray-800 border-b pb-2">
-              Notifications
-            </h4>
-            {[
-              { rule: "90 days before certificates expire", enabled: true },
-              { rule: "30 days before annual services", enabled: true },
-              { rule: "7 days before appointments", enabled: true },
-              { rule: "Day before bin collection", enabled: false },
-            ].map((item, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <span className="text-sm">{item.rule}</span>
-                <Switch defaultChecked={item.enabled} />
-              </div>
-            ))}
-
-            <Separator className="my-4" />
-
-            <h4 className="font-medium text-gray-800 border-b pb-2">
-              Integration
-            </h4>
-            {[
-              { rule: "Import council bin calendar", enabled: false },
-              { rule: "Sync with phone calendar", enabled: true },
-              {
-                rule: "Auto-detect warranty expiries from documents",
-                enabled: false,
-              },
-              { rule: "Track service history from invoices", enabled: true },
-            ].map((item, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <span className="text-sm">{item.rule}</span>
-                <Switch defaultChecked={item.enabled} />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end">
-        <Button
-          onClick={() => setIsSetupWizardOpen(true)}
-          className="flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Run Setup Wizard
-        </Button>
+        <div className="flex justify-end">
+          <Button
+            onClick={() => setIsSetupWizardOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Run Setup Wizard
+          </Button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header Section - Dashboard Style */}
+        {/* Header */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
@@ -542,7 +252,7 @@ const Settings = () => {
             </div>
           </div>
 
-          {/* Stats Row */}
+          {/* Tab strip */}
           <div className="grid grid-cols-5 gap-4">
             {tabs.map((tab) => {
               const IconComponent = tab.icon;
@@ -578,22 +288,16 @@ const Settings = () => {
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Column - Main Settings Content (3 columns wide) */}
           <div className="lg:col-span-3">
             {activeTab === "profile" && <Profile />}
-
             {activeTab === "notifications" && <Notifications />}
-
             {activeTab === "security" && <Security />}
-
             {activeTab === "properties" && <Properties />}
-
             {activeTab === "tasks" && renderTaskTemplates()}
           </div>
 
-          {/* Right Column - Settings Navigation */}
+          {/* Right sidebar nav */}
           <div className="lg:col-span-1 space-y-4">
-            {/* Navigation Panel */}
             <div className="bg-white rounded-[16px] p-5 border border-[#E0E0DB]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-9 w-9 bg-[#FEF9E7] rounded-full flex items-center justify-center">
@@ -612,7 +316,8 @@ const Settings = () => {
                         activeTab === tab.id
                           ? "bg-[#1A1A1A] text-white"
                           : "text-gray-700 hover:bg-gray-100"
-                      }`}>
+                      }`}
+                    >
                       <IconComponent className="w-4 h-4 mr-3" />
                       {tab.label}
                     </button>

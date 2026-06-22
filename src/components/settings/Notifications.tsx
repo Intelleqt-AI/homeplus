@@ -14,10 +14,26 @@ interface NotificationPrefs {
 }
 
 const ITEMS: { key: keyof Omit<NotificationPrefs, 'updated_at'>; label: string; description: string }[] = [
-  { key: 'email_notifications', label: 'Email Notifications', description: 'Receive updates and reminders via email' },
-  { key: 'sms_notifications', label: 'SMS Notifications', description: 'Receive urgent alerts via SMS' },
-  { key: 'calendar_reminders', label: 'Calendar Reminders', description: 'Add maintenance events to your calendar' },
-  { key: 'marketing_emails', label: 'Marketing Emails', description: 'Receive tips, offers, and product updates' },
+  {
+    key: 'email_notifications',
+    label: 'Email Notifications',
+    description: 'Master switch. Turning this off stops all emails, including calendar reminders.',
+  },
+  {
+    key: 'sms_notifications',
+    label: 'SMS Notifications',
+    description: 'Receive urgent alerts via SMS (coming soon).',
+  },
+  {
+    key: 'calendar_reminders',
+    label: 'Calendar Reminders',
+    description: 'Email me before a scheduled task or reminder is due. Requires Email Notifications.',
+  },
+  {
+    key: 'marketing_emails',
+    label: 'Marketing Emails',
+    description: 'Receive tips, offers, and product updates.',
+  },
 ];
 
 const Notifications = () => {

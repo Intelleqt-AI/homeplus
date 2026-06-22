@@ -124,23 +124,34 @@ const Profile = () => {
               disabled
               className="bg-muted text-muted-foreground cursor-not-allowed"
             />
-            <p className="text-xs text-muted-foreground">Email cannot be changed here. Contact support.</p>
+            <p className="text-xs text-muted-foreground">
+              Need to update your email?{' '}
+              <a href="mailto:support@homeplus.co.uk" className="underline hover:text-foreground">
+                Contact support
+              </a>{' '}
+              to start the secure change flow.
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="phone">Phone number</Label>
-              {phoneVerified ? (
+              {phoneVerified && (
                 <Badge variant="outline" className="gap-1 text-xs border-green-300 text-green-700 bg-green-50">
                   <ShieldCheck className="w-3 h-3" /> Verified
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="gap-1 text-xs border-orange-300 text-orange-700 bg-orange-50">
-                  <ShieldAlert className="w-3 h-3" /> Not verified
                 </Badge>
               )}
             </div>
             <Input id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+44 7700 900 123" />
+            {!phoneVerified && (
+              <div className="mt-1.5 flex items-start gap-2 p-2.5 bg-orange-50 border border-orange-200 rounded-lg">
+                <ShieldAlert className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-orange-800">Phone not verified</p>
+                  <p className="text-xs text-orange-700 mt-0.5">Required when posting jobs — tradespeople need a number to contact you.</p>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

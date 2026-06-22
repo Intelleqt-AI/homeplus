@@ -2,22 +2,14 @@ import apiClient from '@/lib/apiClient';
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
-/**
- * Normalize a Django Event to the legacy shape used by the calendar/dashboard.
- * Legacy: { id, title, date, time, eventType, type, priority, cost, recurring,
- *           description, isRequireTrade, complianceType, status }
- */
 const normEvent = (ev: any) => ({
   id: ev.id,
   title: ev.title,
-  // Keep ISO date string — components already parse this
   date: ev.date ? new Date(ev.date).toISOString() : null,
   time: ev.time ?? null,
-  // Legacy components use `eventType` (PascalCase display value)
   eventType: ev.event_type
     ? ev.event_type.charAt(0).toUpperCase() + ev.event_type.slice(1)
     : 'Maintenance',
-  // Legacy `type` field (reminder / service / compliance)
   type: ev.compliance_type && ev.compliance_type !== 'none'
     ? 'compliance'
     : ev.requires_trade
@@ -25,13 +17,19 @@ const normEvent = (ev: any) => ({
     : 'reminder',
   priority: ev.priority ?? 'medium',
   status: ev.status ?? 'pending',
-  cost: ev.estimated_cost ? parseFloat(ev.estimated_cost) : 0,
-  actual_cost: ev.actual_cost ? parseFloat(ev.actual_cost) : null,
+  // Server-computed, date-aware escalation (action_required/overdue/scheduled)
+  // and the reminder fire date. Drives the calendar highlight + Get Quotes.
+  actionStatus: ev.action_status ?? ev.status ?? 'pending',
+  reminderDate: ev.reminder_date ?? null,
   recurring: ev.recurring ?? 'never',
   compliance_type: ev.compliance_type ?? 'none',
   complianceType: ev.compliance_type ?? 'none',
   isRequireTrade: ev.requires_trade ?? false,
   requires_trade: ev.requires_trade ?? false,
+  // Trade taxonomy (slug form, e.g. 'gas_engineer', 'gas_engineer_boilers').
+  // Empty for reminders + legacy events with no trade set.
+  trade: ev.trade ?? '',
+  tradeCategory: ev.trade_category ?? '',
   description: ev.description ?? '',
   notes: ev.notes ?? '',
   property: ev.property ?? null,
@@ -47,10 +45,11 @@ export const addNewEvent = async (event: any) => {
       : new Date().toISOString().split('T')[0],
     event_type: (event.eventType || event.event_type || 'maintenance').toLowerCase(),
     priority: event.priority ?? 'medium',
-    estimated_cost: event.cost ?? event.estimated_cost ?? 0,
     recurring: event.recurring ?? 'never',
     compliance_type: event.complianceType || event.compliance_type || 'none',
     requires_trade: event.isRequireTrade ?? event.requires_trade ?? false,
+    trade: event.trade ?? '',
+    trade_category: event.tradeCategory ?? event.trade_category ?? '',
     description: event.description ?? '',
   };
 
@@ -65,6 +64,75 @@ export const getEvents = async () => {
   const { data: res } = await apiClient.get('/api/v1/events/');
   const events: any[] = res.data ?? res.results ?? [];
   return { data: events.map(normEvent) };
+};
+
+/**
+ * Delete an event.
+ *
+ * For recurring events the caller chooses what to delete:
+ *   - 'this'             — only this occurrence (chain auto-promotes if root)
+ *   - 'this_and_future'  — this + all later non-completed siblings; stops the series
+ *   - 'all'              — root + every non-completed sibling (completed history preserved)
+ *
+ * Non-recurring events ignore the scope.
+ */
+export type DeleteScope = 'this' | 'this_and_future' | 'all';
+
+export const deleteEvent = async (eventId: string, scope: DeleteScope = 'this') => {
+  await apiClient.delete(`/api/v1/events/${eventId}/?scope=${scope}`);
+  return { ok: true };
+};
+
+/** Mark an event completed. Optional actual_cost/notes (we don't surface them yet). */
+export const completeEvent = async (eventId: string) => {
+  const { data: res } = await apiClient.post(`/api/v1/events/${eventId}/complete/`, {});
+  return { data: res?.data ? normEvent(res.data) : null };
+};
+
+/** Snooze an event by pushing its date forward by 1, 7, or 14 days. */
+export const snoozeEvent = async (eventId: string, days: 1 | 7 | 14) => {
+  const { data: res } = await apiClient.post(`/api/v1/events/${eventId}/snooze/`, { days });
+  return { data: res?.data ? normEvent(res.data) : null };
+};
+
+export const exportDocumentPack = async (documentIds: string[]): Promise<void> => {
+  const response = await apiClient.post(
+    '/api/v1/documents/export-pack/',
+    { document_ids: documentIds },
+    { responseType: 'blob' },
+  );
+  const url = URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'homeplus-home-pack.zip';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
+// ─── MOT Templates & Tasks ───────────────────────────────────────────────────
+
+export const getMotTemplates = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/templates/');
+  return (res.data ?? res) as any[];
+};
+
+export const getMotTasks = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/tasks/');
+  return (res.data ?? res) as any[];
+};
+
+export const enableMotTemplate = async (templateId: string, lastCompletedDate: string) => {
+  const { data: res } = await apiClient.post('/api/v1/mot/tasks/', {
+    templateId,
+    lastCompletedDate,
+  });
+  return res.data ?? res;
+};
+
+export const disableMotTemplate = async (templateId: string) => {
+  await apiClient.delete(`/api/v1/mot/tasks/${templateId}/`);
 };
 
 // ─── Properties ──────────────────────────────────────────────────────────────
@@ -171,4 +239,83 @@ export const getCoverImage = async (propertyId: string) => {
   } catch {
     return [];
   }
+};
+
+// ─── Home MOT ──────────────────────────────────────────────────────────────────
+// All MOT data now comes from the backend (apps.homemot). Tasks also create a
+// linked calendar Event server-side, so the calendar/dashboard pick them up via
+// getEvents() — no separate client merge needed.
+
+/** GET /api/v1/mot/templates/ — the 12 canonical task templates (camelCase). */
+export const fetchMotTemplates = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/templates/');
+  const templates: unknown[] = res.data ?? res.results ?? [];
+  return { data: templates };
+};
+
+/** GET /api/v1/mot/tasks/ — the user's generated MOT tasks. */
+export const fetchMotTasks = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/tasks/');
+  const tasks: unknown[] = res.data ?? res.results ?? [];
+  return { data: tasks };
+};
+
+/**
+ * POST /api/v1/mot/tasks/ — upsert a MOT task (replace by template id). The
+ * server computes next-due + reminder and syncs the linked calendar Event.
+ */
+export const upsertMotTask = async (payload: {
+  templateId: string;
+  lastCompletedDate: string;
+  property?: string | null;
+}) => {
+  const body: Record<string, unknown> = {
+    templateId: payload.templateId,
+    lastCompletedDate: payload.lastCompletedDate,
+  };
+  if (payload.property) body.property = payload.property;
+  const { data: res } = await apiClient.post('/api/v1/mot/tasks/', body);
+  return { data: res.data };
+};
+
+/** DELETE /api/v1/mot/tasks/{templateId}/ — remove the task + its linked event. */
+export const deleteMotTask = async (templateId: string) => {
+  await apiClient.delete(`/api/v1/mot/tasks/${templateId}/`);
+  return { ok: true };
+};
+
+/** GET /api/v1/mot/last-completed/ — { templateId: 'YYYY-MM-DD' } for hydration. */
+export const fetchLastCompleted = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/last-completed/');
+  return { data: (res.data ?? {}) as Record<string, string> };
+};
+
+/** GET /api/v1/mot/score/ — { score, baseScore, max, breakdown, answers }. */
+export const fetchMotScore = async () => {
+  const { data: res } = await apiClient.get('/api/v1/mot/score/');
+  return { data: res.data };
+};
+
+/** PUT /api/v1/mot/score/ — persist a step's answers, returns recomputed score. */
+export const updateMotScore = async (
+  step: 'A' | 'B' | 'C',
+  answers: Record<string, boolean>
+) => {
+  const { data: res } = await apiClient.put('/api/v1/mot/score/', { step, answers });
+  return { data: res.data };
+};
+
+// ─── Documents summary ───────────────────────────────────────────────────────
+
+export type DocumentSummary = {
+  total: number;
+  valid: number;
+  expiring: number;
+  expired: number;
+};
+
+/** GET /api/v1/documents/summary/ — counts for the dashboard status mini-cards. */
+export const fetchDocumentSummary = async () => {
+  const { data: res } = await apiClient.get('/api/v1/documents/summary/');
+  return { data: (res.data ?? {}) as DocumentSummary };
 };

@@ -1,8 +1,21 @@
 import { HelpCircle, BookOpen, CheckCircle, Home, FileText, Search, Calendar, Shield } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { fetchDocumentSummary, getEvents } from '@/lib/Api2';
+import { fetchLeads } from '@/lib/Api';
 
 const HowItWorks = () => {
+  const { data: docSummary } = useQuery({ queryKey: ['docSummary'], queryFn: fetchDocumentSummary });
+  const { data: jobsData } = useQuery({ queryKey: ['leads'], queryFn: fetchLeads });
+  const { data: eventsData } = useQuery({ queryKey: ['event'], queryFn: getEvents });
+
+  const docCount: number = (docSummary as any)?.data?.total ?? (docSummary as any)?.total ?? 0;
+  const jobCount: number = Array.isArray(jobsData) ? jobsData.length : ((jobsData as any)?.data?.length ?? 0);
+  const taskCount: number = Array.isArray((eventsData as any)?.data)
+    ? (eventsData as any).data.length
+    : (Array.isArray(eventsData) ? (eventsData as any[]).length : 0);
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -20,7 +33,7 @@ const HowItWorks = () => {
             </div>
           </div>
 
-          {/* Stats Row */}
+          {/* Stats Row — live data */}
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
               <div className="flex items-center justify-between mb-2">
@@ -29,8 +42,12 @@ const HowItWorks = () => {
                   <FileText className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-sm font-medium">Store & organize</p>
-              <p className="text-[#8B8B8B] text-xs mt-1">All your home docs</p>
+              <p className="text-[#1A1A1A] text-sm font-medium">
+                {docCount > 0 ? `${docCount} stored` : 'None yet'}
+              </p>
+              <p className="text-[#8B8B8B] text-xs mt-1">
+                {docCount === 0 ? 'Start with insurance & gas cert' : 'All your home docs'}
+              </p>
             </div>
 
             <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
@@ -40,30 +57,38 @@ const HowItWorks = () => {
                   <Calendar className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-sm font-medium">Track & remind</p>
-              <p className="text-[#8B8B8B] text-xs mt-1">Never miss a deadline</p>
+              <p className="text-[#1A1A1A] text-sm font-medium">
+                {taskCount > 0 ? `${taskCount} scheduled` : 'None set'}
+              </p>
+              <p className="text-[#8B8B8B] text-xs mt-1">
+                {taskCount === 0 ? 'Add boiler service & gas safety' : 'Never miss a deadline'}
+              </p>
             </div>
 
             <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Find a Trade</span>
+                <span className="text-[#6B6B6B] text-sm">Home Improvements & Maintenance</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Search className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-sm font-medium">Get quotes</p>
-              <p className="text-[#8B8B8B] text-xs mt-1">Local tradespeople</p>
+              <p className="text-[#1A1A1A] text-sm font-medium">
+                {jobCount > 0 ? `${jobCount} job${jobCount !== 1 ? 's' : ''} posted` : 'No jobs yet'}
+              </p>
+              <p className="text-[#8B8B8B] text-xs mt-1">
+                {jobCount === 0 ? 'Post a job to get quotes' : 'Local tradespeople'}
+              </p>
             </div>
 
             <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Compliance</span>
+                <span className="text-[#6B6B6B] text-sm">UK Compliance</span>
                 <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                   <Shield className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
               <p className="text-[#10B981] text-sm font-medium">Stay compliant</p>
-              <p className="text-[#8B8B8B] text-xs mt-1">UK regulations</p>
+              <p className="text-[#8B8B8B] text-xs mt-1">Gas safety, EICR, EPC tracked</p>
             </div>
           </div>
         </div>
@@ -90,24 +115,24 @@ const HowItWorks = () => {
                     <div className="h-10 w-10 bg-[#FEF9E7] rounded-full flex items-center justify-center mb-3">
                       <span className="text-[#FBBF24] font-semibold">1</span>
                     </div>
-                    <h4 className="text-[#1A1A1A] text-sm font-medium mb-2">Upload Documents</h4>
-                    <p className="text-[#6B6B6B] text-xs">Start by uploading important home documents like insurance, warranties, and certificates.</p>
+                    <h4 className="text-[#1A1A1A] text-sm font-medium mb-2">Set Up Your Home</h4>
+                    <p className="text-[#6B6B6B] text-xs">Add your property and upload key documents — insurance, warranties, gas safety, and certificates.</p>
                   </div>
 
                   <div className="bg-[#F5F5F0] rounded-[12px] p-5">
                     <div className="h-10 w-10 bg-[#FEF9E7] rounded-full flex items-center justify-center mb-3">
                       <span className="text-[#FBBF24] font-semibold">2</span>
                     </div>
-                    <h4 className="text-[#1A1A1A] text-sm font-medium mb-2">Set Up Reminders</h4>
-                    <p className="text-[#6B6B6B] text-xs">Create tasks and reminders for maintenance, renewals, and important deadlines.</p>
+                    <h4 className="text-[#1A1A1A] text-sm font-medium mb-2">Find a Tradesperson</h4>
+                    <p className="text-[#6B6B6B] text-xs">Post a job and receive quotes from verified local professionals. No call-around needed.</p>
                   </div>
 
                   <div className="bg-[#F5F5F0] rounded-[12px] p-5">
                     <div className="h-10 w-10 bg-[#FEF9E7] rounded-full flex items-center justify-center mb-3">
                       <span className="text-[#FBBF24] font-semibold">3</span>
                     </div>
-                    <h4 className="text-[#1A1A1A] text-sm font-medium mb-2">Find Tradespeople</h4>
-                    <p className="text-[#6B6B6B] text-xs">Post jobs and receive quotes from verified local professionals when you need work done.</p>
+                    <h4 className="text-[#1A1A1A] text-sm font-medium mb-2">Stay on Top of Maintenance</h4>
+                    <p className="text-[#6B6B6B] text-xs">Set reminders for boiler service, gas safety checks, and renewals — never miss a deadline.</p>
                   </div>
                 </div>
               </div>
@@ -147,7 +172,7 @@ const HowItWorks = () => {
                     <Search className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
                   </div>
                   <div>
-                    <h4 className="text-[#1A1A1A] text-sm font-medium">Find a Trade</h4>
+                    <h4 className="text-[#1A1A1A] text-sm font-medium">Home Improvements & Maintenance</h4>
                     <p className="text-[#6B6B6B] text-xs mt-1">Post jobs and receive competitive quotes from verified local tradespeople. Compare prices and reviews to find the right professional.</p>
                   </div>
                 </div>
@@ -184,7 +209,7 @@ const HowItWorks = () => {
               <Link to="/dashboard/job-leads" className="block bg-[#F5F5F0] rounded-[12px] p-4 hover:shadow-sm transition-all">
                 <div className="flex items-center gap-3">
                   <Search className="w-4 h-4 text-[#FBBF24]" />
-                  <span className="text-[#1A1A1A] text-sm font-medium">Find a Trade</span>
+                  <span className="text-[#1A1A1A] text-sm font-medium">Home Improvements & Maintenance</span>
                 </div>
               </Link>
 

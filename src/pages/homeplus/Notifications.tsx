@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, BellOff, Briefcase, CheckCheck, CheckCircle, Trash2 } from 'lucide-react';
+import { Bell, BellOff, Briefcase, CheckCheck, CheckCircle, Trash2, SlidersHorizontal } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { Link, useNavigate } from 'react-router-dom';
 import { fetchData, deleteData, postData } from '@/lib/Api';
 import apiClient from '@/lib/apiClient';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 interface Notification {
   id: string;
-  type: 'new_quote' | 'job_completed' | 'job_status';
+  type: 'new_quote' | 'job_completed' | 'job_status' | 'task_reminder' | 'compliance';
   title: string;
   body: string;
   is_read: boolean;
@@ -21,13 +22,24 @@ interface NotificationsResponse {
 }
 
 const typeConfig = {
-  new_quote: { icon: Briefcase, iconCls: 'text-blue-600 bg-blue-50', label: 'New Quote' },
-  job_completed: { icon: CheckCircle, iconCls: 'text-emerald-600 bg-emerald-50', label: 'Completed' },
-  job_status: { icon: Bell, iconCls: 'text-[#6B6B6B] bg-[#F5F5F0]', label: 'Update' },
+  new_quote: { icon: Briefcase, iconCls: 'text-blue-600 bg-blue-50', label: 'New Quote', badgeCls: 'bg-blue-100 text-blue-700' },
+  job_completed: { icon: CheckCircle, iconCls: 'text-emerald-600 bg-emerald-50', label: 'Job Update', badgeCls: 'bg-green-100 text-green-700' },
+  job_status: { icon: Bell, iconCls: 'text-[#6B6B6B] bg-[#F5F5F0]', label: 'Update', badgeCls: 'bg-gray-100 text-gray-600' },
+  task_reminder: { icon: Bell, iconCls: 'text-yellow-600 bg-yellow-50', label: 'Reminder', badgeCls: 'bg-yellow-100 text-yellow-700' },
+  compliance: { icon: CheckCircle, iconCls: 'text-red-600 bg-red-50', label: 'Compliance', badgeCls: 'bg-red-100 text-red-700' },
 };
+
+function getNotifAction(n: Notification): { label: string; path: string } | null {
+  if (n.type === 'new_quote' && n.job_id) return { label: 'View Quotes', path: '/dashboard/job-leads' };
+  if (n.type === 'job_completed' && n.job_id) return { label: 'Rate Tradesman', path: '/dashboard/job-leads' };
+  if (n.type === 'task_reminder') return { label: 'View Task', path: '/dashboard/calendar' };
+  if (n.type === 'compliance') return { label: 'Get Quotes', path: '/dashboard/job-leads' };
+  return null;
+}
 
 const NotificationsPage = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data, isLoading } = useQuery<NotificationsResponse>({
     queryKey: ['ho-notifications'],
@@ -67,15 +79,24 @@ const NotificationsPage = () => {
                 <h1 className="text-[#1A1A1A] text-2xl font-semibold">Notifications</h1>
               </div>
             </div>
-            {unreadCount > 0 && (
-              <button
-                onClick={() => markAllRead.mutate()}
+            <div className="flex items-center gap-2">
+              <Link
+                to="/dashboard/settings?tab=notifications"
                 className="flex items-center gap-1.5 text-xs font-medium text-[#4A4A4A] hover:text-[#1A1A1A] transition-colors px-3 py-1.5 bg-[#F5F5F0] rounded-full border border-[#E8E8E3] hover:bg-[#E8E8E3]"
               >
-                <CheckCheck className="h-3.5 w-3.5" />
-                Mark all read
-              </button>
-            )}
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Preferences
+              </Link>
+              {unreadCount > 0 && (
+                <button
+                  onClick={() => markAllRead.mutate()}
+                  className="flex items-center gap-1.5 text-xs font-medium text-[#4A4A4A] hover:text-[#1A1A1A] transition-colors px-3 py-1.5 bg-[#F5F5F0] rounded-full border border-[#E8E8E3] hover:bg-[#E8E8E3]"
+                >
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  Mark all read
+                </button>
+              )}
+            </div>
           </div>
 
         </div>
@@ -126,11 +147,29 @@ const NotificationsPage = () => {
                         <p className={`text-sm leading-snug ${!n.is_read ? 'font-semibold text-[#1A1A1A]' : 'font-medium text-[#4A4A4A]'}`}>
                           {n.title}
                         </p>
-                        <span className="text-[10px] text-[#9B9B9B] shrink-0 mt-0.5">
-                          {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                          {cfg.badgeCls && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${cfg.badgeCls}`}>
+                              {cfg.label}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-[#9B9B9B]">
+                            {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-xs text-[#6B6B6B] mt-1 leading-relaxed">{n.body}</p>
+                      {(() => {
+                        const action = getNotifAction(n);
+                        return action ? (
+                          <button
+                            onClick={e => { e.stopPropagation(); if (!n.is_read) markRead.mutate(n.id); navigate(action.path); }}
+                            className="mt-1.5 text-xs font-medium text-[#1A1A1A] underline underline-offset-2 hover:no-underline"
+                          >
+                            {action.label} →
+                          </button>
+                        ) : null;
+                      })()}
                     </div>
                     <button
                       onClick={e => { e.stopPropagation(); deleteNotif.mutate(n.id); }}

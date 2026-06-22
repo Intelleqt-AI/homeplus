@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   Upload,
   Download,
@@ -30,11 +30,17 @@ import useDelete from '@/hooks/useDelete';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteFile, updateDocument, getDocumentDownloadUrl, type NormDoc, type DocumentUpdatePayload, type PaginatedResponse } from '@/lib/Api';
 import DocsUploadDialog from '@/components/docsUploadDialog';
+import { exportDocumentPack } from '@/lib/Api2';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
 import { cn } from '@/lib/utils';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType, getTradeCategoryLabel } from '@/lib/tradeCategories';
 
-const CATEGORY_TABS = [{ id: 'all', label: 'All' }, ...DISCIPLINE_OPTIONS.map(d => ({ id: d.value, label: d.label }))];
+const CATEGORY_TABS = [
+  { id: 'all', label: 'All' },
+  ...DISCIPLINE_OPTIONS
+    .filter(d => d.value !== 'other')
+    .map(d => ({ id: d.value, label: d.label })),
+];
 
 const DISCIPLINES = DISCIPLINE_OPTIONS;
 const DOC_TYPES = TRADE_OPTIONS;
@@ -88,8 +94,26 @@ const Documents = () => {
   const [previewDoc, setPreviewDoc] = useState<NormDoc | null>(null);
   const [selectedForExport, setSelectedForExport] = useState<string[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<'pick' | 'review'>('pick');
+  const [exportModalSearch, setExportModalSearch] = useState('');
+  const [exportModalSelected, setExportModalSelected] = useState<string[]>([]);
+  const [prefillDiscipline, setPrefillDiscipline] = useState<string | undefined>();
+  const [exportLoading, setExportLoading] = useState(false);
+  const [highlightCheckboxes, setHighlightCheckboxes] = useState(false);
+  const docListRef = useRef<HTMLDivElement>(null);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quotePrefill, setQuotePrefill] = useState<QuotePrefill | undefined>();
+
+  const openUploadForm = (discipline?: string) => {
+    setPrefillDiscipline(discipline ?? (activeTab !== 'all' ? activeTab : undefined));
+    setOpenForm(true);
+  };
+
+  const handleStartSelecting = () => {
+    docListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setHighlightCheckboxes(true);
+    setTimeout(() => setHighlightCheckboxes(false), 2000);
+  };
 
   const handlePostJob = (doc: NormDoc) => {
     const tradeLabel = TRADE_OPTIONS.find(t => t.value === doc.doc_type)?.label;
@@ -103,10 +127,18 @@ const Documents = () => {
   };
 
   const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL);
-  const allDocs = useMemo(() => docsPage?.results ?? [], [docsPage]);
+  // Backend is the single source of truth — no demo/sample fallback.
+  const allDocs = useMemo<NormDoc[]>(() => docsPage?.results ?? [], [docsPage]);
 
   const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL);
-  const expiringDocs = useMemo(() => expiringPage?.results ?? [], [expiringPage]);
+
+  // Fetch primary property for suggested docs and role-based chip logic
+  const { data: propertiesRes } = useFetch<{ results?: { id: string; role: string; heating_type?: string; year_built?: number }[]; data?: { id: string; role: string; heating_type?: string; year_built?: number }[] }>('/api/v1/properties/');
+  const primaryProperty = useMemo(() => {
+    const list = propertiesRes?.results ?? propertiesRes?.data ?? [];
+    return list[0] ?? null;
+  }, [propertiesRes]);
+  const expiringDocs = useMemo<NormDoc[]>(() => expiringPage?.results ?? [], [expiringPage]);
 
   const deleteMutation = useDelete({
     mutationFn: deleteFile,
@@ -181,6 +213,25 @@ const Documents = () => {
     [allDocs, expiringDocs],
   );
 
+  // Suggested documents based on property profile — shown when < 5 docs uploaded
+  const suggestedDocs = useMemo(() => {
+    if (allDocs.length >= 5) return [];
+    const hasDisc = (discipline: string, category?: string) =>
+      allDocs.some(d => d.discipline === discipline && (!category || d.category === category));
+    const suggestions: { label: string; discipline: string; category: string; reason: string }[] = [];
+    if (!hasDisc('insurance'))
+      suggestions.push({ label: 'Buildings Insurance', discipline: 'insurance', category: '', reason: 'Every UK homeowner should have this' });
+    if (primaryProperty?.heating_type?.startsWith('gas') && !hasDisc('compliance', 'gas_engineer_gas_safety_certificates'))
+      suggestions.push({ label: 'Gas Safety Certificate (CP12)', discipline: 'compliance', category: 'gas_engineer_gas_safety_certificates', reason: 'Required for gas appliances' });
+    if (primaryProperty?.heating_type?.startsWith('gas') && !hasDisc('manuals_appliances', 'boiler_manual'))
+      suggestions.push({ label: 'Boiler Manual', discipline: 'manuals_appliances', category: 'boiler_manual', reason: 'Useful for servicing & faults' });
+    if (!hasDisc('energy_epc', 'epc_certificate'))
+      suggestions.push({ label: 'EPC Certificate', discipline: 'energy_epc', category: 'epc_certificate', reason: 'Valid 10 years — required for selling/letting' });
+    if ((primaryProperty?.year_built ?? 3000) < 1970 && !hasDisc('compliance', 'electrical_testing_certificates'))
+      suggestions.push({ label: 'Electrical Condition Report (EICR)', discipline: 'compliance', category: 'electrical_testing_certificates', reason: 'Recommended for older properties' });
+    return suggestions.slice(0, 4);
+  }, [allDocs, primaryProperty]);
+
   function downloadFile(docId: string, fileName: string) {
     toast.promise(
       getDocumentDownloadUrl(docId).then(url =>
@@ -224,15 +275,24 @@ const Documents = () => {
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
-                onClick={() => setIsExportModalOpen(true)}
-                disabled={selectedForExport.length === 0}
-                className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white text-sm font-medium h-10 px-4 rounded-full disabled:opacity-50"
+                onClick={() => {
+                  if (selectedForExport.length > 0) {
+                    setExportMode('review');
+                    setExportModalSelected(selectedForExport);
+                  } else {
+                    setExportMode('pick');
+                    setExportModalSelected([]);
+                  }
+                  setExportModalSearch('');
+                  setIsExportModalOpen(true);
+                }}
+                className="text-[#1A1A1A] hover:bg-[#F5F5F0] border border-[#E8E8E3] bg-white text-sm font-medium h-10 px-4 rounded-full"
               >
                 <Package className="w-4 h-4 mr-2" strokeWidth={1.5} />
                 Export Pack {selectedForExport.length > 0 && `(${selectedForExport.length})`}
               </Button>
               <Button
-                onClick={() => setOpenForm(true)}
+                onClick={() => openUploadForm()}
                 className="bg-[#1A1A1A] text-white hover:bg-[#333333] text-sm font-medium h-10 px-4 rounded-full"
               >
                 <Upload className="w-4 h-4 mr-2" strokeWidth={1.5} />
@@ -307,6 +367,29 @@ const Documents = () => {
           </div>
         )}
 
+        {/* Home Pack promo — shown when 3+ docs exist */}
+        {allDocs.length >= 3 && (
+          <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[16px] p-5 flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-full bg-[#FEF3C7] flex items-center justify-center shrink-0">
+                <Package className="w-5 h-5 text-[#FBBF24]" strokeWidth={1.5} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#1A1A1A]">Ready to sell or remortgage?</p>
+                <p className="text-xs text-[#6B6B6B] mt-0.5">
+                  Select documents below and build your Home Pack — share with your solicitor or estate agent.
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={handleStartSelecting}
+              className="bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] text-sm font-medium h-9 px-4 rounded-full shrink-0"
+            >
+              Start selecting
+            </Button>
+          </div>
+        )}
+
         {/* Table card */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
           {/* Search + Tabs */}
@@ -316,17 +399,22 @@ const Documents = () => {
               <Input placeholder="Search documents…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {CATEGORY_TABS.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 text-sm font-medium rounded-full transition-all ${
-                    activeTab === tab.id ? 'bg-[#1A1A1A] text-white' : 'text-[#4A4A4A] hover:bg-[#F5F5F0]'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+              {CATEGORY_TABS.map(tab => {
+                const isTenancy = tab.id === 'tenancy';
+                const isHomeownerOnly = isTenancy && primaryProperty?.role === 'homeowner';
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    title={isTenancy ? 'For rental properties — landlord agreements, tenancy deposits, inventories' : undefined}
+                    className={`px-4 py-2 text-sm font-medium rounded-full transition-all ${
+                      activeTab === tab.id ? 'bg-[#1A1A1A] text-white' : 'text-[#4A4A4A] hover:bg-[#F5F5F0]'
+                    } ${isHomeownerOnly ? 'opacity-40' : ''}`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -347,6 +435,29 @@ const Documents = () => {
             </div>
           )}
 
+          {/* Suggested for your home */}
+          {suggestedDocs.length > 0 && (
+            <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+              <p className="text-sm font-semibold text-amber-900 mb-3">Suggested for your home</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {suggestedDocs.map(s => (
+                  <div key={s.label} className="flex items-center justify-between px-3 py-2 bg-white rounded-xl border border-amber-100">
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A1A]">{s.label}</p>
+                      <p className="text-xs text-[#6B6B6B]">{s.reason}</p>
+                    </div>
+                    <button
+                      onClick={() => openUploadForm(s.discipline)}
+                      className="ml-2 shrink-0 px-3 py-1.5 text-xs font-medium bg-[#1A1A1A] text-white rounded-full hover:bg-[#333] transition-colors"
+                    >
+                      Upload
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Loading skeletons */}
           {isLoading && (
             <div className="space-y-3">
@@ -358,7 +469,7 @@ const Documents = () => {
 
           {/* Doc list */}
           {!isLoading && (
-            <div className="space-y-3">
+            <div className="space-y-3" ref={docListRef}>
               {filtered.map(doc => {
                 const status = expiryStatus(doc);
                 return (
@@ -427,7 +538,7 @@ const Documents = () => {
                       </button>
                     </div>
 
-                    <div className="shrink-0 pl-2 border-l border-[#E8E8E3]">
+                    <div className={`shrink-0 pl-2 border-l transition-colors ${highlightCheckboxes ? 'border-[#FBBF24]' : 'border-[#E8E8E3]'}`}>
                       <Checkbox
                         checked={selectedForExport.includes(doc.id)}
                         onCheckedChange={checked => handleExportSelection(doc.id, checked as boolean)}
@@ -440,7 +551,7 @@ const Documents = () => {
               {/* Upload row */}
               <div
                 className="bg-white rounded-[12px] px-5 py-4 border-2 border-dashed border-[#E8E8E3] cursor-pointer hover:bg-[#F5F5F0] hover:border-[#FBBF24] transition-all flex items-center gap-4"
-                onClick={() => setOpenForm(true)}
+                onClick={() => openUploadForm()}
               >
                 <div className="h-10 w-10 rounded-[10px] bg-[#FEF9E7] flex items-center justify-center shrink-0">
                   <Upload className="w-5 h-5 text-[#FBBF24]" strokeWidth={1.5} />
@@ -464,7 +575,7 @@ const Documents = () => {
                 {search ? 'Try a different search term' : 'Upload your first document to get started'}
               </p>
               {!search && (
-                <Button onClick={() => setOpenForm(true)} className="bg-[#1A1A1A] text-white hover:bg-[#333333] rounded-full">
+                <Button onClick={() => openUploadForm()} className="bg-[#1A1A1A] text-white hover:bg-[#333333] rounded-full">
                   <Upload className="w-4 h-4 mr-2" /> Upload Document
                 </Button>
               )}
@@ -473,46 +584,150 @@ const Documents = () => {
         </div>
 
         {/* Upload dialog */}
-        <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} refetch={refetch} />
+        <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} refetch={refetch} prefillDiscipline={prefillDiscipline} />
 
         {/* Post-a-Job dialog (prefilled from a doc) */}
         <Quote open={quoteOpen} setOpen={setQuoteOpen} prefill={quotePrefill} />
 
         {/* Export modal */}
         <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Export Home Pack</DialogTitle>
             </DialogHeader>
-            <div className="py-4">
-              <p className="text-sm text-[#6B6B6B] mb-4">
-                {selectedForExport.length} document{selectedForExport.length !== 1 ? 's' : ''} selected.
-              </p>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {allDocs
-                  .filter(d => selectedForExport.includes(d.id))
-                  .map(doc => (
-                    <div key={doc.id} className="flex items-center gap-3 p-2 bg-[#F5F5F0] rounded-lg">
-                      <FileText className="w-4 h-4 text-[#6B6B6B]" />
-                      <span className="text-sm text-[#1A1A1A]">{doc.name}</span>
-                    </div>
-                  ))}
+
+            {exportMode === 'pick' ? (
+              /* ── Pick mode: choose from all documents ── */
+              <div className="py-2">
+                <p className="text-sm text-[#6B6B6B] mb-3">
+                  Select the documents you want to include in your ZIP pack.
+                </p>
+                {/* Search */}
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8B8B8B]" strokeWidth={1.5} />
+                  <input
+                    type="text"
+                    placeholder="Search documents…"
+                    value={exportModalSearch}
+                    onChange={e => setExportModalSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 text-sm border border-[#E8E8E3] rounded-lg bg-white outline-none focus:border-[#1A1A1A] transition-colors"
+                  />
+                </div>
+                {/* Document list */}
+                <div className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
+                  {allDocs
+                    .filter(d => {
+                      const q = exportModalSearch.toLowerCase();
+                      return !q || d.name.toLowerCase().includes(q) || (d.file_name ?? '').toLowerCase().includes(q);
+                    })
+                    .map(doc => {
+                      const checked = exportModalSelected.includes(doc.id);
+                      return (
+                        <label
+                          key={doc.id}
+                          className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer hover:bg-[#F5F5F0] transition-colors"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={v => {
+                              setExportModalSelected(prev =>
+                                v ? [...prev, doc.id] : prev.filter(id => id !== doc.id),
+                              );
+                            }}
+                          />
+                          <FileText className="w-4 h-4 text-[#6B6B6B] shrink-0" strokeWidth={1.5} />
+                          <span className="text-sm text-[#1A1A1A] flex-1 truncate">{doc.name}</span>
+                          {doc.discipline && doc.discipline !== 'other' && (
+                            <span className="text-[11px] text-[#6B6B6B] bg-[#F5F5F0] border border-[#E8E8E3] rounded-full px-2 py-0.5 shrink-0 capitalize">
+                              {doc.discipline.replace(/_/g, ' ')}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  {allDocs.length === 0 && (
+                    <p className="text-sm text-[#8B8B8B] text-center py-6">No documents uploaded yet.</p>
+                  )}
+                </div>
+                {/* Footer */}
+                <div className="flex items-center justify-between pt-4 mt-1 border-t border-[#E8E8E3]">
+                  <span className="text-sm text-[#6B6B6B]">
+                    {exportModalSelected.length > 0
+                      ? `${exportModalSelected.length} document${exportModalSelected.length !== 1 ? 's' : ''} selected`
+                      : 'No documents selected'}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="text-black hover:bg-gray-100" onClick={() => setIsExportModalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      className="bg-[#1A1A1A] text-white hover:bg-[#333333]"
+                      disabled={exportModalSelected.length === 0 || exportLoading}
+                      onClick={async () => {
+                        setExportLoading(true);
+                        try {
+                          await exportDocumentPack(exportModalSelected);
+                          setIsExportModalOpen(false);
+                          setSelectedForExport([]);
+                          setExportModalSelected([]);
+                        } catch {
+                          toast.error('Failed to generate pack. Please try again.');
+                        } finally {
+                          setExportLoading(false);
+                        }
+                      }}
+                    >
+                      {exportLoading ? 'Generating…' : 'Download ZIP'}
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button className="text-black hover:bg-gray-200" variant="outline" onClick={() => setIsExportModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                className="bg-[#1A1A1A] text-white hover:bg-[#333333]"
-                onClick={() => {
-                  toast.success(`Exporting ${selectedForExport.length} documents`);
-                  setIsExportModalOpen(false);
-                }}
-              >
-                Generate Pack
-              </Button>
-            </div>
+            ) : (
+              /* ── Review mode: show pre-selected documents ── */
+              <div className="py-2">
+                <p className="text-sm text-[#6B6B6B] mb-3">
+                  {selectedForExport.length} document{selectedForExport.length !== 1 ? 's' : ''} selected for export.
+                </p>
+                <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
+                  {allDocs
+                    .filter(d => selectedForExport.includes(d.id))
+                    .map(doc => (
+                      <div key={doc.id} className="flex items-center gap-3 p-2.5 bg-[#F5F5F0] rounded-lg">
+                        <FileText className="w-4 h-4 text-[#6B6B6B] shrink-0" strokeWidth={1.5} />
+                        <span className="text-sm text-[#1A1A1A] flex-1 truncate">{doc.name}</span>
+                        {doc.discipline && doc.discipline !== 'other' && (
+                          <span className="text-[11px] text-[#6B6B6B] bg-white border border-[#E8E8E3] rounded-full px-2 py-0.5 shrink-0 capitalize">
+                            {doc.discipline.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                </div>
+                <div className="flex justify-end gap-2 pt-4 mt-1 border-t border-[#E8E8E3]">
+                  <Button variant="outline" className="text-black hover:bg-gray-100" onClick={() => setIsExportModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    className="bg-[#1A1A1A] text-white hover:bg-[#333333]"
+                    disabled={exportLoading}
+                    onClick={async () => {
+                      setExportLoading(true);
+                      try {
+                        await exportDocumentPack(selectedForExport);
+                        setIsExportModalOpen(false);
+                        setSelectedForExport([]);
+                      } catch {
+                        toast.error('Failed to generate pack. Please try again.');
+                      } finally {
+                        setExportLoading(false);
+                      }
+                    }}
+                  >
+                    {exportLoading ? 'Generating…' : 'Download ZIP'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
 
