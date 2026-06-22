@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X, Bell, Zap } from 'lucide-react';
+import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X, Bell } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { fetchData } from '@/lib/Api';
@@ -26,10 +26,9 @@ const Sidebar = () => {
 
   const sidebarItems = [
     { icon: Home, label: 'My Home', path: '/dashboard' },
-    { icon: Search, label: 'Find a Trade', path: '/dashboard/job-leads' },
+    { icon: Search, label: 'Home Improvements & Maintenance', path: '/dashboard/job-leads' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
     { icon: ClipboardList, label: 'Tasks & Reminders', path: '/dashboard/calendar' },
-    { icon: Zap, label: 'Energy & EPC', path: '/dashboard/energy' },
     { icon: Bell, label: 'Notifications', path: '/dashboard/notifications', badge: unreadCount },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
   ];
