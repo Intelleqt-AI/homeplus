@@ -9,8 +9,10 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8081,
     proxy: {
+      // HomePlus backend runs on 8010 (port 8000 is the separate TradePilot backend).
+      // Override with VITE_API_PROXY_TARGET if your backend runs elsewhere.
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8010',
         changeOrigin: true,
       },
     },

@@ -160,10 +160,6 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   };
 
   const handleSubmit = () => {
-    if (!propertyId) {
-      toast.error('Please select a property');
-      return;
-    }
     if (selectedProperty && (selectedProperty.latitude === null || selectedProperty.longitude === null)) {
       toast.error('Selected property has no exact location. Open Settings → Properties to set its map pin.');
       return;
@@ -199,7 +195,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     }
 
     submitJob({
-      property: propertyId,
+      ...(propertyId ? { property: propertyId } : {}),
       title,
       description,
       service,
@@ -239,7 +235,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
           {/* ── Property ─────────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>
-              Property <span className="text-red-500">*</span>
+              Property <span className="normal-case font-normal text-gray-400">(optional)</span>
             </p>
             <PropertySelect
               value={propertyId}

@@ -60,9 +60,7 @@ interface EventTemplate {
 
 const eventSchema = z
   .object({
-    // Optional at the schema level — superRefine below enforces "required for
-    // tasks only" so reminders (e.g. "Bin Day", "Pay phone bill") can be
-    // saved without a property.
+    // Always optional — tasks and reminders alike can be saved without a property.
     propertyId: z.string().optional(),
     title: z.string().min(1, 'Title is required'),
     date: z.string().min(1, 'Date is required'),
@@ -84,13 +82,7 @@ const eventSchema = z
   })
   .superRefine((val, ctx) => {
     if (val.requiresTrade) {
-      if (!val.propertyId) {
-        ctx.addIssue({
-          path: ['propertyId'],
-          code: z.ZodIssueCode.custom,
-          message: 'Property is required for tasks',
-        });
-      }
+      // Property is optional — tasks/reminders can be saved without one.
       if (!val.trade) {
         ctx.addIssue({
           path: ['trade'],

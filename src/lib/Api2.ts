@@ -312,10 +312,177 @@ export type DocumentSummary = {
   valid: number;
   expiring: number;
   expired: number;
+  /** Per-category document counts keyed by backend `discipline` slug. */
+  by_discipline?: Record<string, number>;
 };
 
 /** GET /api/v1/documents/summary/ — counts for the dashboard status mini-cards. */
 export const fetchDocumentSummary = async () => {
   const { data: res } = await apiClient.get('/api/v1/documents/summary/');
   return { data: (res.data ?? {}) as DocumentSummary };
+};
+
+// ─── Annual spend tracker ────────────────────────────────────────────────────
+
+export type SpendCategory = { key: string; label: string; amount: number; color: string };
+
+export type AnnualSpendYear = {
+  year: number;
+  total: number;
+  invoice_count: number;
+  delta_vs_prev: number | null;
+  bars: number[]; // 12 monthly sums, Jan..Dec
+  categories: SpendCategory[];
+};
+
+export type AnnualSpend = { default_year: number; years: AnnualSpendYear[] };
+
+/** GET /api/v1/insights/annual-spend/ — per-year spend totals, monthly bars and
+ *  category split for the dashboard Annual Spend Tracker. */
+export const fetchAnnualSpend = async () => {
+  const { data: res } = await apiClient.get('/api/v1/insights/annual-spend/');
+  return { data: (res.data ?? { default_year: new Date().getFullYear(), years: [] }) as AnnualSpend };
+};
+
+// ─── 12-week timeline ─────────────────────────────────────────────────────────
+
+export type TimelineNode = {
+  label: string;
+  diff_days: number;
+  tone: 'good' | 'warn' | 'now' | 'future';
+  date: string;
+};
+
+/** GET /api/v1/insights/timeline/ — dashboard 12-week timeline nodes (real events). */
+export const fetchTimeline = async () => {
+  const { data: res } = await apiClient.get('/api/v1/insights/timeline/');
+  return { data: (res.data ?? { nodes: [] }) as { nodes: TimelineNode[]; window_weeks?: number } };
+};
+
+// ─── Needs attention ──────────────────────────────────────────────────────────
+
+export type AttentionItem = {
+  tone: 'danger' | 'warning' | 'neutral';
+  tag: string;
+  icon: string;
+  title: string;
+  sub: string;
+  cta: string;
+  meta: string;
+  path: string;
+};
+
+/** GET /api/v1/insights/attention/ — dashboard "Needs attention" feed (real events + docs). */
+export const fetchAttention = async () => {
+  const { data: res } = await apiClient.get('/api/v1/insights/attention/');
+  return { data: (res.data ?? { items: [], total: 0 }) as { items: AttentionItem[]; total: number } };
+};
+
+// ─── TradePilot — quotes in ───────────────────────────────────────────────────
+
+export type QuoteRow = {
+  bid_id: string;
+  name: string;
+  rating: number | null;
+  jobs: number;
+  amount: number;
+  price: string;
+  tag: string | null;
+  tag_kind: 'best_price' | 'fastest' | 'top_rated' | null;
+  highlight: boolean;
+};
+
+export type QuotesSummary = {
+  job: { id: string; title: string; trade: string; location: string; trades_responded: number; avg_response: string } | null;
+  quotes: QuoteRow[];
+  recommended_bid_id: string | null;
+};
+
+/** GET /api/v1/jobs/quotes-summary/ — the dashboard "quotes in" panel (real bids). */
+export const fetchQuotesSummary = async () => {
+  const { data: res } = await apiClient.get('/api/v1/jobs/quotes-summary/');
+  return { data: (res.data ?? { job: null, quotes: [], recommended_bid_id: null }) as QuotesSummary };
+};
+
+/** POST /api/v1/jobs/{id}/decline-quotes/ — reject all pending bids on a job. */
+export const declineQuotes = async (jobId: string) => {
+  const { data: res } = await apiClient.post(`/api/v1/jobs/${jobId}/decline-quotes/`, {});
+  return res;
+};
+
+// ─── Recent activity ──────────────────────────────────────────────────────────
+
+export type ActivityItem = {
+  id: string;
+  type: string;          // notification type key, drives the icon (e.g. 'new_quote')
+  text: string;          // main line
+  sub: string;           // secondary line
+  good: boolean;         // positive outcome → green accent
+  timestamp: string | null; // ISO; formatted to relative time in the UI
+};
+
+const normActivity = (a: any): ActivityItem => ({
+  id: a.id,
+  type: a.type ?? '',
+  text: a.text ?? '',
+  sub: a.sub ?? '',
+  good: Boolean(a.good),
+  timestamp: a.timestamp ?? null,
+});
+
+/** GET /api/v1/notifications/recent/ — dashboard "Recent activity" feed (real notifications). */
+export const fetchRecentActivity = async (limit = 6) => {
+  const { data: res } = await apiClient.get(`/api/v1/notifications/recent/?limit=${limit}`);
+  const items: any[] = res.data ?? res.results ?? [];
+  return { data: items.map(normActivity) };
+};
+
+// ─── Energy & EPC (AI rating) ─────────────────────────────────────────────────
+
+export type EpcRecommendation = { title: string; detail: string; saving: string };
+
+export type EpcAssessment = {
+  id: string;
+  currentBand: string;
+  currentScore: number | null;
+  potentialBand: string | null;
+  potentialScore: number | null;
+  validUntil: string | null;     // ISO date
+  assessmentDate: string | null; // ISO date
+  recommendations: EpcRecommendation[];
+  documentName: string | null;
+};
+
+const normEpc = (e: any): EpcAssessment => ({
+  id: e.id,
+  currentBand: e.current_band ?? '',
+  currentScore: e.current_score ?? null,
+  potentialBand: e.potential_band ?? null,
+  potentialScore: e.potential_score ?? null,
+  validUntil: e.valid_until ?? null,
+  assessmentDate: e.assessment_date ?? null,
+  recommendations: Array.isArray(e.recommendations)
+    ? e.recommendations.map((r: any) => ({
+        title: r.title ?? '',
+        detail: r.detail ?? '',
+        saving: r.saving ?? '',
+      }))
+    : [],
+  documentName: e.document_name ?? null,
+});
+
+/**
+ * GET /api/v1/insights/epc/ — latest AI-generated EPC rating for the dashboard
+ * Energy & EPC card. Returns null until an EPC certificate has been analysed.
+ */
+export const fetchEpc = async () => {
+  const { data: res } = await apiClient.get('/api/v1/insights/epc/');
+  const payload = res.data ?? null;
+  return { data: payload ? normEpc(payload) : null };
+};
+
+/** POST /api/v1/documents/{id}/analyze-epc/ — (re-)run AI analysis on an EPC doc. */
+export const reanalyzeEpc = async (documentId: string) => {
+  const { data: res } = await apiClient.post(`/api/v1/documents/${documentId}/analyze-epc/`, {});
+  return { data: res.data ? normEpc(res.data) : null };
 };
