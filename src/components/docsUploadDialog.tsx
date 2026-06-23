@@ -101,7 +101,11 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
       queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/'] });
       queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/expiring/'] });
       queryClient.invalidateQueries({ queryKey: ['event'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
       refetch?.();
+      if (doc.discipline === 'energy_epc' && doc.epc_status === 'unreadable') {
+        toast.error("Couldn't read a rating from this file — try a clearer photo or the EPC PDF.");
+      }
       setReminderDoc({
         id: doc.id,
         name: doc.name,

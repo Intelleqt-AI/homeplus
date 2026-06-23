@@ -451,6 +451,7 @@ export type EpcAssessment = {
   assessmentDate: string | null; // ISO date
   recommendations: EpcRecommendation[];
   documentName: string | null;
+  isEstimate: boolean;           // true = AI best-effort estimate, not a real certificate
 };
 
 const normEpc = (e: any): EpcAssessment => ({
@@ -469,6 +470,7 @@ const normEpc = (e: any): EpcAssessment => ({
       }))
     : [],
   documentName: e.document_name ?? null,
+  isEstimate: e.is_estimate ?? false,
 });
 
 /**
@@ -485,4 +487,32 @@ export const fetchEpc = async () => {
 export const reanalyzeEpc = async (documentId: string) => {
   const { data: res } = await apiClient.post(`/api/v1/documents/${documentId}/analyze-epc/`, {});
   return { data: res.data ? normEpc(res.data) : null };
+};
+
+// ─── System health ────────────────────────────────────────────────────────────
+
+export type SystemHealthRec = { title: string; detail: string; saving?: string };
+
+export type SystemHealth = {
+  key: string;
+  name: string;
+  score: number;            // 0–100, deterministic predictive Health Index
+  last: string;             // e.g. "Serviced 04 Jun 2026"
+  next: string;             // e.g. "Next due May 2027"
+  note: string;             // AI-enriched when available, else deterministic
+  tone?: 'good' | 'warn' | 'poor';
+  status?: 'ok' | 'due_soon' | 'overdue';  // predictive status
+  forecast?: string;        // e.g. "Service due in ~2 months" ('' when ok)
+  risk?: string;            // AI: what could go wrong if ignored
+  recommendations?: SystemHealthRec[];  // AI: prioritized next actions
+};
+
+/**
+ * GET /api/v1/insights/systems-health/ — per-system condition for the dashboard
+ * "System health" card. Returns only the systems the user has data for; an empty
+ * array means the card should show its empty state.
+ */
+export const fetchSystemsHealth = async () => {
+  const { data: res } = await apiClient.get('/api/v1/insights/systems-health/');
+  return { data: (Array.isArray(res.data) ? res.data : []) as SystemHealth[] };
 };

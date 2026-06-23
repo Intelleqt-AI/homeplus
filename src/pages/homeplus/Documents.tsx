@@ -171,6 +171,7 @@ const Documents = () => {
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: [DOCS_URL] });
       queryClient.refetchQueries({ queryKey: [EXPIRY_URL] });
+      queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
       setDeleteDocId(null);
       toast.success('Document deleted.');
     },
