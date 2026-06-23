@@ -3,7 +3,7 @@ import {
   Upload, Download, Eye, Trash2, FileText, Package, FolderOpen,
   Search, AlertTriangle, Pencil, Loader2, CalendarIcon,
   ShieldCheck, Umbrella, Leaf, BookOpen, ClipboardList, Ruler,
-  Landmark, Key, Layers, HelpCircle,
+  Landmark, Key, Layers, HelpCircle, BadgeCheck, Zap,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,62 +19,30 @@ import { toast } from '@/lib/toast';
 import { format, parseISO } from 'date-fns';
 import useFetch from '@/hooks/useFetch';
 import useDelete from '@/hooks/useDelete';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deleteFile, updateDocument, getDocumentDownloadUrl, type NormDoc, type DocumentUpdatePayload, type PaginatedResponse } from '@/lib/Api';
 import DocsUploadDialog from '@/components/docsUploadDialog';
-import { exportDocumentPack } from '@/lib/Api2';
+import { exportDocumentPack, fetchDocumentSummary, type DocumentSummary } from '@/lib/Api2';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
 import { cn } from '@/lib/utils';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType, getTradeCategoryLabel } from '@/lib/tradeCategories';
 
 // ── Category config ────────────────────────────────────────────────────────────
 
-type CatEntry = { name: string; color: string; bg: string; Icon: React.ElementType; need: number };
+type CatEntry = { name: string; color: string; bg: string; Icon: React.ElementType };
 const CAT_CONFIG: Record<string, CatEntry> = {
-  compliance:         { name: 'Compliance',         color: '#A855F7', bg: '#F3E8FF', Icon: ShieldCheck,   need: 5 },
-  insurance:          { name: 'Insurance',           color: '#3B82F6', bg: '#DBEAFE', Icon: Umbrella,      need: 2 },
-  energy_epc:         { name: 'Energy & EPC',        color: '#10B981', bg: '#DCFCE7', Icon: Leaf,          need: 2 },
-  manuals_appliances: { name: 'Manuals',             color: '#F59E0B', bg: '#FEF3C7', Icon: BookOpen,      need: 4 },
-  surveys_reports:    { name: 'Surveys',             color: '#64748B', bg: '#E2E8F0', Icon: ClipboardList, need: 2 },
-  planning:           { name: 'Planning',            color: '#14B8A6', bg: '#CCFBF1', Icon: Ruler,         need: 1 },
-  purchase:           { name: 'Purchase',            color: '#0EA5E9', bg: '#E0F2FE', Icon: Landmark,      need: 3 },
-  tenancy:            { name: 'Tenancy',             color: '#F43F5E', bg: '#FFE4E6', Icon: Key,           need: 2 },
+  compliance:         { name: 'Compliance',         color: '#A855F7', bg: '#F3E8FF', Icon: ShieldCheck },
+  warranty:           { name: 'Warranty',           color: '#6366F1', bg: '#E0E7FF', Icon: BadgeCheck },
+  insurance:          { name: 'Insurance',           color: '#3B82F6', bg: '#DBEAFE', Icon: Umbrella },
+  energy_epc:         { name: 'Energy & EPC',        color: '#10B981', bg: '#DCFCE7', Icon: Leaf },
+  manuals_appliances: { name: 'Manuals',             color: '#F59E0B', bg: '#FEF3C7', Icon: BookOpen },
+  surveys_reports:    { name: 'Surveys',             color: '#64748B', bg: '#E2E8F0', Icon: ClipboardList },
+  tenancy:            { name: 'Tenancy',             color: '#F43F5E', bg: '#FFE4E6', Icon: Key },
+  purchase:           { name: 'Purchase',            color: '#0EA5E9', bg: '#E0F2FE', Icon: Landmark },
+  planning:           { name: 'Planning',            color: '#14B8A6', bg: '#CCFBF1', Icon: Ruler },
+  utility:            { name: 'Utility',             color: '#F97316', bg: '#FFEDD5', Icon: Zap },
+  other:              { name: 'Other',               color: '#71717A', bg: '#F4F4F5', Icon: FolderOpen },
 };
-
-// ── Inline primitives ──────────────────────────────────────────────────────────
-
-function HealthBar({ value, segments = 10, color }: { value: number; segments?: number; color?: string }) {
-  const filled = Math.round((value / 100) * segments);
-  const c = color ?? (value >= 80 ? '#10B981' : value >= 60 ? '#FBBF24' : '#EF4444');
-  return (
-    <div className="flex gap-0.5">
-      {Array.from({ length: segments }).map((_, i) => (
-        <div key={i} className="h-1.5 flex-1 rounded-full" style={{ background: i < filled ? c : '#E8E8E3' }} />
-      ))}
-    </div>
-  );
-}
-
-function CompletenessRing({ value, size = 80, strokeWidth = 8 }: { value: number; size?: number; strokeWidth?: number }) {
-  const r = (size - strokeWidth) / 2;
-  const c = 2 * Math.PI * r;
-  const len = (value / 100) * c;
-  return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EEEEEA" strokeWidth={strokeWidth} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#FBBF24" strokeWidth={strokeWidth}
-          strokeLinecap="round" strokeDasharray={`${len} ${c}`} />
-      </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: Math.round(size * 0.26), fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: '#1A1A1A' }}>
-          {value}<span style={{ fontSize: Math.round(size * 0.13), fontWeight: 500, color: '#8B8B8B' }}>%</span>
-        </span>
-        <span style={{ fontSize: 9, color: '#8B8B8B', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>Complete</span>
-      </div>
-    </div>
-  );
-}
 
 // ── Existing helpers (unchanged) ───────────────────────────────────────────────
 
@@ -110,8 +78,11 @@ interface EditState {
   expires_at: Date | null; notes: string;
 }
 
-const DOCS_URL = '/api/v1/documents/';
-const EXPIRY_URL = '/api/v1/documents/expiring/';
+// Request page_size=100 (backend max) so a typical user's full library comes
+// down in one shot. Counts still come from /documents/summary/ below — they
+// stay correct even if a user exceeds 100 docs.
+const DOCS_URL = '/api/v1/documents/?page_size=100';
+const EXPIRY_URL = '/api/v1/documents/expiring/?page_size=100';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -157,6 +128,21 @@ const Documents = () => {
 
   const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL);
 
+  // Authoritative counts come from /documents/summary/ — same query key the
+  // dashboard uses, so both pages share cache and always agree.
+  const { data: summaryRes } = useQuery({
+    queryKey: ['documents-summary'],
+    queryFn: fetchDocumentSummary,
+  });
+  const summary: DocumentSummary = summaryRes?.data ?? { total: 0, valid: 0, expiring: 0, expired: 0, by_discipline: {} };
+
+  // refetch wrapper that also busts the shared summary cache, so dashboard
+  // and Documents page tick together after an upload/delete/edit.
+  const refetchAll = useMemo(() => () => {
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ['documents-summary'] });
+  }, [refetch, queryClient]);
+
   const { data: propertiesRes } = useFetch<{ results?: { id: string; role: string; heating_type?: string; year_built?: number }[]; data?: { id: string; role: string; heating_type?: string; year_built?: number }[] }>('/api/v1/properties/');
   const primaryProperty = useMemo(() => {
     const list = propertiesRes?.results ?? propertiesRes?.data ?? [];
@@ -171,6 +157,7 @@ const Documents = () => {
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: [DOCS_URL] });
       queryClient.refetchQueries({ queryKey: [EXPIRY_URL] });
+      queryClient.invalidateQueries({ queryKey: ['documents-summary'] });
       queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
       setDeleteDocId(null);
       toast.success('Document deleted.');
@@ -183,6 +170,7 @@ const Documents = () => {
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: [DOCS_URL] });
       queryClient.refetchQueries({ queryKey: [EXPIRY_URL] });
+      queryClient.invalidateQueries({ queryKey: ['documents-summary'] });
       setEditDoc(null);
       toast.success('Document updated.');
     },
@@ -216,14 +204,11 @@ const Documents = () => {
   // ── Computed ───────────────────────────────────────────────────────────────
 
   const stats = useMemo(() => ({
-    total: allDocs.length,
-    expiring: expiringDocs.length,
-    expired: allDocs.filter(d => d.is_expired).length,
-    compliance: allDocs.filter(d => d.discipline === 'compliance').length,
-  }), [allDocs, expiringDocs]);
-
-  const validCount = allDocs.filter(d => !d.is_expired).length;
-  const completeness = stats.total > 0 ? Math.round((validCount / stats.total) * 100) : 0;
+    total: summary.total,
+    expiring: summary.expiring,
+    expired: summary.expired,
+    compliance: summary.by_discipline?.compliance ?? 0,
+  }), [summary]);
 
   const docsByDiscipline = useMemo(() => {
     const map: Record<string, NormDoc[]> = {};
@@ -320,21 +305,13 @@ const Documents = () => {
     setSelectedForExport(prev => checked ? [...prev, id] : prev.filter(x => x !== id));
   const handleSelectAll = (checked: boolean) => setSelectedForExport(checked ? allDocs.map(d => d.id) : []);
 
-  // PackBuilder items (real selected + top missing)
-  const packInItems = allDocs.filter(d => selectedForExport.includes(d.id)).slice(0, 6);
-  const packMissing = allDocs.filter(d => !selectedForExport.includes(d.id)).slice(0, Math.max(0, 6 - packInItems.length));
+  // PackBuilder list — every real document (selected first), scrollable in the card.
   const PACK_ITEMS = [
-    ...packInItems.map(d => ({ name: d.name, inPack: true })),
-    ...packMissing.map(d => ({ name: d.name, inPack: false })),
-    ...( packInItems.length + packMissing.length < 3
-      ? [
-          { name: 'Title Deeds', inPack: false },
-          { name: 'Mortgage agreement', inPack: false },
-          { name: 'FENSA window cert', inPack: false },
-        ].slice(0, 3 - (packInItems.length + packMissing.length))
-      : []
-    ),
+    ...allDocs.filter(d => selectedForExport.includes(d.id)).map(d => ({ id: d.id, name: d.name, inPack: true })),
+    ...allDocs.filter(d => !selectedForExport.includes(d.id)).map(d => ({ id: d.id, name: d.name, inPack: false })),
   ];
+  const packReadiness = allDocs.length > 0 ? Math.round((selectedForExport.length / allDocs.length) * 100) : 0;
+  const allSelected = allDocs.length > 0 && selectedForExport.length === allDocs.length;
 
   const MONTHS_SHORT = ['J','F','M','A','M','J','J','A','S','O','N','D'];
   const MONTHS_FULL = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -349,7 +326,6 @@ const Documents = () => {
         {/* ── DocsHero ─────────────────────────────────────── */}
         <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex items-center justify-between gap-5 flex-wrap">
           <div className="flex items-center gap-4">
-            <CompletenessRing value={completeness} size={80} strokeWidth={8} />
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Document pack</p>
               <h1 className="text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-0.5 leading-none">Your home paperwork</h1>
@@ -360,7 +336,7 @@ const Documents = () => {
             <div className="flex gap-3">
               {[
                 { label: 'Total files', value: String(stats.total), Icon: FileText, tint: '#F5F5F0', color: '#1A1A1A' },
-                { label: 'Compliance', value: `${stats.compliance}/5`, Icon: ShieldCheck, tint: '#F3E8FF', color: '#A855F7' },
+                { label: 'Compliance', value: String(stats.compliance), Icon: ShieldCheck, tint: '#F3E8FF', color: '#A855F7' },
                 { label: 'Expiring', value: String(stats.expiring), Icon: AlertTriangle, tint: '#FFFBEB', color: '#F59E0B' },
                 { label: 'Expired', value: String(stats.expired), Icon: AlertTriangle, tint: '#FEF2F2', color: '#EF4444' },
               ].map(s => (
@@ -377,12 +353,6 @@ const Documents = () => {
               ))}
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => { setExportMode('pick'); setExportModalSelected([]); setExportModalSearch(''); setIsExportModalOpen(true); }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-[#E8E8E3] bg-white text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors"
-              >
-                <Package className="w-4 h-4" /> Build moving pack
-              </button>
               <button
                 onClick={() => openUploadForm()}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors"
@@ -467,8 +437,9 @@ const Documents = () => {
                 </button>
                 {/* Discipline cards */}
                 {Object.entries(CAT_CONFIG).map(([key, cat]) => {
-                  const have = docsByDiscipline[key]?.length ?? 0;
-                  const pct = Math.round((have / cat.need) * 100);
+                  // Authoritative count from /documents/summary/; freshness label
+                  // still reads the (paginated) loaded docs — fine for page_size=100.
+                  const have = summary.by_discipline?.[key] ?? 0;
                   const active = activeTab === key;
                   const lastDoc = docsByDiscipline[key]?.sort((a, b) =>
                     new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())[0];
@@ -487,17 +458,10 @@ const Documents = () => {
                           style={{ background: cat.bg, color: cat.color }}>
                           <cat.Icon className="w-4 h-4" />
                         </span>
-                        <div className="text-right">
-                          <span className="text-[18px] font-bold tracking-tight text-[#1A1A1A]">{have}</span>
-                          <span className="text-[11px] text-[#8B8B8B]"> / {cat.need}</span>
-                        </div>
+                        <span className="text-[18px] font-bold tracking-tight text-[#1A1A1A]">{have}</span>
                       </div>
                       <p className="text-[13px] font-semibold text-[#1A1A1A] leading-snug">{cat.name}</p>
-                      <HealthBar value={Math.min(pct, 100)} segments={10} color={have >= cat.need ? '#10B981' : cat.color} />
-                      <div className="flex items-center justify-between text-[10.5px] text-[#8B8B8B]">
-                        <span>{Math.min(pct, 100)}% complete</span>
-                        <span>{lastDate ? `Last ${lastDate}` : 'Empty'}</span>
-                      </div>
+                      <span className="text-[10.5px] text-[#8B8B8B]">{lastDate ? `Last ${lastDate}` : 'Empty'}</span>
                     </button>
                   );
                 })}
@@ -548,13 +512,15 @@ const Documents = () => {
               </div>
 
               {/* Table header row */}
-              <div className="grid gap-3 px-3.5 pb-2 border-b border-[#E8E8E3] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]"
-                style={{ gridTemplateColumns: '40px minmax(0,1.6fr) minmax(0,1fr) 100px 110px 110px 32px' }}>
+              <div className="grid items-center gap-3 px-3.5 pb-2 border-b border-[#E8E8E3] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]
+                grid-cols-[36px_minmax(0,1fr)_auto_32px]
+                sm:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_auto_32px]
+                md:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_100px_110px_auto_32px]">
                 <span />
                 <span>Document</span>
-                <span>Category</span>
-                <span>Size</span>
-                <span>Added</span>
+                <span className="hidden sm:inline">Category</span>
+                <span className="hidden md:inline">Size</span>
+                <span className="hidden md:inline">Added</span>
                 <span className="text-right">Status</span>
                 <span />
               </div>
@@ -579,8 +545,10 @@ const Documents = () => {
                     const catCfg = CAT_CONFIG[doc.discipline];
                     return (
                       <div key={doc.id}
-                        className="group grid gap-3 px-3.5 py-3 rounded-[12px] items-center hover:bg-[#FAFAF7] transition-colors cursor-pointer"
-                        style={{ gridTemplateColumns: '40px minmax(0,1.6fr) minmax(0,1fr) 100px 110px 110px 32px' }}
+                        className="group grid items-center gap-3 px-3.5 py-3 rounded-[12px] hover:bg-[#FAFAF7] transition-colors cursor-pointer
+                          grid-cols-[36px_minmax(0,1fr)_auto_32px]
+                          sm:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_auto_32px]
+                          md:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_100px_110px_auto_32px]"
                       >
                         <span className="h-9 w-9 rounded-[10px] flex items-center justify-center shrink-0"
                           style={{ background: catCfg?.bg ?? '#F5F5F0', color: catCfg?.color ?? '#6B6B6B' }}>
@@ -590,12 +558,12 @@ const Documents = () => {
                           <p className="text-[13.5px] font-semibold text-[#1A1A1A] truncate">{doc.name}</p>
                           <p className="text-[11.5px] text-[#6B6B6B] truncate">{tradeTypeLabel(doc.doc_type) || '—'}</p>
                         </div>
-                        <span className="text-[12px] text-[#6B6B6B] truncate">{catCfg?.name ?? doc.discipline}</span>
-                        <span className="text-[12px] text-[#6B6B6B]">{formatBytes(doc.file_size)}</span>
-                        <span className="text-[12px] text-[#6B6B6B]">{format(parseISO(doc.uploaded_at), 'dd MMM yyyy')}</span>
-                        <div className="flex items-center justify-end gap-1.5">
+                        <span className="hidden sm:inline-block text-[12px] text-[#6B6B6B] truncate">{catCfg?.name ?? doc.discipline}</span>
+                        <span className="hidden md:inline-block text-[12px] text-[#6B6B6B]">{formatBytes(doc.file_size)}</span>
+                        <span className="hidden md:inline-block text-[12px] text-[#6B6B6B]">{format(parseISO(doc.uploaded_at), 'dd MMM yyyy')}</span>
+                        <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
                           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
-                          <div className="hidden group-hover:flex items-center gap-0.5">
+                          <div className="flex md:hidden md:group-hover:flex items-center gap-0.5 flex-wrap justify-end">
                             <button onClick={() => setPreviewDoc(doc)} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Preview">
                               <Eye className="w-3.5 h-3.5" />
                             </button>
@@ -654,63 +622,107 @@ const Documents = () => {
               </div>
               <h3 className="text-[20px] font-bold tracking-tight text-white mt-3.5 mb-1">One pack, ready when you move</h3>
               <p className="text-[12px] text-white/55 leading-relaxed">Add docs new owners ask for. Hand it over as a single ZIP.</p>
-              {/* Progress */}
-              <div className="mt-3.5 p-3.5 rounded-[12px]" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center justify-between text-[11px] mb-1.5">
-                  <span className="text-white/55">Pack readiness</span>
-                  <span className="text-white font-semibold">
-                    {allDocs.length > 0 ? Math.round((selectedForExport.length / Math.max(allDocs.length, 12)) * 100) : 0}%
-                  </span>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                  <div className="h-full rounded-full bg-[#FBBF24] transition-all"
-                    style={{ width: `${allDocs.length > 0 ? Math.round((selectedForExport.length / Math.max(allDocs.length, 12)) * 100) : 0}%` }} />
-                </div>
-              </div>
-              {/* Checklist */}
-              <div className="mt-3.5 flex flex-col">
-                {PACK_ITEMS.slice(0, 6).map((item, i) => (
-                  <div key={i} className="flex items-center gap-2.5 py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                    <span className="h-4 w-4 rounded-[4px] flex items-center justify-center shrink-0"
-                      style={{ background: item.inPack ? '#FBBF24' : 'transparent', border: `1px solid ${item.inPack ? '#FBBF24' : 'rgba(255,255,255,0.25)'}` }}>
-                      {item.inPack && (
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </span>
-                    <span className="flex-1 text-[12.5px] truncate" style={{ color: item.inPack ? '#fff' : 'rgba(255,255,255,0.5)' }}>{item.name}</span>
-                    <span className="text-[10px]" style={{ color: item.inPack ? '#10B981' : 'rgba(255,255,255,0.35)' }}>
-                      {item.inPack ? 'in pack' : 'missing'}
-                    </span>
+              {allDocs.length === 0 ? (
+                /* New user — no documents to build a pack from yet */
+                <div className="mt-4 flex flex-col items-center text-center py-6">
+                  <div className="h-12 w-12 rounded-full flex items-center justify-center mb-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <FileText className="w-5 h-5 text-white/40" />
                   </div>
-                ))}
-              </div>
-              <div className="flex flex-col gap-2 mt-4">
-                <button
-                  disabled={selectedForExport.length === 0 || exportLoading}
-                  onClick={async () => {
-                    if (selectedForExport.length === 0) {
-                      setExportMode('pick'); setExportModalSelected([]); setExportModalSearch(''); setIsExportModalOpen(true);
-                      return;
-                    }
-                    setExportLoading(true);
-                    try {
-                      await exportDocumentPack(selectedForExport);
-                      setSelectedForExport([]);
-                    } catch { toast.error('Failed to generate pack.'); }
-                    finally { setExportLoading(false); }
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[13px] font-semibold bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] transition-colors disabled:opacity-40"
-                >
-                  <Download className="w-4 h-4" />
-                  {exportLoading ? 'Generating…' : selectedForExport.length > 0 ? 'Export pack (ZIP)' : 'Select documents'}
-                </button>
-                <button className="w-full py-2.5 rounded-full text-[13px] font-medium text-white/70 hover:text-white transition-colors"
-                  style={{ border: '1px solid rgba(255,255,255,0.15)' }}>
-                  Share with conveyancer
-                </button>
-              </div>
+                  <p className="text-[13px] font-semibold text-white/80">No documents uploaded yet</p>
+                  <p className="text-[11px] text-white/45 mt-1 max-w-[210px] leading-relaxed">Upload your documents to build a moving pack to hand over when you sell.</p>
+                  <button onClick={() => openUploadForm()}
+                    className="mt-3.5 flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-[12.5px] font-semibold bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] transition-colors">
+                    <Upload className="w-3.5 h-3.5" /> Upload document
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Progress */}
+                  <div className="mt-3.5 p-3.5 rounded-[12px]" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div className="flex items-center justify-between text-[11px] mb-1.5">
+                      <span className="text-white/55">Pack readiness</span>
+                      <span className="text-white font-semibold">{packReadiness}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                      <div className="h-full rounded-full bg-[#FBBF24] transition-all" style={{ width: `${packReadiness}%` }} />
+                    </div>
+                  </div>
+                  {/* Select all */}
+                  <div className="flex items-center justify-between mt-3.5">
+                    <span className="text-[11px] text-white/45">{selectedForExport.length} of {allDocs.length} selected</span>
+                    <button onClick={() => handleSelectAll(!allSelected)}
+                      className="text-[11px] font-semibold text-[#FBBF24] hover:text-[#F59E0B] transition-colors">
+                      {allSelected ? 'Clear all' : 'Select all'}
+                    </button>
+                  </div>
+                  {/* Checklist — tap a document to add/remove it from the pack (scrollable) */}
+                  <div className="pack-scroll mt-2 flex flex-col overflow-y-auto pr-1" style={{ maxHeight: 220 }}>
+                    {PACK_ITEMS.map((item) => (
+                      <button key={item.id} type="button" onClick={() => handleExportSelection(item.id, !item.inPack)}
+                        className="flex items-center gap-2.5 py-1.5 w-full text-left shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <span className="h-4 w-4 rounded-[4px] flex items-center justify-center shrink-0"
+                          style={{ background: item.inPack ? '#FBBF24' : 'transparent', border: `1px solid ${item.inPack ? '#FBBF24' : 'rgba(255,255,255,0.25)'}` }}>
+                          {item.inPack && (
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="flex-1 text-[12.5px] truncate" style={{ color: item.inPack ? '#fff' : 'rgba(255,255,255,0.5)' }}>{item.name}</span>
+                        <span className="text-[10px]" style={{ color: item.inPack ? '#10B981' : 'rgba(255,255,255,0.35)' }}>
+                          {item.inPack ? 'in pack' : 'add'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-2 mt-4">
+                    <button
+                      disabled={selectedForExport.length === 0 || exportLoading}
+                      onClick={async () => {
+                        if (selectedForExport.length === 0) {
+                          setExportMode('pick'); setExportModalSelected([]); setExportModalSearch(''); setIsExportModalOpen(true);
+                          return;
+                        }
+                        setExportLoading(true);
+                        try {
+                          await exportDocumentPack(selectedForExport);
+                          setSelectedForExport([]);
+                        } catch { toast.error('Failed to generate pack.'); }
+                        finally { setExportLoading(false); }
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[13px] font-semibold bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] transition-colors disabled:opacity-40"
+                    >
+                      <Download className="w-4 h-4" />
+                      {exportLoading ? 'Generating…' : selectedForExport.length > 0 ? 'Export pack (ZIP)' : 'Select documents'}
+                    </button>
+                    <button
+                      disabled={exportLoading}
+                      onClick={async () => {
+                        if (selectedForExport.length === 0) {
+                          setExportMode('pick'); setExportModalSelected([]); setExportModalSearch(''); setIsExportModalOpen(true);
+                          return;
+                        }
+                        setExportLoading(true);
+                        try {
+                          await exportDocumentPack(selectedForExport);
+                          const count = selectedForExport.length;
+                          const subject = encodeURIComponent('Home documentation pack');
+                          const body = encodeURIComponent(
+                            `Hi,\n\nPlease find attached my home documentation pack (${count} document${count === 1 ? '' : 's'}) for the property. Let me know if you need anything else.\n\nThanks`
+                          );
+                          window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                          toast.success('Pack downloaded — attach the ZIP to the email that just opened.');
+                          setSelectedForExport([]);
+                        } catch { toast.error('Failed to prepare pack.'); }
+                        finally { setExportLoading(false); }
+                      }}
+                      className="w-full py-2.5 rounded-full text-[13px] font-medium text-white/70 hover:text-white transition-colors disabled:opacity-40"
+                      style={{ border: '1px solid rgba(255,255,255,0.15)' }}>
+                      Share with conveyancer
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* ComplianceCalendar */}
@@ -809,7 +821,7 @@ const Documents = () => {
 
       {/* ── Dialogs (unchanged logic) ─────────────────────── */}
 
-      <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} refetch={refetch} prefillDiscipline={prefillDiscipline} />
+      <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} refetch={refetchAll} prefillDiscipline={prefillDiscipline} />
       <Quote open={quoteOpen} setOpen={setQuoteOpen} prefill={quotePrefill} />
 
       {/* Export modal */}

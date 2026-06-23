@@ -295,8 +295,6 @@ const HomePlusDashboard = () => {
 
   const docSummary = (docSummaryResp?.data ?? docSummaryResp) as { total?: number; valid?: number; expiring?: number; expired?: number; by_discipline?: Record<string, number> } | null;
   const totalDocs: number = docSummary?.total ?? 0;
-  const validDocs: number = docSummary?.valid ?? 0;
-  const completeness: number = totalDocs > 0 ? Math.round((validDocs / totalDocs) * 100) : 0;
   const docsByDiscipline: Record<string, number> = docSummary?.by_discipline ?? {};
 
   const now = new Date();
@@ -542,7 +540,7 @@ const HomePlusDashboard = () => {
               <span className="text-[13px] text-[#8B8B8B]">files</span>
             </div>
             <p className="text-[11px] text-[#8B8B8B]">
-              {totalDocs === 0 ? 'No documents yet' : `${completeness}% complete`}
+              {totalDocs === 0 ? 'No documents yet' : `${totalDocs} file${totalDocs === 1 ? '' : 's'} stored`}
             </p>
             <div className="mt-1">
               <Sparkline data={totalDocs > 0 ? [0, totalDocs] : [0, 0]} />
@@ -1040,10 +1038,7 @@ const HomePlusDashboard = () => {
                 <div className="flex items-center gap-3.5 py-3 my-3 border-y border-[#E8E8E3]">
                   <div className="shrink-0">
                     <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{totalDocs}</span>
-                    <span className="text-[12px] text-[#8B8B8B] ml-1.5">files · {completeness}% complete</span>
-                  </div>
-                  <div className="flex-1 h-1.5 bg-[#EEEEEA] rounded-full overflow-hidden">
-                    <div className="h-full bg-[#FBBF24] rounded-full transition-all" style={{ width: `${completeness}%` }} />
+                    <span className="text-[12px] text-[#8B8B8B] ml-1.5">files stored</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
