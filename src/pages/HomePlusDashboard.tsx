@@ -1,24 +1,26 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Bell, Upload, Flame, Zap, Droplets, CloudRain, TreePine,
+  Bell, Upload, Flame, Zap, Droplets, CloudRain, Home,
   Clock, ShieldCheck, Umbrella, BookOpen, ClipboardList,
   Ruler, Leaf, FolderOpen, Wrench, CheckCircle, Mail,
   TrendingUp, AlertCircle, CalendarDays, PoundSterling,
-  Cpu, Star, ArrowRight, CalendarCheck, FileText,
+  Cpu, Star, ArrowRight, CalendarCheck, FileText, Trash2,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import useFetch from '@/hooks/useFetch';
-import { getEvents, fetchMotScore, fetchDocumentSummary, fetchLastCompleted, fetchAnnualSpend, fetchTimeline, fetchAttention, fetchRecentActivity, fetchQuotesSummary, declineQuotes, fetchEpc, type AnnualSpendYear, type AttentionItem, type ActivityItem } from '@/lib/Api2';
-import { fetchData, modifyBid } from '@/lib/Api';
+import { getEvents, fetchMotScore, fetchDocumentSummary, fetchLastCompleted, fetchAnnualSpend, fetchTimeline, fetchAttention, fetchRecentActivity, fetchQuotesSummary, declineQuotes, fetchEpc, getProperty, fetchSystemsHealth, type AnnualSpendYear, type AttentionItem, type ActivityItem, type SystemHealth } from '@/lib/Api2';
+import { fetchData, modifyBid, fetchLeads } from '@/lib/Api';
 import { toast } from '@/lib/toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import DocsUploadDialog from '@/components/docsUploadDialog';
 import HomeMotWizard, { STEP_CONFIG, type HomeMotStep } from '@/components/homemot/HomeMotWizard';
+import EmptyState from '@/components/homeplus/EmptyState';
+import GettingStarted, { type GsStep } from '@/components/homeplus/GettingStarted';
 import {
-  BarChart, Bar, Cell, XAxis, PieChart, Pie,
+  BarChart, Bar, Cell, XAxis, YAxis, PieChart, Pie,
   Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts';
 
@@ -98,12 +100,26 @@ const ACTIVITY_ICON: Record<string, React.ElementType> = {
   new_review: Star,
   job_status: Clock,
   bid_rejected: AlertCircle,
+  document_uploaded: Upload,
+  document_deleted: Trash2,
+  trade_added: Wrench,
+  epc_rated: Leaf,
+  reminder_set: CalendarCheck,
 };
 
 const activityTime = (iso: string | null): string => {
   if (!iso) return '';
   const d = new Date(iso);
   return isNaN(d.getTime()) ? '' : formatDistanceToNow(d, { addSuffix: true });
+};
+
+// System-health key → icon for the "System health" card.
+const SYSTEM_ICON: Record<string, React.ElementType> = {
+  heating: Flame,
+  electrical: Zap,
+  plumbing: Droplets,
+  roof: CloudRain,
+  safety: ShieldCheck,
 };
 
 // ── Energy & EPC helpers ──────────────────────────────────────────────────────
@@ -156,7 +172,7 @@ const HomePlusDashboard = () => {
     breakdown?: Record<string, number>;
     answers?: Record<HomeMotStep, Record<string, boolean>>;
   } | null;
-  const homeMotScore: number = motScore?.score ?? 8;
+  const homeMotScore: number = motScore?.score ?? 0;
   const motAnswers: Record<HomeMotStep, Record<string, boolean>> =
     motScore?.answers ?? { A: {}, B: {}, C: {} };
 
@@ -205,11 +221,31 @@ const HomePlusDashboard = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: systemsResp } = useFetch('/api/v1/insights/systems-health/', {
+    queryKey: ['systems-health'],
+    queryFn: fetchSystemsHealth,
+    staleTime: 5 * 60 * 1000,
+  });
+  const systemsHealth: SystemHealth[] = Array.isArray(systemsResp?.data) ? systemsResp.data : [];
+
   const { data: quotesResp } = useFetch('/api/v1/jobs/quotes-summary/', {
     queryKey: ['quotes'],
     queryFn: fetchQuotesSummary,
     staleTime: 5 * 60 * 1000,
   });
+
+  // The user's posted jobs (shared cache with the Job Leads page). Lets the
+  // TradePilot card surface jobs that are still awaiting quotes — quotes-summary
+  // only returns a job once it has a pending bid.
+  const { data: leadsResp } = useFetch('/api/v1/jobs/', {
+    queryKey: ['leads'],
+    queryFn: fetchLeads,
+    staleTime: 5 * 60 * 1000,
+  });
+  const leads: { isApproved?: boolean; status?: string }[] = Array.isArray(leadsResp) ? leadsResp : [];
+  const awaitingJobsCount = leads.filter(
+    j => !j.isApproved && j.status !== 'completed' && j.status !== 'cancelled'
+  ).length;
 
   // AI-generated EPC rating (null until an EPC certificate has been analysed).
   const { data: epcResp } = useFetch('/api/v1/insights/epc/', {
@@ -218,6 +254,9 @@ const HomePlusDashboard = () => {
     staleTime: 5 * 60 * 1000,
   });
   const epc = epcResp?.data ?? null;
+  // Only treat the EPC as "rated" once AI has extracted a usable band/score; an empty/legacy
+  // assessment must still show the upload wizard, not a half-filled "Score — / 100".
+  const hasEpcRating = !!epc && (!!epc.currentBand || epc.currentScore != null);
 
   const { data: notifData } = useQuery({
     queryKey: ['ho-notifications'],
@@ -232,6 +271,15 @@ const HomePlusDashboard = () => {
     staleTime: 60 * 1000,
   });
   const recentActivity: ActivityItem[] = Array.isArray(activityResp?.data) ? activityResp.data : [];
+
+  // Property — drives the first-run "Add your property" step (pre-completed at sign-up).
+  const { data: propertyResp } = useFetch('/api/v1/properties/', {
+    queryKey: ['property'],
+    queryFn: getProperty,
+    staleTime: 5 * 60 * 1000,
+  });
+  const property = propertyResp?.data ?? null;
+  const hasProperty = !!property;
 
   // ── Computed values ────────────────────────────────────────────────────────
 
@@ -314,6 +362,14 @@ const HomePlusDashboard = () => {
   }));
   const spendCats = (activeSpend?.categories ?? []).map(c => ({ name: c.label, v: Math.round(c.amount), color: c.color }));
 
+  // Empty-state skeleton: when the selected year has no spend, show uniform
+  // light-gray placeholder bars/donut instead of an invisible 0-height chart.
+  const spendEmpty = spendBarData.every(d => d.spend === 0);
+  const spendBarChartData = spendEmpty ? spendBarData.map(d => ({ ...d, spend: 1 })) : spendBarData;
+  const spendPieData = spendCats.length
+    ? spendCats.map(c => ({ name: c.name, value: c.v, fill: c.color }))
+    : [{ name: 'No spend yet', value: 1, fill: '#ECECE6' }];
+
   // YTD home-spend vitals tile — derived from the same annual-spend payload.
   const ytdYear = now.getFullYear();
   const curYearEntry = spendYears.find(y => y.year === ytdYear) ?? null;
@@ -324,14 +380,6 @@ const HomePlusDashboard = () => {
   const ytdPrev = sumToDate(prevYearEntry); // same period last year
   const ytdDeltaPct = ytdPrev > 0 ? Math.round(((ytdSpend - ytdPrev) / ytdPrev) * 100) : null;
   const ytdBars = curYearEntry?.bars ?? [];
-
-  const SYSTEMS = [
-    { name: 'Heating', Icon: Flame, score: 86, last: 'Serviced 04 Jun 2026', next: 'Next service May 2027', note: 'Worcester Bosch 28i' },
-    { name: 'Electrical', Icon: Zap, score: 92, last: 'EICR 22 Jan 2026', next: 'Next test Jan 2031', note: '5-year inspection valid' },
-    { name: 'Plumbing', Icon: Droplets, score: 78, last: 'Mains check 14 Mar', next: 'Stopcock check due', note: 'Low pressure noted x2' },
-    { name: 'Roof & Exterior', Icon: CloudRain, score: 64, last: 'Gutter clean Oct 2024', next: 'Clean due Sep 2026', note: 'Missing tile flagged' },
-    { name: 'Garden & Grounds', Icon: TreePine, score: 71, last: 'Hedge cut 02 May', next: 'Trim due Jun 2026', note: '—' },
-  ];
 
   // TradePilot — quotes in: live from /api/v1/jobs/quotes-summary/ (real bids).
   const quotes = quotesResp?.data ?? null;
@@ -383,6 +431,37 @@ const HomePlusDashboard = () => {
     { key: 'planning', name: 'Planning', color: '#14B8A6', bg: '#CCFBF1', Icon: Ruler },
   ];
 
+  // ── First-run "Getting started" checklist ────────────────────────────────────
+  // Completion derives entirely from data already on the page. Step 1 (property) is
+  // pre-completed at sign-up → endowed progress ("1 of 5 done").
+  const motTickedTotal = motYesCount('A') + motYesCount('B') + motYesCount('C');
+  const hasJob = !!quotes?.job;
+
+  const gsSteps: GsStep[] = [
+    { id: 'property', icon: Home, title: 'Add your property', helper: "Your home's address & details — done at sign-up.", done: hasProperty, ctaLabel: 'View', href: '/dashboard/settings' },
+    { id: 'mot', icon: ClipboardList, title: 'Run your first Home MOT check', helper: 'Three 60-second checks. Each one grows your score.', done: motTickedTotal > 0, ctaLabel: 'Start check', onCta: () => setMotStep('A') },
+    { id: 'document', icon: Upload, title: 'Upload your first document', helper: 'Warranties, certificates & manuals — safe and searchable.', done: totalDocs > 0, ctaLabel: 'Upload', onCta: () => setUploadOpen(true) },
+    { id: 'epc', icon: Leaf, title: 'Get your EPC rating', helper: 'Upload your certificate for an instant energy rating.', done: hasEpcRating, ctaLabel: 'Add EPC', onCta: () => setEpcUploadOpen(true) },
+    { id: 'job', icon: Wrench, title: 'Post your first job', helper: 'Get quotes from verified local trades.', done: hasJob, ctaLabel: 'Post a job', href: '/dashboard/job-leads' },
+  ];
+  // "Activated" = ≥2 meaningful actions (property excluded). New accounts always see
+  // the checklist (through its celebratory finish); older accounts only while still
+  // under-engaged. Either way it disappears once dismissed.
+  const meaningfulDone = [totalDocs > 0, motTickedTotal > 0, hasEpcRating, hasJob].filter(Boolean).length;
+  const createdMs = user?.created_at ? new Date(user.created_at).getTime() : NaN;
+  const accountAgeDays = Number.isFinite(createdMs) ? (Date.now() - createdMs) / 86_400_000 : 999;
+
+  const gsDismissKey = `hp_gs_dismissed_${user?.id ?? 'anon'}`;
+  const [gsDismissed, setGsDismissed] = useState(false);
+  useEffect(() => {
+    try { setGsDismissed(localStorage.getItem(gsDismissKey) === '1'); } catch { setGsDismissed(false); }
+  }, [gsDismissKey]);
+  const dismissGettingStarted = () => {
+    try { localStorage.setItem(gsDismissKey, '1'); } catch { /* ignore */ }
+    setGsDismissed(true);
+  };
+  const showGettingStarted = !gsDismissed && (accountAgeDays < 30 || meaningfulDone < 2);
+
   return (
     <DashboardLayout>
       <div className="space-y-4">
@@ -416,6 +495,11 @@ const HomePlusDashboard = () => {
           </div>
         </div>
 
+        {/* ── First-run getting-started checklist (new users only) ── */}
+        {showGettingStarted && (
+          <GettingStarted firstName={firstName} steps={gsSteps} onDismiss={dismissGettingStarted} />
+        )}
+
         {/* ── Vitals strip — 4 tiles ──────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* MOT */}
@@ -425,8 +509,8 @@ const HomePlusDashboard = () => {
               <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{homeMotScore}</span>
               <span className="text-[13px] text-[#8B8B8B]">/ 100</span>
             </div>
-            <p className="text-[11px] text-[#8B8B8B] flex items-center gap-1">
-              <span className="text-green-600">↑</span> +8 this month
+            <p className="text-[11px] text-[#8B8B8B]">
+              {motTickedTotal === 0 ? 'Run your first check to begin' : `${motTickedTotal} check${motTickedTotal === 1 ? '' : 's'} completed`}
             </p>
             <div className="mt-1"><HealthBar value={homeMotScore} segments={12} /></div>
           </div>
@@ -457,11 +541,11 @@ const HomePlusDashboard = () => {
               <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{totalDocs}</span>
               <span className="text-[13px] text-[#8B8B8B]">files</span>
             </div>
-            <p className="text-[11px] text-[#8B8B8B] flex items-center gap-1">
-              <span className="text-green-600">↑</span> {completeness}% complete
+            <p className="text-[11px] text-[#8B8B8B]">
+              {totalDocs === 0 ? 'No documents yet' : `${completeness}% complete`}
             </p>
             <div className="mt-1">
-              <Sparkline data={[4,5,6,6,7,7,8,8,9,9,Math.max(totalDocs, 9),Math.max(totalDocs, 9)]} />
+              <Sparkline data={totalDocs > 0 ? [0, totalDocs] : [0, 0]} />
             </div>
           </div>
           {/* Upcoming events */}
@@ -475,7 +559,7 @@ const HomePlusDashboard = () => {
               {eventsNext30 === 0 ? 'Nothing scheduled · all clear' : 'Due in next 30 days'}
             </p>
             <div className="mt-1">
-              <Sparkline data={[2,1,3,2,4,3,eventsNext30 || 2,eventsNext30 || 2]} color="#A855F7" />
+              <Sparkline data={eventsNext30 > 0 ? [0, eventsNext30] : [0, 0]} color="#A855F7" />
             </div>
           </div>
         </div>
@@ -534,32 +618,56 @@ const HomePlusDashboard = () => {
               </Link>
             } />
             <div className="mt-4">
-              {SYSTEMS.map((s, i) => (
-                <div key={s.name}
-                  className={`grid items-center gap-5 py-3.5 ${i > 0 ? 'border-t border-[#E8E8E3]' : ''}`}
-                  style={{ gridTemplateColumns: '200px 1fr 56px' }}>
-                  <div className="flex items-center gap-2.5">
-                    <span className="h-8 w-8 rounded-[10px] bg-[#F5F5F0] text-[#1A1A1A] flex items-center justify-center shrink-0">
-                      <s.Icon className="w-4 h-4" />
-                    </span>
-                    <div>
-                      <p className="text-[13.5px] font-semibold text-[#1A1A1A]">{s.name}</p>
-                      <p className="text-[11px] text-[#8B8B8B]">{s.note}</p>
+              {systemsHealth.length === 0 ? (
+                <EmptyState
+                  icon={Cpu}
+                  title="Track your home's systems"
+                  subtitle="Log a service or run your Home MOT and we'll start scoring heating, electrics, plumbing and more."
+                  ctaLabel="Start Home MOT"
+                  onCta={() => setMotStep('C')}
+                />
+              ) : (
+                systemsHealth.map((s, i) => {
+                  const Icon = SYSTEM_ICON[s.key] ?? Cpu;
+                  return (
+                    <div key={s.key}
+                      className={`grid items-center gap-5 py-3.5 ${i > 0 ? 'border-t border-[#E8E8E3]' : ''}`}
+                      style={{ gridTemplateColumns: '200px 1fr 56px' }}>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="h-8 w-8 rounded-[10px] bg-[#F5F5F0] text-[#1A1A1A] flex items-center justify-center shrink-0">
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[13.5px] font-semibold text-[#1A1A1A]">{s.name}</p>
+                          <p className="text-[11px] text-[#8B8B8B] truncate">{s.note}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <HealthBar value={s.score} segments={20} />
+                        <div className="flex justify-between mt-1.5 text-[11px] text-[#6B6B6B]">
+                          <span>{s.last}</span>
+                          <span className="text-[#8B8B8B]">{s.next}</span>
+                        </div>
+                        {s.forecast && s.status !== 'ok' && (
+                          <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={s.status === 'overdue'
+                              ? { background: '#FEF2F2', color: '#DC2626' }
+                              : { background: '#FFFBEB', color: '#B45309' }}>
+                            {s.status === 'overdue'
+                              ? <AlertCircle className="w-2.5 h-2.5" />
+                              : <Clock className="w-2.5 h-2.5" />}
+                            {s.forecast}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[24px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.score}</span>
+                        <span className="text-[10px] text-[#8B8B8B] ml-0.5">/100</span>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <HealthBar value={s.score} segments={20} />
-                    <div className="flex justify-between mt-1.5 text-[11px] text-[#6B6B6B]">
-                      <span>{s.last}</span>
-                      <span className="text-[#8B8B8B]">{s.next}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[24px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.score}</span>
-                    <span className="text-[10px] text-[#8B8B8B] ml-0.5">/100</span>
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -630,22 +738,25 @@ const HomePlusDashboard = () => {
                 </div>
                 <div className="h-[72px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={spendBarData} barCategoryGap="25%" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    <BarChart data={spendBarChartData} barCategoryGap="25%" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <YAxis hide domain={spendEmpty ? [0, 3] : [0, 'auto']} />
                       <XAxis dataKey="month" tickLine={false} axisLine={false}
-                        tick={{ fontSize: 9, fill: '#8B8B8B' }} interval={0} />
-                      <RTooltip
-                        cursor={{ fill: '#F5F5F0', radius: 4 }}
-                        content={({ active, payload }) =>
-                          active && payload?.length ? (
-                            <div className="bg-white border border-[#E8E8E3] rounded-[8px] px-2.5 py-1.5 shadow-sm text-[11px]">
-                              <span className="font-semibold text-[#1A1A1A]">£{payload[0].value}</span>
-                            </div>
-                          ) : null
-                        }
-                      />
-                      <Bar dataKey="spend" radius={[3, 3, 0, 0]} isAnimationActive animationDuration={400}>
-                        {spendBarData.map((entry, i) => (
-                          <Cell key={i} fill={entry.highlight ? '#FBBF24' : '#E4E4DE'} />
+                        tick={{ fontSize: 9, fill: spendEmpty ? '#B8B8B8' : '#8B8B8B' }} interval={0} />
+                      {!spendEmpty && (
+                        <RTooltip
+                          cursor={{ fill: '#F5F5F0', radius: 4 }}
+                          content={({ active, payload }) =>
+                            active && payload?.length ? (
+                              <div className="bg-white border border-[#E8E8E3] rounded-[8px] px-2.5 py-1.5 shadow-sm text-[11px]">
+                                <span className="font-semibold text-[#1A1A1A]">£{payload[0].value}</span>
+                              </div>
+                            ) : null
+                          }
+                        />
+                      )}
+                      <Bar dataKey="spend" radius={[3, 3, 0, 0]} isAnimationActive={!spendEmpty} animationDuration={400}>
+                        {spendBarChartData.map((entry, i) => (
+                          <Cell key={i} fill={!spendEmpty && entry.highlight ? '#FBBF24' : '#E4E4DE'} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -658,14 +769,14 @@ const HomePlusDashboard = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={spendCats.map(c => ({ name: c.name, value: c.v, fill: c.color }))}
+                        data={spendPieData}
                         cx="50%" cy="50%"
                         innerRadius={32} outerRadius={46}
                         dataKey="value"
-                        isAnimationActive animationBegin={0} animationDuration={500}
+                        isAnimationActive={!spendEmpty} animationBegin={0} animationDuration={500}
                         strokeWidth={0}
                       >
-                        {spendCats.map((c, i) => <Cell key={i} fill={c.color} />)}
+                        {spendPieData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                       </Pie>
                     </PieChart>
                   </ResponsiveContainer>
@@ -675,13 +786,17 @@ const HomePlusDashboard = () => {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
-                  {spendCats.map(c => (
-                    <div key={c.name} className="flex items-center gap-2 text-[12px]">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
-                      <span className="flex-1 text-[#4A4A4A] truncate">{c.name}</span>
-                      <span className="font-semibold text-[#1A1A1A]">£{c.v}</span>
-                    </div>
-                  ))}
+                  {spendCats.length ? (
+                    spendCats.map(c => (
+                      <div key={c.name} className="flex items-center gap-2 text-[12px]">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
+                        <span className="flex-1 text-[#4A4A4A] truncate">{c.name}</span>
+                        <span className="font-semibold text-[#1A1A1A]">£{c.v}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[12px] text-[#8B8B8B]">No categories yet</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -690,17 +805,17 @@ const HomePlusDashboard = () => {
           {/* EPC */}
           <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
             <Eyebrow icon={Leaf} label="Energy & EPC" trailing={
-              epc ? (
+              hasEpcRating ? (
                 <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"
                   style={{ background: epcBandBadge(epc.currentBand).bg, color: epcBandBadge(epc.currentBand).color }}>
-                  EPC {epc.currentBand}
+                  EPC {epc.currentBand}{epc.isEstimate ? ' · est' : ''}
                 </span>
               ) : (
                 <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#F5F5F0] text-[#8B8B8B]">AI-powered</span>
               )
             } />
 
-            {epc ? (
+            {hasEpcRating ? (
               <>
                 <div className="grid grid-cols-2 gap-2.5 mt-4 mb-3">
                   <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
@@ -709,7 +824,7 @@ const HomePlusDashboard = () => {
                       <span className="text-[40px] font-extrabold leading-none tracking-tighter" style={{ color: epcBandColor(epc.currentBand) }}>{epc.currentBand || '—'}</span>
                       <span className="text-[13px] text-[#6B6B6B]">Score {epc.currentScore ?? '—'} / 100</span>
                     </div>
-                    <p className="text-[11px] text-[#8B8B8B] mt-1.5">{epc.validUntil ? `Valid until ${epcDate(epc.validUntil)}` : 'AI-assessed'}</p>
+                    <p className="text-[11px] text-[#8B8B8B] mt-1.5">{epc.isEstimate ? 'AI estimate' : epc.validUntil ? `Valid until ${epcDate(epc.validUntil)}` : 'AI-assessed'}</p>
                   </div>
                   <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Potential rating</p>
@@ -737,6 +852,11 @@ const HomePlusDashboard = () => {
                           {epc.recommendations.length > 1 ? ` · +${epc.recommendations.length - 1} more` : ''}
                         </p>
                       </>
+                    ) : epc.isEstimate ? (
+                      <>
+                        <p className="text-[13px] font-semibold text-[#1A1A1A]">AI estimate from your upload</p>
+                        <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">Upload your EPC certificate for an exact, verified rating</p>
+                      </>
                     ) : (
                       <>
                         <p className="text-[13px] font-semibold text-[#1A1A1A]">AI-rated from your certificate</p>
@@ -756,22 +876,28 @@ const HomePlusDashboard = () => {
                 <div className="grid grid-cols-2 gap-2.5 mt-4 mb-3">
                   <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">EPC rating</p>
-                    <span className="block text-[40px] font-extrabold text-[#D1D5DB] leading-none tracking-tighter mt-1.5">—</span>
-                    <p className="text-[11px] text-[#8B8B8B] mt-1.5">No certificate yet</p>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <AlertCircle className="w-5 h-5 text-[#FBBF24] shrink-0" />
+                      <span className="text-[13px] font-medium text-[#9CA3AF]">Upload to see your rating</span>
+                    </div>
+                    <p className="text-[11px] text-[#8B8B8B] mt-1.5">AI-assessed</p>
                   </div>
                   <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Potential rating</p>
-                    <span className="block text-[40px] font-extrabold text-[#D1D5DB] leading-none tracking-tighter mt-1.5">—</span>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <AlertCircle className="w-5 h-5 text-[#FBBF24] shrink-0" />
+                      <span className="text-[13px] font-medium text-[#9CA3AF]">Upload to see your rating</span>
+                    </div>
                     <p className="text-[11px] text-[#8B8B8B] mt-1.5">With recommended changes</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px]">
                   <span className="h-8 w-8 rounded-[10px] bg-[#FBBF24] text-[#1A1A1A] flex items-center justify-center shrink-0">
-                    <Leaf className="w-4 h-4" />
+                    <AlertCircle className="w-4 h-4" />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-[#1A1A1A]">Get an instant AI EPC rating</p>
-                    <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">Upload your EPC certificate — we'll read your rating &amp; recommendations</p>
+                    <p className="text-[13px] font-semibold text-[#1A1A1A]">Upload a document for your AI EPC rating</p>
+                    <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">Add your EPC certificate or a photo — our AI reads it and scores your rating instantly</p>
                   </div>
                   <button
                     onClick={() => setEpcUploadOpen(true)}
@@ -791,7 +917,13 @@ const HomePlusDashboard = () => {
             <Eyebrow icon={Clock} label="Recent activity" />
             <div className="mt-4">
               {recentActivity.length === 0 ? (
-                <p className="text-[12px] text-[#8B8B8B] py-6 text-center">No recent activity yet</p>
+                <EmptyState
+                  icon={Clock}
+                  title="Your activity will appear here"
+                  subtitle="Document uploads, job requests, quotes, EPC ratings and reminders show up as you use HomePlus."
+                  ctaLabel="Upload a document"
+                  onCta={() => setUploadOpen(true)}
+                />
               ) : (
                 recentActivity.map((it, i) => {
                   const Icon = ACTIVITY_ICON[it.type] ?? Bell;
@@ -817,7 +949,9 @@ const HomePlusDashboard = () => {
             <Eyebrow icon={Wrench} label="TradePilot — quotes in" trailing={
               quotes?.job
                 ? <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">Awaiting decision</span>
-                : undefined
+                : awaitingJobsCount > 0
+                  ? <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#F5F5F0] text-[#6B6B6B]">{awaitingJobsCount} active</span>
+                  : undefined
             } />
             {quotes?.job ? (
               <>
@@ -864,18 +998,22 @@ const HomePlusDashboard = () => {
                   </button>
                 </div>
               </>
+            ) : awaitingJobsCount > 0 ? (
+              <EmptyState
+                icon={Clock}
+                title={`${awaitingJobsCount} job${awaitingJobsCount === 1 ? '' : 's'} awaiting quotes`}
+                subtitle="Local trades are reviewing your request — we'll alert you when quotes arrive."
+                ctaLabel="View jobs"
+                href="/dashboard/job-leads"
+              />
             ) : (
-              <div className="mt-4 flex flex-col items-center justify-center text-center py-6">
-                <div className="h-9 w-9 rounded-[10px] bg-[#F5F5F0] flex items-center justify-center mb-2">
-                  <Wrench className="w-4 h-4 text-[#8B8B8B]" />
-                </div>
-                <p className="text-[13px] font-semibold text-[#1A1A1A]">No quotes awaiting your decision</p>
-                <p className="text-[11px] text-[#6B6B6B] mt-0.5">Post a job to get quotes from local trades.</p>
-                <Link to="/dashboard/job-leads"
-                  className="mt-3 text-xs font-semibold px-3.5 py-2 rounded-full bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors">
-                  Post a job
-                </Link>
-              </div>
+              <EmptyState
+                icon={Wrench}
+                title="No quotes awaiting your decision"
+                subtitle="Post a job to get quotes from verified local trades."
+                ctaLabel="Post a job"
+                href="/dashboard/job-leads"
+              />
             )}
           </div>
 
@@ -887,30 +1025,44 @@ const HomePlusDashboard = () => {
                 Open <ArrowRight className="w-3 h-3" />
               </Link>
             } />
-            <div className="flex items-center gap-3.5 py-3 my-3 border-y border-[#E8E8E3]">
-              <div className="shrink-0">
-                <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{totalDocs}</span>
-                <span className="text-[12px] text-[#8B8B8B] ml-1.5">files · {completeness}% complete</span>
+            {totalDocs === 0 ? (
+              <div className="mt-2">
+                <EmptyState
+                  icon={FolderOpen}
+                  title="Build your home's document vault"
+                  subtitle="Upload warranties, certificates and manuals — searchable and safe."
+                  ctaLabel="Upload first document"
+                  onCta={() => setUploadOpen(true)}
+                />
               </div>
-              <div className="flex-1 h-1.5 bg-[#EEEEEA] rounded-full overflow-hidden">
-                <div className="h-full bg-[#FBBF24] rounded-full transition-all" style={{ width: `${completeness}%` }} />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {DOC_CATS.map(c => {
-                const count = docsByDiscipline[c.key] ?? 0;
-                return (
-                  <div key={c.key} className="p-2.5 rounded-[10px] bg-[#FAFAF7] border border-[#E8E8E3]">
-                    <span className="inline-flex h-6 w-6 rounded-[7px] items-center justify-center mb-1.5"
-                      style={{ background: c.bg, color: c.color }}>
-                      <c.Icon className="w-3 h-3" />
-                    </span>
-                    <p className="text-[12px] font-semibold text-[#1A1A1A]">{c.name}</p>
-                    <p className="text-[11px] text-[#8B8B8B] mt-0.5">{count} {count === 1 ? 'file' : 'files'}</p>
+            ) : (
+              <>
+                <div className="flex items-center gap-3.5 py-3 my-3 border-y border-[#E8E8E3]">
+                  <div className="shrink-0">
+                    <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{totalDocs}</span>
+                    <span className="text-[12px] text-[#8B8B8B] ml-1.5">files · {completeness}% complete</span>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="flex-1 h-1.5 bg-[#EEEEEA] rounded-full overflow-hidden">
+                    <div className="h-full bg-[#FBBF24] rounded-full transition-all" style={{ width: `${completeness}%` }} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {DOC_CATS.map(c => {
+                    const count = docsByDiscipline[c.key] ?? 0;
+                    return (
+                      <div key={c.key} className="p-2.5 rounded-[10px] bg-[#FAFAF7] border border-[#E8E8E3]">
+                        <span className="inline-flex h-6 w-6 rounded-[7px] items-center justify-center mb-1.5"
+                          style={{ background: c.bg, color: c.color }}>
+                          <c.Icon className="w-3 h-3" />
+                        </span>
+                        <p className="text-[12px] font-semibold text-[#1A1A1A]">{c.name}</p>
+                        <p className="text-[11px] text-[#8B8B8B] mt-0.5">{count} {count === 1 ? 'file' : 'files'}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

@@ -101,6 +101,8 @@ export type NormDoc = {
   created_event: string | null;
   /** OCR-suggested expiry date returned by the backend after upload. */
   suggested_expiry?: string | null;
+  /** Set to 'unreadable' when an energy_epc upload could not be AI-rated. */
+  epc_status?: string | null;
   _docId: string;
   // Legacy compat — homePack.tsx and HomePlusDashboard.tsx use these
   publicUrl: null;
@@ -128,6 +130,7 @@ const normDoc = (doc: any): NormDoc => ({
   property_address: doc.property_address ?? null,
   created_event: doc.created_event ?? null,
   suggested_expiry: doc.suggested_expiry ?? null,
+  epc_status: doc.epc_status ?? null,
   _docId: doc.id,
   publicUrl: null,
   metadata: {
