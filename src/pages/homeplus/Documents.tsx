@@ -35,7 +35,7 @@ const CAT_CONFIG: Record<string, CatEntry> = {
   insurance:          { name: 'Insurance',           color: '#3B82F6', bg: '#DBEAFE', Icon: Umbrella,      need: 2 },
   energy_epc:         { name: 'Energy & EPC',        color: '#10B981', bg: '#DCFCE7', Icon: Leaf,          need: 2 },
   manuals_appliances: { name: 'Manuals',             color: '#F59E0B', bg: '#FEF3C7', Icon: BookOpen,      need: 4 },
-  surveys:            { name: 'Surveys',             color: '#64748B', bg: '#E2E8F0', Icon: ClipboardList, need: 2 },
+  surveys_reports:    { name: 'Surveys',             color: '#64748B', bg: '#E2E8F0', Icon: ClipboardList, need: 2 },
   planning:           { name: 'Planning',            color: '#14B8A6', bg: '#CCFBF1', Icon: Ruler,         need: 1 },
   purchase:           { name: 'Purchase',            color: '#0EA5E9', bg: '#E0F2FE', Icon: Landmark,      need: 3 },
   tenancy:            { name: 'Tenancy',             color: '#F43F5E', bg: '#FFE4E6', Icon: Key,           need: 2 },
@@ -273,8 +273,16 @@ const Documents = () => {
   }, [filtered, sort]);
 
   const suggestedDocs = useMemo(() => {
+    // A suggestion is satisfied if a doc is in the right discipline AND its
+    // category matches exactly OR is unspecific ('' / 'other'). Discipline-grouped
+    // categories (epc_certificate, boiler_manual) can't be set via the trade-scoped
+    // upload dialog, so an uploaded EPC lands as energy_epc/'other' — match on that.
+    const UNSPECIFIC_CATS = new Set(['', 'other']);
     const hasDisc = (discipline: string, category?: string) =>
-      allDocs.some(d => d.discipline === discipline && (!category || d.category === category));
+      allDocs.some(d =>
+        d.discipline === discipline &&
+        (!category || d.category === category || UNSPECIFIC_CATS.has((d.category ?? '').toLowerCase()))
+      );
     const suggestions: { label: string; discipline: string; category: string; reason: string }[] = [];
     if (!hasDisc('insurance'))
       suggestions.push({ label: 'Buildings Insurance', discipline: 'insurance', category: '', reason: 'Every UK homeowner should have this' });
