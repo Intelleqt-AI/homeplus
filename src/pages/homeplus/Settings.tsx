@@ -173,9 +173,9 @@ const Settings = () => {
           return (
             <Card key={cat}>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <IconComp className={`w-5 h-5 ${cfg.headerColor}`} />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                    <IconComp className={`w-5 h-5 shrink-0 ${cfg.headerColor}`} />
                     {cfg.label}
                   </CardTitle>
                   <Badge variant={cfg.badgeVariant}>{cfg.badge}</Badge>
@@ -240,20 +240,39 @@ const Settings = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="hidden sm:flex h-12 w-12 bg-[#F5F5F0] rounded-full items-center justify-center">
                 <SettingsIcon className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
               </div>
               <div>
                 <p className="text-[#6B6B6B] text-sm mb-0.5">Manage your account</p>
-                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Settings</h1>
+                <h1 className="text-[#1A1A1A] text-lg sm:text-2xl font-semibold leading-tight">Settings</h1>
               </div>
             </div>
           </div>
 
-          {/* Tab strip */}
-          <div className="grid grid-cols-5 gap-4">
+          {/* Tab strip — mobile: scrollable pill row; desktop: card grid */}
+          <div className="flex sm:hidden overflow-x-auto gap-2 pb-1 [&::-webkit-scrollbar]:hidden">
+            {tabs.map((tab) => {
+              const IconComponent = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-full whitespace-nowrap text-sm font-medium shrink-0 transition-all ${
+                    isActive ? 'bg-[#1A1A1A] text-white' : 'bg-[#F5F5F0] text-[#4A4A4A] hover:bg-[#E8E8E3]'
+                  }`}
+                >
+                  <IconComponent className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-[#FBBF24]'}`} strokeWidth={1.5} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="hidden sm:grid grid-cols-5 gap-4">
             {tabs.map((tab) => {
               const IconComponent = tab.icon;
               const isActive = activeTab === tab.id;

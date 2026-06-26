@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef } from 'react';
 import {
   Upload, Download, Eye, Trash2, FileText, Package, FolderOpen,
-  Search, AlertTriangle, Pencil, Loader2, CalendarIcon,
+  Search, AlertTriangle, Pencil, Loader2, CalendarIcon, MoreHorizontal,
+  SlidersHorizontal, ChevronRight,
   ShieldCheck, Umbrella, Leaf, BookOpen, ClipboardList, Ruler,
   Landmark, Key, Layers, HelpCircle, BadgeCheck, Zap,
 } from 'lucide-react';
@@ -108,6 +109,8 @@ const Documents = () => {
   const docListRef = useRef<HTMLDivElement>(null);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quotePrefill, setQuotePrefill] = useState<QuotePrefill | undefined>();
+  const [mobileActionDoc, setMobileActionDoc] = useState<NormDoc | null>(null);
+  const [mobileCatOpen, setMobileCatOpen] = useState(false);
 
   const openUploadForm = (discipline?: string) => {
     setPrefillDiscipline(discipline ?? (activeTab !== 'all' ? activeTab : undefined));
@@ -324,7 +327,7 @@ const Documents = () => {
       <div className="space-y-4">
 
         {/* ── DocsHero ─────────────────────────────────────── */}
-        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex items-center justify-between gap-5 flex-wrap">
+        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
           <div className="flex items-center gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Document pack</p>
@@ -332,15 +335,15 @@ const Documents = () => {
               <p className="text-[13px] text-[#6B6B6B] mt-1.5">Stored safely, organised by category, exportable as a moving pack.</p>
             </div>
           </div>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { label: 'Total files', value: String(stats.total), Icon: FileText, tint: '#F5F5F0', color: '#1A1A1A' },
                 { label: 'Compliance', value: String(stats.compliance), Icon: ShieldCheck, tint: '#F3E8FF', color: '#A855F7' },
                 { label: 'Expiring', value: String(stats.expiring), Icon: AlertTriangle, tint: '#FFFBEB', color: '#F59E0B' },
                 { label: 'Expired', value: String(stats.expired), Icon: AlertTriangle, tint: '#FEF2F2', color: '#EF4444' },
               ].map(s => (
-                <div key={s.label} className="text-center px-4 py-2.5 bg-[#FAFAF7] border border-[#E8E8E3] rounded-[14px]">
+                <div key={s.label} className="text-center px-4 py-2.5 bg-[#FAFAF7] border border-[#E8E8E3] rounded-[14px] flex flex-col items-center justify-center">
                   <div className="flex items-center justify-center gap-1.5 mb-1">
                     <span className="h-5 w-5 rounded-full flex items-center justify-center"
                       style={{ background: s.tint, color: s.color }}>
@@ -355,7 +358,7 @@ const Documents = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => openUploadForm()}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors w-full sm:w-auto"
               >
                 <Upload className="w-4 h-4" /> Upload document
               </button>
@@ -364,7 +367,7 @@ const Documents = () => {
         </div>
 
         {/* ── Two-column layout ──────────────────────────────── */}
-        <div className="flex gap-4 items-start">
+        <div className="flex flex-col gap-4 items-start lg:flex-row">
 
           {/* ── Main content ── */}
           <div className="flex-1 min-w-0 flex flex-col gap-4">
@@ -410,8 +413,36 @@ const Documents = () => {
               </div>
             )}
 
-            {/* Categories grid */}
-            <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+            {/* Categories — mobile: filter button / desktop: full grid */}
+            {/* Mobile filter button */}
+            <div className="sm:hidden">
+              {(() => {
+                const activeCat = activeTab === 'all' ? null : CAT_CONFIG[activeTab];
+                const ActiveIcon = activeCat?.Icon ?? Layers;
+                const activeName = activeCat?.name ?? 'All documents';
+                const activeCount = activeTab === 'all' ? stats.total : (summary.by_discipline?.[activeTab] ?? 0);
+                return (
+                  <button
+                    onClick={() => setMobileCatOpen(true)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 bg-white rounded-[16px] border border-[#E8E8E3] hover:border-[#FBBF24]/60 transition-colors"
+                  >
+                    <span className="h-9 w-9 rounded-[11px] flex items-center justify-center shrink-0"
+                      style={{ background: activeCat?.bg ?? '#EEEEEA', color: activeCat?.color ?? '#1A1A1A' }}>
+                      <ActiveIcon className="w-4 h-4" />
+                    </span>
+                    <div className="flex-1 text-left min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Category filter</p>
+                      <p className="text-[13.5px] font-bold text-[#1A1A1A] truncate">{activeName}</p>
+                    </div>
+                    <span className="text-[13px] font-bold text-[#1A1A1A] mr-1">{activeCount}</span>
+                    <SlidersHorizontal className="w-4 h-4 text-[#9B9B9B] shrink-0" />
+                  </button>
+                );
+              })()}
+            </div>
+
+            {/* Desktop categories grid */}
+            <div className="hidden sm:block bg-white rounded-[18px] border border-[#E8E8E3] p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 bg-[#F5F5F0] rounded-full flex items-center justify-center">
@@ -421,7 +452,6 @@ const Documents = () => {
                 </div>
               </div>
               <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
-                {/* All documents */}
                 <button
                   onClick={() => setActiveTab('all')}
                   className={`text-left p-4 rounded-[14px] border flex flex-col gap-3 transition-all ${activeTab === 'all' ? 'bg-[#1A1A1A] border-[#1A1A1A] text-white' : 'bg-[#FAFAF7] border-[#E8E8E3] text-[#1A1A1A] hover:border-[#FBBF24]/60'}`}
@@ -435,10 +465,7 @@ const Documents = () => {
                   <p className="text-[13px] font-semibold">All documents</p>
                   <span className={`text-[10.5px] ${activeTab === 'all' ? 'text-white/55' : 'text-[#8B8B8B]'}`}>Across every category</span>
                 </button>
-                {/* Discipline cards */}
                 {Object.entries(CAT_CONFIG).map(([key, cat]) => {
-                  // Authoritative count from /documents/summary/; freshness label
-                  // still reads the (paginated) loaded docs — fine for page_size=100.
                   const have = summary.by_discipline?.[key] ?? 0;
                   const active = activeTab === key;
                   const lastDoc = docsByDiscipline[key]?.sort((a, b) =>
@@ -486,14 +513,14 @@ const Documents = () => {
                     )}
                   </h3>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <div className="relative w-full sm:w-auto">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8B8B8B]" />
                     <input
                       placeholder="Search documents…"
                       value={search}
                       onChange={e => setSearch(e.target.value)}
-                      className="h-9 w-52 pl-8 pr-4 rounded-full border border-[#E8E8E3] bg-white text-[12.5px] text-[#1A1A1A] placeholder:text-[#8B8B8B] outline-none focus:border-[#1A1A1A] transition-colors"
+                      className="h-9 w-full sm:w-52 pl-8 pr-4 rounded-full border border-[#E8E8E3] bg-white text-[12.5px] text-[#1A1A1A] placeholder:text-[#8B8B8B] outline-none focus:border-[#1A1A1A] transition-colors"
                     />
                   </div>
                   <select
@@ -512,8 +539,7 @@ const Documents = () => {
               </div>
 
               {/* Table header row */}
-              <div className="grid items-center gap-3 px-3.5 pb-2 border-b border-[#E8E8E3] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]
-                grid-cols-[36px_minmax(0,1fr)_auto_32px]
+              <div className="hidden sm:grid items-center gap-3 px-3.5 pb-2 border-b border-[#E8E8E3] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]
                 sm:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_auto_32px]
                 md:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_100px_110px_auto_32px]">
                 <span />
@@ -545,8 +571,9 @@ const Documents = () => {
                     const catCfg = CAT_CONFIG[doc.discipline];
                     return (
                       <div key={doc.id}
+                        onClick={() => setPreviewDoc(doc)}
                         className="group grid items-center gap-3 px-3.5 py-3 rounded-[12px] hover:bg-[#FAFAF7] transition-colors cursor-pointer
-                          grid-cols-[36px_minmax(0,1fr)_auto_32px]
+                          grid-cols-[36px_minmax(0,1fr)_32px]
                           sm:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_auto_32px]
                           md:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_100px_110px_auto_32px]"
                       >
@@ -556,37 +583,52 @@ const Documents = () => {
                         </span>
                         <div className="min-w-0">
                           <p className="text-[13.5px] font-semibold text-[#1A1A1A] truncate">{doc.name}</p>
-                          <p className="text-[11.5px] text-[#6B6B6B] truncate">{tradeTypeLabel(doc.doc_type) || '—'}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <p className="text-[11.5px] text-[#6B6B6B] truncate">{(catCfg?.name ?? tradeTypeLabel(doc.doc_type)) || '—'}</p>
+                            <span className={`sm:hidden shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
+                          </div>
                         </div>
+                        {/* Mobile: tap to open action sheet */}
+                        <button
+                          className="sm:hidden flex items-center justify-center w-8 h-8 rounded-full hover:bg-[#E8E8E3] text-[#9B9B9B]"
+                          onClick={e => { e.stopPropagation(); setMobileActionDoc(doc); }}
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                        {/* Desktop: category */}
                         <span className="hidden sm:inline-block text-[12px] text-[#6B6B6B] truncate">{catCfg?.name ?? doc.discipline}</span>
                         <span className="hidden md:inline-block text-[12px] text-[#6B6B6B]">{formatBytes(doc.file_size)}</span>
                         <span className="hidden md:inline-block text-[12px] text-[#6B6B6B]">{format(parseISO(doc.uploaded_at), 'dd MMM yyyy')}</span>
-                        <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
+                        {/* Status + actions: desktop only */}
+                        <div className="hidden sm:flex flex-wrap items-center justify-end gap-1.5 min-w-0" onClick={e => e.stopPropagation()}>
                           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
                           <div className="flex md:hidden md:group-hover:flex items-center gap-0.5 flex-wrap justify-end">
-                            <button onClick={() => setPreviewDoc(doc)} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Preview">
+                            <button onClick={e => { e.stopPropagation(); setPreviewDoc(doc); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Preview">
                               <Eye className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => downloadFile(doc.id, doc.file_name || doc.name)} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Download">
+                            <button onClick={e => { e.stopPropagation(); downloadFile(doc.id, doc.file_name || doc.name); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Download">
                               <Download className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => openEdit(doc)} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Edit">
+                            <button onClick={e => { e.stopPropagation(); openEdit(doc); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Edit">
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => setDeleteDocId(doc.id)} className="p-1 rounded-full hover:bg-[#FEF2F2] text-[#6B6B6B] hover:text-red-500" title="Delete">
+                            <button onClick={e => { e.stopPropagation(); setDeleteDocId(doc.id); }} className="p-1 rounded-full hover:bg-[#FEF2F2] text-[#6B6B6B] hover:text-red-500" title="Delete">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                             {needsJobCTA(doc) && (
-                              <button onClick={() => handlePostJob(doc)} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] transition-colors ml-1">
+                              <button onClick={e => { e.stopPropagation(); handlePostJob(doc); }} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] transition-colors ml-1">
                                 Post Job
                               </button>
                             )}
                           </div>
                         </div>
-                        <Checkbox
-                          checked={selectedForExport.includes(doc.id)}
-                          onCheckedChange={checked => handleExportSelection(doc.id, checked as boolean)}
-                        />
+                        {/* Checkbox: desktop only */}
+                        <span className="hidden sm:block" onClick={e => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedForExport.includes(doc.id)}
+                            onCheckedChange={checked => handleExportSelection(doc.id, checked as boolean)}
+                          />
+                        </span>
                       </div>
                     );
                   })}
@@ -605,7 +647,7 @@ const Documents = () => {
           </div>
 
           {/* ── Right rail ────────────────────────────────────── */}
-          <div className="w-[290px] shrink-0 flex flex-col gap-4" style={{ position: 'sticky', top: 80 }}>
+          <div className="w-full shrink-0 flex flex-col gap-4 lg:w-[290px] lg:sticky lg:top-[80px]">
 
             {/* PackBuilder */}
             <div className="rounded-[18px] p-5" style={{ background: '#1A1A1A' }}>
@@ -738,7 +780,7 @@ const Documents = () => {
               </div>
 
               {/* 4×3 grid */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {MONTHS_FULL.map((month, i) => {
                   const ev = calendarData[i];
                   const isCurrent = i === currentMonth;
@@ -1025,6 +1067,159 @@ const Documents = () => {
           )}
         </DialogContent>
       </Dialog>
+      {/* ── Mobile category filter sheet ─────────────────── */}
+      {mobileCatOpen && (
+        <div className="sm:hidden fixed inset-0 z-50 flex items-end" onClick={() => setMobileCatOpen(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative w-full bg-white rounded-t-[24px] pb-8 shadow-2xl max-h-[80vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="w-10 h-1 bg-[#E0E0DA] rounded-full mx-auto mt-4 mb-1 shrink-0" />
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#F0F0EB] shrink-0">
+              <span className="text-[15px] font-bold text-[#1A1A1A]">Filter by category</span>
+              {activeTab !== 'all' && (
+                <button
+                  onClick={() => { setActiveTab('all'); setMobileCatOpen(false); }}
+                  className="text-[12px] font-semibold text-[#FBBF24]"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {/* Category list */}
+            <div className="overflow-y-auto flex-1">
+              {/* All documents row */}
+              <button
+                onClick={() => { setActiveTab('all'); setMobileCatOpen(false); }}
+                className={`w-full flex items-center gap-3 px-5 py-3.5 transition-colors ${activeTab === 'all' ? 'bg-[#FAFAF7]' : 'hover:bg-[#FAFAF7]'}`}
+              >
+                <span className={`h-9 w-9 rounded-[11px] flex items-center justify-center shrink-0 ${activeTab === 'all' ? 'bg-[#1A1A1A]' : 'bg-[#EEEEEA]'}`}
+                  style={{ color: activeTab === 'all' ? '#FBBF24' : '#1A1A1A' }}>
+                  <Layers className="w-4 h-4" />
+                </span>
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-[13.5px] font-semibold text-[#1A1A1A]">All documents</p>
+                  <p className="text-[11px] text-[#8B8B8B]">Across every category</p>
+                </div>
+                <span className="text-[13px] font-bold text-[#1A1A1A] mr-2">{stats.total}</span>
+                {activeTab === 'all' && <ChevronRight className="w-4 h-4 text-[#FBBF24] shrink-0" />}
+              </button>
+              {/* Discipline rows */}
+              {Object.entries(CAT_CONFIG).map(([key, cat]) => {
+                const have = summary.by_discipline?.[key] ?? 0;
+                const active = activeTab === key;
+                const lastDoc = docsByDiscipline[key]?.sort((a, b) =>
+                  new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())[0];
+                const lastDate = lastDoc ? format(parseISO(lastDoc.uploaded_at), 'dd MMM') : null;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => { setActiveTab(key); setMobileCatOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-5 py-3.5 border-t border-[#F5F5F0] transition-colors ${active ? 'bg-[#FAFAF7]' : 'hover:bg-[#FAFAF7]'}`}
+                  >
+                    <span className="h-9 w-9 rounded-[11px] flex items-center justify-center shrink-0"
+                      style={{ background: cat.bg, color: cat.color }}>
+                      <cat.Icon className="w-4 h-4" />
+                    </span>
+                    <div className="flex-1 text-left min-w-0">
+                      <p className="text-[13.5px] font-semibold text-[#1A1A1A]">{cat.name}</p>
+                      <p className="text-[11px] text-[#8B8B8B]">{lastDate ? `Last ${lastDate}` : 'Empty'}</p>
+                    </div>
+                    <span className="text-[13px] font-bold text-[#1A1A1A] mr-2">{have}</span>
+                    {active && <ChevronRight className="w-4 h-4 shrink-0" style={{ color: cat.color }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile action sheet ───────────────────────────── */}
+      {mobileActionDoc && (() => {
+        const doc = mobileActionDoc;
+        const sheetCat = CAT_CONFIG[doc.discipline];
+        const SheetIcon = sheetCat?.Icon ?? FileText;
+        const sheetStatus = expiryStatus(doc);
+        const inPack = selectedForExport.includes(doc.id);
+        return (
+          <div className="sm:hidden fixed inset-0 z-50 flex items-end" onClick={() => setMobileActionDoc(null)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div
+              className="relative w-full bg-white rounded-t-[24px] p-5 pb-8 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Handle */}
+              <div className="w-10 h-1 bg-[#E0E0DA] rounded-full mx-auto mb-5" />
+
+              {/* Doc info */}
+              <div className="flex items-center gap-3 mb-4">
+                <span className="h-12 w-12 rounded-[14px] flex items-center justify-center shrink-0"
+                  style={{ background: sheetCat?.bg ?? '#F5F5F0', color: sheetCat?.color ?? '#6B6B6B' }}>
+                  <SheetIcon className="w-5 h-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-bold text-[#1A1A1A] truncate">{doc.name}</p>
+                  <p className="text-[12px] text-[#6B6B6B] mt-0.5">{sheetCat?.name ?? doc.discipline}</p>
+                </div>
+                <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${sheetStatus.cls}`}>
+                  {sheetStatus.label}
+                </span>
+              </div>
+
+              <div className="border-t border-[#F0F0EB] mb-4" />
+
+              {/* Action grid */}
+              <div className="grid grid-cols-4 gap-2.5 mb-4">
+                {([
+                  { icon: Eye, label: 'Preview', onClick: () => { setPreviewDoc(doc); setMobileActionDoc(null); } },
+                  { icon: Download, label: 'Download', onClick: () => { downloadFile(doc.id, doc.file_name || doc.name); setMobileActionDoc(null); } },
+                  { icon: Pencil, label: 'Edit', onClick: () => { openEdit(doc); setMobileActionDoc(null); } },
+                  { icon: Trash2, label: 'Delete', onClick: () => { setDeleteDocId(doc.id); setMobileActionDoc(null); }, danger: true },
+                ] as { icon: React.ElementType; label: string; onClick: () => void; danger?: boolean }[]).map(({ icon: Icon, label, onClick, danger }) => (
+                  <button key={label} onClick={onClick}
+                    className={`flex flex-col items-center gap-2 pt-3.5 pb-3 rounded-[16px] border transition-colors ${
+                      danger
+                        ? 'border-red-100 bg-red-50 text-red-500 active:bg-red-100'
+                        : 'border-[#E8E8E3] bg-[#FAFAF7] text-[#4A4A4A] active:bg-[#EEEEE8]'
+                    }`}>
+                    <Icon className="w-5 h-5" />
+                    <span className="text-[10.5px] font-semibold">{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Post Job */}
+              {needsJobCTA(doc) && (
+                <button
+                  onClick={() => { handlePostJob(doc); setMobileActionDoc(null); }}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-[16px] bg-[#FBBF24] text-[#1A1A1A] font-bold text-[13.5px] active:bg-[#F59E0B] transition-colors mb-3"
+                >
+                  Post Job
+                </button>
+              )}
+
+              {/* Pack toggle */}
+              <button
+                onClick={() => handleExportSelection(doc.id, !inPack)}
+                className={`w-full flex items-center justify-between px-4 py-3.5 rounded-[16px] border transition-colors ${
+                  inPack
+                    ? 'bg-[#1A1A1A] border-[#1A1A1A] text-white'
+                    : 'border-[#E8E8E3] bg-[#FAFAF7] text-[#4A4A4A]'
+                }`}
+              >
+                <span className="text-[13.5px] font-semibold">
+                  {inPack ? '✓ In moving pack' : 'Add to moving pack'}
+                </span>
+                <Package className="w-4 h-4 shrink-0" />
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </DashboardLayout>
   );
 };

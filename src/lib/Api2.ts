@@ -83,9 +83,10 @@ export const deleteEvent = async (eventId: string, scope: DeleteScope = 'this') 
   return { ok: true };
 };
 
-/** Mark an event completed. Optional actual_cost/notes (we don't surface them yet). */
-export const completeEvent = async (eventId: string) => {
-  const { data: res } = await apiClient.post(`/api/v1/events/${eventId}/complete/`, {});
+/** Mark an event completed, optionally recording what it cost (feeds Annual Spend). */
+export const completeEvent = async (eventId: string, actualCost?: number | null) => {
+  const body = actualCost != null ? { actual_cost: actualCost } : {};
+  const { data: res } = await apiClient.post(`/api/v1/events/${eventId}/complete/`, body);
   return { data: res?.data ? normEvent(res.data) : null };
 };
 

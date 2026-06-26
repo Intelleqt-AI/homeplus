@@ -45,8 +45,10 @@ function Sparkline({ data, width = 120, height = 28, color = '#9CA3AF' }: {
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
+  // Inset horizontally so the end-dot/stroke never touch (and clip at) the edges.
+  const pad = 3;
   const coords = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * width,
+    x: pad + (i / (data.length - 1)) * (width - pad * 2),
     y: height - ((v - min) / range) * (height - 4) - 2,
   }));
   const pts = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
@@ -57,7 +59,7 @@ function Sparkline({ data, width = 120, height = 28, color = '#9CA3AF' }: {
     ` L ${last.x.toFixed(1)},${height} Z`;
   const uid = `sg-${color.replace('#','')}`;
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} fill="none" style={{ overflow: 'visible' }}>
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" fill="none" className="block w-full">
       <defs>
         <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity={0.18} />
@@ -468,7 +470,7 @@ const HomePlusDashboard = () => {
         <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Good morning</p>
-            <h1 className="text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-1 leading-none">{firstName}'s home pulse</h1>
+            <h1 className="text-[22px] xs:text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-1 leading-tight xs:leading-none">{firstName}'s home pulse</h1>
           </div>
           <div className="flex items-center gap-2.5 shrink-0">
             <Link
@@ -476,7 +478,7 @@ const HomePlusDashboard = () => {
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-[#E8E8E3] bg-white text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors"
             >
               <Bell className="w-4 h-4" />
-              Notifications
+              <span className="hidden sm:inline">Notifications</span>
               {unreadCount > 0 && (
                 <span className="bg-[#FBBF24] text-[#1A1A1A] rounded-full min-w-[18px] h-[18px] text-[10px] font-bold flex items-center justify-center px-1">
                   {unreadCount}
@@ -488,7 +490,7 @@ const HomePlusDashboard = () => {
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors"
             >
               <Upload className="w-4 h-4" />
-              Upload document
+              <span className="hidden sm:inline">Upload document</span>
             </button>
           </div>
         </div>
@@ -629,15 +631,21 @@ const HomePlusDashboard = () => {
                   const Icon = SYSTEM_ICON[s.key] ?? Cpu;
                   return (
                     <div key={s.key}
-                      className={`grid items-center gap-5 py-3.5 ${i > 0 ? 'border-t border-[#E8E8E3]' : ''}`}
-                      style={{ gridTemplateColumns: '200px 1fr 56px' }}>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="h-8 w-8 rounded-[10px] bg-[#F5F5F0] text-[#1A1A1A] flex items-center justify-center shrink-0">
-                          <Icon className="w-4 h-4" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-[13.5px] font-semibold text-[#1A1A1A]">{s.name}</p>
-                          <p className="text-[11px] text-[#8B8B8B] truncate">{s.note}</p>
+                      className={`flex flex-col gap-2 py-3.5 sm:grid sm:items-center sm:gap-5 sm:[grid-template-columns:160px_1fr_56px] lg:[grid-template-columns:200px_1fr_56px] ${i > 0 ? 'border-t border-[#E8E8E3]' : ''}`}>
+                      {/* Mobile: name + score share one row; sm: wrapper dissolves so both fall into grid cols. */}
+                      <div className="flex items-center justify-between gap-3 sm:contents">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="h-8 w-8 rounded-[10px] bg-[#F5F5F0] text-[#1A1A1A] flex items-center justify-center shrink-0">
+                            <Icon className="w-4 h-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-[13.5px] font-semibold text-[#1A1A1A]">{s.name}</p>
+                            <p className="text-[11px] text-[#8B8B8B] truncate">{s.note}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 sm:order-last">
+                          <span className="text-[24px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.score}</span>
+                          <span className="text-[10px] text-[#8B8B8B] ml-0.5">/100</span>
                         </div>
                       </div>
                       <div>
@@ -657,10 +665,6 @@ const HomePlusDashboard = () => {
                             {s.forecast}
                           </span>
                         )}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[24px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.score}</span>
-                        <span className="text-[10px] text-[#8B8B8B] ml-0.5">/100</span>
                       </div>
                     </div>
                   );
@@ -727,7 +731,7 @@ const HomePlusDashboard = () => {
                 ))}
               </div>
             } />
-            <div className="grid grid-cols-2 gap-6 items-start mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6 items-start mt-4">
               {/* Left: BigStat + BarChart */}
               <div className="flex flex-col gap-3">
                 <div>
@@ -815,7 +819,7 @@ const HomePlusDashboard = () => {
 
             {hasEpcRating ? (
               <>
-                <div className="grid grid-cols-2 gap-2.5 mt-4 mb-3">
+                <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 mt-4 mb-3">
                   <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">EPC rating</p>
                     <div className="flex items-baseline gap-1.5 mt-1.5">
@@ -833,7 +837,8 @@ const HomePlusDashboard = () => {
                     <p className="text-[11px] text-[#8B8B8B] mt-1.5">With recommended changes</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px]">
+                <div className="flex flex-col gap-3 p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px] sm:flex-row sm:items-start">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
                   <span className="h-8 w-8 rounded-[10px] bg-[#FBBF24] text-[#1A1A1A] flex items-center justify-center shrink-0">
                     <Star className="w-4 h-4" />
                   </span>
@@ -862,16 +867,17 @@ const HomePlusDashboard = () => {
                       </>
                     )}
                   </div>
+                  </div>
                   <button
                     onClick={() => setEpcUploadOpen(true)}
-                    className="shrink-0 flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors whitespace-nowrap">
+                    className="shrink-0 flex items-center justify-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors whitespace-nowrap w-full sm:w-auto sm:justify-start">
                     <Upload className="w-3 h-3" /> Update
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-2.5 mt-4 mb-3">
+                <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 mt-4 mb-3">
                   <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">EPC rating</p>
                     <div className="flex items-center gap-1.5 mt-1.5">
@@ -889,17 +895,19 @@ const HomePlusDashboard = () => {
                     <p className="text-[11px] text-[#8B8B8B] mt-1.5">With recommended changes</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px]">
-                  <span className="h-8 w-8 rounded-[10px] bg-[#FBBF24] text-[#1A1A1A] flex items-center justify-center shrink-0">
-                    <AlertCircle className="w-4 h-4" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-[#1A1A1A]">Upload a document for your AI EPC rating</p>
-                    <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">Add your EPC certificate or a photo — our AI reads it and scores your rating instantly</p>
+                <div className="flex flex-col gap-3 p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px] sm:flex-row sm:items-center">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <span className="h-8 w-8 rounded-[10px] bg-[#FBBF24] text-[#1A1A1A] flex items-center justify-center shrink-0">
+                      <AlertCircle className="w-4 h-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-[#1A1A1A]">Upload a document for your AI EPC rating</p>
+                      <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">Add your EPC certificate or a photo — our AI reads it and scores your rating instantly</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => setEpcUploadOpen(true)}
-                    className="shrink-0 flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors whitespace-nowrap">
+                    className="shrink-0 flex items-center justify-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors whitespace-nowrap w-full sm:w-auto sm:justify-start">
                     <Upload className="w-3 h-3" /> Upload
                   </button>
                 </div>
@@ -1041,7 +1049,7 @@ const HomePlusDashboard = () => {
                     <span className="text-[12px] text-[#8B8B8B] ml-1.5">files stored</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 xs:grid-cols-3 gap-2">
                   {DOC_CATS.map(c => {
                     const count = docsByDiscipline[c.key] ?? 0;
                     return (

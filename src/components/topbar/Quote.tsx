@@ -224,14 +224,14 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     >
       <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto p-0">
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+        <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-gray-100">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-gray-900">Post a Job</DialogTitle>
             <p className="text-sm text-gray-500 mt-0.5">Get quotes from verified local tradespeople</p>
           </DialogHeader>
         </div>
 
-        <div className="px-6 py-5 space-y-6">
+        <div className="px-4 sm:px-6 py-5 space-y-6">
           {/* ── Property ─────────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>
@@ -259,7 +259,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                   className={inputCls}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
                     Trade <span className="text-red-500">*</span>
@@ -315,7 +315,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
           {/* ── Location ─────────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Location</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Area</Label>
                 <Popover open={locationOpen} onOpenChange={setLocationOpen}>
@@ -377,7 +377,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
           {/* ── Requirements ─────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Requirements</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Urgency</Label>
                 <select value={urgency} onChange={e => setUrgency(e.target.value)} className={selectCls}>
@@ -395,7 +395,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                   <option value="high">High</option>
                 </select>
               </div>
-              <div>
+              <div className="col-span-2 sm:col-span-1">
                 <Label className="text-sm font-medium text-gray-700">Preferred Date</Label>
                 <input
                   type="date"
@@ -520,7 +520,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-100 flex gap-3">
           <Button onClick={handleSubmit} className="flex-1" disabled={isPending || uploading}>
             {uploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Uploading…</> : isPending ? 'Posting…' : 'Post Job'}
           </Button>
