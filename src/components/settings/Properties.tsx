@@ -34,7 +34,6 @@ import {
   AlertCircle,
   ChevronsUpDown,
   Check,
-  Search,
   Plus,
   ChevronLeft,
   ChevronRight,
@@ -487,24 +486,10 @@ export function PropertyFormFields({
 export default function Properties() {
   const queryClient = useQueryClient();
 
-  // Search / pagination
-  const [search, setSearch] = useState('');
+  // Pagination
   const [page, setPage] = useState(1);
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
-
-  useEffect(() => {
-    clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => clearTimeout(searchTimer.current);
-  }, [search]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch]);
 
   const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
-  if (debouncedSearch) params.set('search', debouncedSearch);
   const listUrl = `/api/v1/properties/?${params}`;
 
   const { data: raw, isLoading, isError, refetch } = useFetch<ListResponse>(listUrl);
@@ -683,28 +668,21 @@ export default function Properties() {
 
   return (
     <>
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, address, postcode…"
-            className="pl-9"
-          />
+      {/* Add property — only when no property exists yet */}
+      {!isLoading && !isError && properties.length === 0 && (
+        <div className="flex justify-end mb-4">
+          <Button
+            size="sm"
+            onClick={() => {
+              setAddForm(EMPTY_FORM);
+              setAddErrors({});
+              setAddOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-1.5" /> Add property
+          </Button>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setAddForm(EMPTY_FORM);
-            setAddErrors({});
-            setAddOpen(true);
-          }}
-        >
-          <Plus className="w-4 h-4 mr-1.5" /> Add property
-        </Button>
-      </div>
+      )}
 
       {/* List */}
       {isLoading ? (
@@ -722,7 +700,7 @@ export default function Properties() {
       ) : properties.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <Building2 className="w-10 h-10 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">{debouncedSearch ? 'No properties match your search.' : 'No properties yet.'}</p>
+          <p className="text-sm text-muted-foreground">No properties yet.</p>
         </div>
       ) : (
         <>
