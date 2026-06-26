@@ -109,12 +109,12 @@ const NotificationsPage = () => {
     <DashboardLayout>
       <div className="space-y-4">
         {/* ── PageHeader ─────────────────────────────────────── */}
-        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex items-center justify-between gap-4">
+        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Notifications</p>
             <h1 className="text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-1 leading-none">Stay up to date</h1>
           </div>
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <Link
               to="/dashboard/settings?tab=notifications"
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-[#E8E8E3] bg-white text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors"
@@ -223,7 +223,7 @@ const NotificationsPage = () => {
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
                         <p className={`text-sm leading-snug ${!n.is_read ? 'font-semibold text-[#1A1A1A]' : 'font-medium text-[#4A4A4A]'}`}>
                           {n.title}
                         </p>
@@ -248,7 +248,7 @@ const NotificationsPage = () => {
                     </div>
                     <button
                       onClick={e => { e.stopPropagation(); deleteNotif.mutate(n.id); }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-[#E8E8E3] shrink-0 -mt-0.5"
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-[#E8E8E3] shrink-0 -mt-0.5"
                       aria-label="Delete notification"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-[#9B9B9B] hover:text-red-500 transition-colors" />

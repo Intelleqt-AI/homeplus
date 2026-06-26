@@ -80,23 +80,29 @@ const statusLabel: Record<string, string> = {
 const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) => {
   const queryClient = useQueryClient();
 
-  // The dialog has two views: the details panel and a "what should we
-  // delete?" panel. We swap between them in-place so the user keeps context.
-  const [view, setView] = useState<'details' | 'confirm-delete'>('details');
+  // The dialog swaps between three in-place views (so the user keeps context):
+  // the details panel, a "what should we delete?" panel, and a "mark complete +
+  // optional cost" panel.
+  const [view, setView] = useState<'details' | 'confirm-delete' | 'confirm-complete'>('details');
   const [scope, setScope] = useState<DeleteScope>('this');
+  const [cost, setCost] = useState<string>('');
 
   // Reset to the details view whenever the dialog re-opens for a new event.
   useEffect(() => {
     if (open) {
       setView('details');
       setScope('this');
+      setCost('');
     }
   }, [open, event?.id]);
 
   const completeMut = useMutation({
-    mutationFn: (id: string) => completeEvent(id),
+    mutationFn: ({ id, actualCost }: { id: string; actualCost?: number | null }) =>
+      completeEvent(id, actualCost),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event'] });
+      // A logged cost feeds the Annual Spend Tracker — refresh it too.
+      queryClient.invalidateQueries({ queryKey: ['annual-spend'] });
       toast.success('Marked as completed');
       onOpenChange(false);
     },
@@ -249,7 +255,7 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
               size="sm"
               variant="outline"
               disabled={completeMut.isPending}
-              onClick={() => completeMut.mutate(String(event.id))}
+              onClick={() => { setCost(''); setView('confirm-complete'); }}
               className="flex-1"
             >
               <CheckCircle className="w-4 h-4 mr-1.5" />
@@ -288,7 +294,65 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
             </div>
           )}
         </div>
-        </>) : (
+        </>) : view === 'confirm-complete' ? (
+          /* ── Mark-complete view (optional cost) ────────────────────────── */
+          <div className="space-y-4 pt-2">
+            <div className="flex items-start gap-3 p-3 rounded-lg border border-green-100 bg-green-50">
+              <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-green-900">Mark "{event.title}" complete</p>
+                <p className="text-green-700 text-xs mt-0.5">
+                  Add what it cost to track it in your Annual Spend — or leave blank to just mark it done.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="event-cost" className="block text-xs text-gray-500 mb-1">
+                What did this cost? (optional)
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">£</span>
+                <input
+                  id="event-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={cost}
+                  onChange={e => setCost(e.target.value)}
+                  placeholder="0.00"
+                  className="flex-1 h-9 rounded-md border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setView('details')}
+                disabled={completeMut.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => {
+                  const parsed = parseFloat(cost);
+                  const actualCost = Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+                  completeMut.mutate({ id: String(event.id), actualCost });
+                }}
+                disabled={completeMut.isPending}
+              >
+                <CheckCircle className="w-4 h-4 mr-1.5" />
+                {completeMut.isPending ? 'Saving…' : 'Mark Complete'}
+              </Button>
+            </div>
+          </div>
+        ) : (
           /* ── Confirm-delete view ───────────────────────────────────────── */
           <div className="space-y-4 pt-2">
             <div className="flex items-start gap-3 p-3 rounded-lg border border-red-100 bg-red-50">

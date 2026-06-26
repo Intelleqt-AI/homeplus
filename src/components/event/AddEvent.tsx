@@ -287,7 +287,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
         )}
 
         {quickAddOpen && (
-          <div className="absolute top-full right-0 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4">
+          <div className="absolute top-full right-0 mt-2 w-[min(24rem,calc(100vw-2rem))] bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium text-gray-900">What type of task?</h3>
               <Button variant="ghost" size="sm" onClick={() => setQuickAddOpen(false)} className="h-6 w-6 p-0">

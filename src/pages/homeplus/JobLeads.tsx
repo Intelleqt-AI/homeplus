@@ -491,7 +491,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   className={inputCls(locked)}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
                     Trade <span className="text-red-500">*</span>
@@ -552,7 +552,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
           {/* ── Location ─────────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Location</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Area</Label>
                 <Popover open={locationOpen} onOpenChange={locked ? undefined : setLocationOpen}>
@@ -617,7 +617,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
           {/* ── Requirements ─────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Requirements</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Urgency</Label>
                 <select value={urgency} onChange={e => setUrgency(e.target.value)} disabled={locked} className={selectCls(locked)}>
@@ -877,7 +877,7 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
           {/* Quote details */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Quote Details</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-gray-50 rounded-xl px-4 py-3">
                 <p className="text-xs text-gray-500 mb-0.5">Price</p>
                 <p className="text-lg font-bold text-gray-900">£{bid.proposedValue.toLocaleString()}</p>
@@ -1331,14 +1331,14 @@ const JobLeads = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="hidden sm:flex h-12 w-12 bg-[#F5F5F0] rounded-full items-center justify-center">
                 <Search className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
               </div>
               <div>
                 <p className="text-[#6B6B6B] text-sm mb-0.5">Find tradespeople</p>
-                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Home Improvements & Maintenance</h1>
+                <h1 className="text-[#1A1A1A] text-lg sm:text-2xl font-semibold leading-tight">Home Improvements & Maintenance</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -1354,45 +1354,45 @@ const JobLeads = () => {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-sm">Total Jobs</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Briefcase className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-2xl font-semibold">{leads.length}</p>
+              <p className="text-[#1A1A1A] text-xl sm:text-2xl font-semibold">{leads.length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">All posted jobs</p>
             </div>
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-sm">Active</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-2xl font-semibold">{leads.filter(l => !l.isApproved).length}</p>
+              <p className="text-[#1A1A1A] text-xl sm:text-2xl font-semibold">{leads.filter(l => !l.isApproved).length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">Awaiting quotes</p>
             </div>
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-sm">Quotes Received</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <MessageSquare className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#FBBF24] text-2xl font-semibold">{leads.reduce((acc, l) => acc + l.bids.length, 0)}</p>
+              <p className="text-[#FBBF24] text-xl sm:text-2xl font-semibold">{leads.reduce((acc, l) => acc + l.bids.length, 0)}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">From tradespeople</p>
             </div>
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-sm">Completed</span>
                 <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                   <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#10B981] text-2xl font-semibold">{leads.filter(l => l.isApproved).length}</p>
+              <p className="text-[#10B981] text-xl sm:text-2xl font-semibold">{leads.filter(l => l.isApproved).length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">Jobs completed</p>
             </div>
           </div>
@@ -1486,8 +1486,8 @@ const JobLeads = () => {
               <div className="space-y-3">
                 {filteredLeads.map(job => (
                   <div key={job.id} className="bg-[#F5F5F0] rounded-[12px] px-5 py-4 hover:shadow-sm transition-all">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-start gap-4 flex-1 cursor-pointer" onClick={() => setEditJob(job)}>
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+                      <div className="flex items-start gap-3 sm:flex-1 cursor-pointer" onClick={() => setEditJob(job)}>
                         <div className="h-10 w-10 rounded-[10px] bg-white border border-[#E5E7EB] flex items-center justify-center flex-shrink-0">
                           <Briefcase className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
                         </div>
@@ -1497,7 +1497,7 @@ const JobLeads = () => {
                             {job.bids.length > 0 && <Lock className="h-3 w-3 text-amber-500 shrink-0" />}
                           </div>
                           <p className="text-[#6B6B6B] text-xs mt-0.5">{job.service}</p>
-                          <div className="flex items-center gap-4 mt-2 text-xs text-[#6B6B6B]">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-[#6B6B6B]">
                             <div className="flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
                               <span>{job.location || '—'}</span>
@@ -1515,7 +1515,7 @@ const JobLeads = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
                         {(() => {
                           const s = job.status;
                           const cfg =

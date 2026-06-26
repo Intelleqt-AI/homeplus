@@ -64,6 +64,7 @@ const Calendar = () => {
     | "household"
     | "custom";
   const [filterType, setFilterType] = useState<FilterType>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addDialogDate, setAddDialogDate] = useState<string | undefined>(undefined);
   const [dragOverDateKey, setDragOverDateKey] = useState<string | null>(null);
@@ -540,48 +541,48 @@ const Calendar = () => {
           </div>
 
           {/* Stats Row */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Total Tasks</span>
+                <span className="text-[#6B6B6B] text-xs sm:text-sm">Total Tasks</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <ClipboardList className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-2xl font-semibold">{filteredEvents.length}</p>
+              <p className="text-[#1A1A1A] text-xl sm:text-2xl font-semibold">{filteredEvents.length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">All tasks</p>
             </div>
 
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">This Week</span>
+                <span className="text-[#6B6B6B] text-xs sm:text-sm">This Week</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-2xl font-semibold">{thisWeekEvents.length}</p>
+              <p className="text-[#1A1A1A] text-xl sm:text-2xl font-semibold">{thisWeekEvents.length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">Due this week</p>
             </div>
 
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Done</span>
+                <span className="text-[#6B6B6B] text-xs sm:text-sm">Done</span>
                 <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                   <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#10B981] text-2xl font-semibold">{filteredEvents.filter(e => e.status === 'completed').length}</p>
+              <p className="text-[#10B981] text-xl sm:text-2xl font-semibold">{filteredEvents.filter(e => e.status === 'completed').length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">Completed</p>
             </div>
 
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Needs attention</span>
+                <span className="text-[#6B6B6B] text-xs sm:text-sm">Needs attention</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF2F2] flex items-center justify-center">
                   <AlertTriangle className="w-4 h-4 text-[#DC2626]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#DC2626] text-2xl font-semibold">{overdueEvents.length}</p>
+              <p className="text-[#DC2626] text-xl sm:text-2xl font-semibold">{overdueEvents.length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">Need attention</p>
             </div>
           </div>
@@ -615,8 +616,9 @@ const Calendar = () => {
 
         {/* View Mode & Filters */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-          <div className="flex items-center justify-between">
-            {/* View Mode Toggle */}
+
+          {/* Desktop (sm+): single row — view toggle left, pills right */}
+          <div className="hidden sm:flex items-center justify-between">
             <div className="flex items-center gap-2">
               {[
                 { value: "month", label: "Calendar" },
@@ -625,7 +627,7 @@ const Calendar = () => {
                 <button
                   key={mode.value}
                   onClick={() => setViewMode(mode.value as "month" | "list")}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-all duration-200 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
                     viewMode === mode.value
                       ? 'bg-[#1A1A1A] text-white'
                       : 'text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A]'
@@ -635,8 +637,6 @@ const Calendar = () => {
                 </button>
               ))}
             </div>
-
-            {/* Filter Pills */}
             <div className="flex items-center gap-2">
               {[
                 { value: "all", label: "All" },
@@ -648,7 +648,7 @@ const Calendar = () => {
                 <button
                   key={filter.value}
                   onClick={() => setFilterType(filter.value as FilterType)}
-                  className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
+                  className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
                     filterType === filter.value
                       ? 'bg-[#1A1A1A] text-white'
                       : 'text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A] border border-[#E8E8E3]'
@@ -659,6 +659,79 @@ const Calendar = () => {
               ))}
             </div>
           </div>
+
+          {/* Mobile: single row — view toggle + Filter button with floating popup */}
+          <div className="sm:hidden flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {[
+                { value: "month", label: "Calendar" },
+                { value: "list", label: "List" },
+              ].map((mode) => (
+                <button
+                  key={mode.value}
+                  onClick={() => setViewMode(mode.value as "month" | "list")}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
+                    viewMode === mode.value
+                      ? 'bg-[#1A1A1A] text-white'
+                      : 'text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A]'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Filter button + floating popup */}
+            <div className="relative">
+              <button
+                onClick={() => setFilterOpen(v => !v)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-full border transition-all duration-200 ${
+                  filterOpen || filterType !== 'all'
+                    ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+                    : 'text-[#4A4A4A] border-[#E8E8E3] hover:bg-[#F5F5F0]'
+                }`}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                Filter
+                {filterType !== 'all' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#FBBF24] ml-0.5" />
+                )}
+              </button>
+
+              {filterOpen && (
+                <>
+                  {/* Backdrop — closes popup on outside tap */}
+                  <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
+                  {/* Mini popup */}
+                  <div className="absolute top-full right-0 mt-2 z-20 bg-white border border-[#E8E8E3] rounded-[16px] shadow-lg py-2 min-w-[160px]">
+                    {[
+                      { value: "all", label: "All" },
+                      { value: "safety", label: "Safety" },
+                      { value: "maintenance", label: "Maintenance" },
+                      { value: "financial", label: "Financial" },
+                      { value: "household", label: "Household" },
+                    ].map((filter) => (
+                      <button
+                        key={filter.value}
+                        onClick={() => { setFilterType(filter.value as FilterType); setFilterOpen(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${
+                          filterType === filter.value
+                            ? 'bg-[#F5F5F0] text-[#1A1A1A] font-semibold'
+                            : 'text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A]'
+                        }`}
+                      >
+                        {filterType === filter.value && (
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#1A1A1A] mr-2 mb-0.5" />
+                        )}
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -685,15 +758,17 @@ const Calendar = () => {
 
                 <>
                   <div className="grid grid-cols-7 gap-1 mb-4">
-                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                      (day) => (
-                        <div
-                          key={day}
-                          className="p-2 text-center text-sm font-medium text-gray-600">
-                          {day}
-                        </div>
-                      )
-                    )}
+                    {[
+                      ["Mon", "M"], ["Tue", "T"], ["Wed", "W"], ["Thu", "T"],
+                      ["Fri", "F"], ["Sat", "S"], ["Sun", "S"],
+                    ].map(([full, short]) => (
+                      <div
+                        key={full}
+                        className="p-1 sm:p-2 text-center text-xs sm:text-sm font-medium text-gray-600">
+                        <span className="hidden sm:inline">{full}</span>
+                        <span className="sm:hidden">{short}</span>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="grid grid-cols-7 gap-1">
@@ -724,7 +799,7 @@ const Calendar = () => {
                                 }\nClick to add a task on this day`
                               : "Click to add a task on this day"
                           }
-                          className={`min-h-[100px] p-2 border border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                          className={`min-h-[60px] sm:min-h-[80px] md:min-h-[100px] p-1 sm:p-2 border border-gray-100 hover:bg-gray-50 cursor-pointer ${
                             !isCurrentMonth ? "text-gray-400 bg-gray-50" : ""
                           } ${isToday ? "bg-primary/10 border-primary" : ""} ${
                             bankHoliday && isCurrentMonth ? "bg-rose-50/60" : ""
@@ -734,28 +809,28 @@ const Calendar = () => {
                               : ""
                           }`}>
                           <div
-                            className={`text-sm mb-1 ${
+                            className={`text-xs sm:text-sm mb-0.5 sm:mb-1 ${
                               isToday ? "font-bold text-primary" : ""
                             }`}>
                             {day.getDate()}
                           </div>
 
                           {bankHoliday && (
-                            <div className="text-[10px] font-medium px-1.5 py-0.5 mb-1 rounded bg-rose-100 text-rose-700 border border-rose-200 truncate">
+                            <div className="hidden sm:block text-[10px] font-medium px-1.5 py-0.5 mb-1 rounded bg-rose-100 text-rose-700 border border-rose-200 truncate">
                               {bankHoliday.title}
                             </div>
                           )}
 
                           {/* Clean Event Display */}
                           <div className="space-y-1">
-                            {dayEvents.slice(0, 2).map((event) => (
+                            {dayEvents.slice(0, 2).map((event, i) => (
                               <div
                                 key={event.id}
                                 draggable
                                 onDragStart={(e) => handleEventDragStart(e, event.id)}
-                                className={`text-xs px-2 py-2 rounded border ${getStatusBorder(
+                                className={`text-xs px-1.5 sm:px-2 py-1 sm:py-2 rounded border ${getStatusBorder(
                                   event.status
-                                )} cursor-pointer hover:shadow-sm transition-shadow`}
+                                )} cursor-pointer hover:shadow-sm transition-shadow ${i === 1 ? 'hidden sm:block' : ''}`}
                                 title={`${event.time ? event.time + ' - ' : ''}${event.title}${event.description ? '\n' + event.description : ''}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -765,17 +840,23 @@ const Calendar = () => {
                                   {event.title}
                                 </div>
                                 {event.time && (
-                                  <div className="text-xs text-gray-600 mt-1">
+                                  <div className="hidden sm:block text-xs text-gray-600 mt-1">
                                     {event.time}
                                   </div>
                                 )}
-                                <div className="text-xs text-gray-500 mt-1">
+                                <div className="hidden sm:flex items-center text-xs text-gray-500 mt-1">
                                   {getStatusIcon(event.status)}
                                 </div>
                               </div>
                             ))}
+                            {/* +N more: shows after 1 event on mobile, after 2 on sm+ */}
+                            {dayEvents.length > 1 && (
+                              <div className="sm:hidden text-[10px] text-gray-500 pl-1">
+                                +{dayEvents.length - 1} more
+                              </div>
+                            )}
                             {dayEvents.length > 2 && (
-                              <div className="text-xs text-gray-500 pl-2 py-1">
+                              <div className="hidden sm:block text-xs text-gray-500 pl-2 py-1">
                                 +{dayEvents.length - 2} more
                               </div>
                             )}
