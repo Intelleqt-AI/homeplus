@@ -126,21 +126,22 @@ const Settings = () => {
     (activeTasks as any[]).map((t: any) => t.templateId ?? t.template_id ?? t.id)
   );
 
+  // MOT tasks feed the calendar (event) AND the dashboard MOT score/last-completed.
+  const invalidateMot = () => {
+    ['motTasks', 'event', 'mot-score', 'mot-last-completed'].forEach(k =>
+      queryClient.invalidateQueries({ queryKey: [k] }),
+    );
+  };
+
   const enableMut = useMutation({
     mutationFn: (slug: string) =>
       enableMotTemplate(slug, new Date().toISOString().split('T')[0]),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['motTasks'] });
-      queryClient.invalidateQueries({ queryKey: ['event'] });
-    },
+    onSuccess: invalidateMot,
   });
 
   const disableMut = useMutation({
     mutationFn: (slug: string) => disableMotTemplate(slug),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['motTasks'] });
-      queryClient.invalidateQueries({ queryKey: ['event'] });
-    },
+    onSuccess: invalidateMot,
   });
 
   const handleSetupComplete = () => {

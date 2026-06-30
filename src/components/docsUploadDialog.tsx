@@ -98,10 +98,10 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
   const uploadMutation = useMutation({
     mutationFn: uploadFileWithMetadata,
     onSuccess: doc => {
-      queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/expiring/'] });
-      queryClient.invalidateQueries({ queryKey: ['event'] });
-      queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
+      // Refresh everything an upload affects, independent of any parent refetch prop.
+      ['documents', 'documents-expiring', 'documents-summary', 'event', 'recent-activity'].forEach(k =>
+        queryClient.invalidateQueries({ queryKey: [k] }),
+      );
       refetch?.();
       if (doc.discipline === 'energy_epc' && doc.epc_status === 'unreadable') {
         toast.error("Couldn't read a rating from this file — try a clearer photo or the EPC PDF.");

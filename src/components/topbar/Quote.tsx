@@ -12,7 +12,7 @@ import useFetch from '@/hooks/useFetch';
 import { createJob, postData } from '@/lib/Api';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { categoryConfig } from '@/lib/jobCategories';
-import { TRADE_OPTIONS } from '@/lib/tradeCategories';
+import { TRADE_OPTIONS, JOB_TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { Check, ChevronsUpDown, Upload, File as FileIcon, X, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
@@ -53,6 +53,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   // Location
   const [locationArea, setLocationArea] = useState('');
   const [locationPostcode, setLocationPostcode] = useState('');
+  const [locationAddress, setLocationAddress] = useState('');
   const [locationOpen, setLocationOpen] = useState(false);
 
   // Dynamic Q&A
@@ -86,6 +87,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     setPreferredDate('');
     setLocationArea('');
     setLocationPostcode('');
+    setLocationAddress('');
     setAnswers({});
     setPendingFiles([]);
   };
@@ -119,7 +121,15 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     if (!propertyId || !selectedProperty) return;
     setLocationArea(selectedProperty.location ?? '');
     setLocationPostcode(selectedProperty.postcode ?? '');
+    setLocationAddress(selectedProperty.address ?? '');
   }, [propertyId, selectedProperty]);
+
+  // Auto-select when the user has exactly one property
+  useEffect(() => {
+    if (properties.length === 1 && !propertyId) {
+      setPropertyId(properties[0].id);
+    }
+  }, [properties.length, propertyId]);
 
   const { mutate: submitJob, isPending } = usePost({
     mutationFn: (vars: Record<string, unknown>) => createJob(vars),
@@ -170,6 +180,10 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     }
     if (!locationPostcode.trim()) {
       toast.error('Postcode is required');
+      return;
+    }
+    if (!preferredDate) {
+      toast.error('Preferred date is required');
       return;
     }
     if (serviceCategories.length > 0 && !category) {
@@ -234,9 +248,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
         <div className="px-4 sm:px-6 py-5 space-y-6">
           {/* ── Property ─────────────────────────────────────── */}
           <div>
-            <p className={sectionTitle}>
-              Property <span className="normal-case font-normal text-gray-400">(optional)</span>
-            </p>
+            <p className={sectionTitle}>Property</p>
             <PropertySelect
               value={propertyId}
               onChange={id => setPropertyId(id)}
@@ -273,7 +285,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                     }}
                     className={selectCls}
                   >
-                    {TRADE_OPTIONS.map(opt => (
+                    {JOB_TRADE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.label}>{opt.label}</option>
                     ))}
                   </select>
@@ -372,6 +384,15 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                 <p className="text-xs text-gray-400 mt-1">Auto-filled from area or property · editable</p>
               </div>
             </div>
+            <div className="mt-3">
+              <Label className="text-sm font-medium text-gray-700">Address</Label>
+              <input
+                value={locationAddress}
+                onChange={e => setLocationAddress(e.target.value)}
+                placeholder="Auto-filled from property"
+                className={inputCls}
+              />
+            </div>
           </div>
 
           {/* ── Requirements ─────────────────────────────────── */}
@@ -396,7 +417,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                 </select>
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <Label className="text-sm font-medium text-gray-700">Preferred Date</Label>
+                <Label className="text-sm font-medium text-gray-700">Preferred Date <span className="text-red-500">*</span></Label>
                 <input
                   type="date"
                   value={preferredDate}

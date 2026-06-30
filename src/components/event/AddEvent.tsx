@@ -39,9 +39,10 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { LucideIcon } from 'lucide-react';
-import PropertySelect from '@/components/property/PropertySelect';
+import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
+import useFetch from '@/hooks/useFetch';
 import { cn } from '@/lib/utils';
-import { TRADE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
+import { JOB_TRADE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
 
 type EventMode = 'task' | 'reminder';
 
@@ -144,6 +145,11 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
 
   const propertyId = watch('propertyId');
 
+  const { data: propertiesRes } = useFetch<{ results?: PropertyOption[]; data?: PropertyOption[] }>(
+    '/api/v1/properties/',
+  );
+  const properties: PropertyOption[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
+
   useEffect(() => {
     if (isAddEventOpen && initialDate) {
       setValue('date', initialDate);
@@ -154,10 +160,18 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
   useEffect(() => {
     setValue('requiresTrade', eventMode === 'task');
     if (eventMode === 'reminder') {
-      // Reminders default to "other" so the calendar treats them as non-trade items.
       setValue('type', 'other');
+      setValue('propertyId', '');
     }
   }, [eventMode, setValue]);
+
+  // Auto-select the only property when in task mode
+  useEffect(() => {
+    if (eventMode === 'task' && properties.length === 1) {
+      setValue('propertyId', properties[0].id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventMode, properties.length]);
 
   const mutation = usePost({
     mutationFn: addNewEvent,
@@ -463,6 +477,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                     value={field.value ?? ''}
                     onChange={id => field.onChange(id)}
                     requireMapPin={eventMode === 'task'}
+                    showDropdown={eventMode === 'reminder'}
                   />
                 )}
               />
@@ -507,7 +522,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
-                          {TRADE_OPTIONS.map(opt => (
+                          {JOB_TRADE_OPTIONS.map(opt => (
                             <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
                             </SelectItem>

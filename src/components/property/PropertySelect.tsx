@@ -30,6 +30,8 @@ interface PropertySelectProps {
   className?: string;
   /** When true, shows a red warning if the selected property has no lat/long pin. */
   requireMapPin?: boolean;
+  /** When true, always shows the searchable dropdown even if only one property exists. */
+  showDropdown?: boolean;
 }
 
 const PropertySelect = ({
@@ -38,6 +40,7 @@ const PropertySelect = ({
   placeholder = 'Select a property',
   className,
   requireMapPin = false,
+  showDropdown = false,
 }: PropertySelectProps) => {
   const [open, setOpen] = React.useState(false);
 
@@ -46,6 +49,33 @@ const PropertySelect = ({
   );
   const properties: PropertyOption[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
   const selected = properties.find(p => p.id === value);
+
+  // Single property — static read-only display, no search needed (skip when showDropdown is set)
+  if (properties.length === 1 && !showDropdown) {
+    const only = properties[0];
+    return (
+      <div className={cn('w-full overflow-hidden', className)}>
+        <div className="w-full min-h-10 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm flex items-center gap-2 overflow-hidden">
+          <Building2 className="h-4 w-4 shrink-0 text-gray-400" />
+          <div className="w-0 flex-1 overflow-hidden">
+            <p className="truncate font-medium text-gray-900 leading-tight text-sm">
+              {only.name || only.address}
+            </p>
+            {only.name && (
+              <p className="truncate text-xs text-gray-400 leading-tight">
+                {only.address}{only.postcode ? ` · ${only.postcode}` : ''}
+              </p>
+            )}
+          </div>
+        </div>
+        {requireMapPin && (only.latitude === null || only.longitude === null) && (
+          <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
+            ⚠ This property has no map pin yet. Go to <strong>Settings → Properties</strong> and drag the pin to its exact location before posting the job.
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={className}>

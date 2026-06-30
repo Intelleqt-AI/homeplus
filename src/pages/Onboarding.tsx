@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/lib/apiClient';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
+import PropertyMapPicker from '@/components/PropertyMapPicker';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -120,6 +121,8 @@ function StepProperty({
   heatingType, setHeatingType,
   yearBuilt, setYearBuilt,
   tenure, setTenure,
+  lat, setLat,
+  lng, setLng,
   coverPreview, onCoverClick,
   error,
 }: {
@@ -134,6 +137,8 @@ function StepProperty({
   heatingType: string; setHeatingType: (v: string) => void;
   yearBuilt: string; setYearBuilt: (v: string) => void;
   tenure: string; setTenure: (v: string) => void;
+  lat: number | null; setLat: (v: number | null) => void;
+  lng: number | null; setLng: (v: number | null) => void;
   coverPreview: string | null; onCoverClick: () => void;
   error: string;
 }) {
@@ -238,6 +243,26 @@ function StepProperty({
             </Command>
           </PopoverContent>
         </Popover>
+
+        {/* Exact location map */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+            Exact location
+            <span className="font-normal normal-case ml-1 text-muted-foreground/60">— drag pin to fine-tune</span>
+          </p>
+          <PropertyMapPicker
+            lat={lat}
+            lng={lng}
+            postcode={postcode}
+            onChange={({ lat: newLat, lng: newLng, address: newAddr, postcode: newPc, city: newCity }) => {
+              setLat(newLat);
+              setLng(newLng);
+              if (newAddr) setAddress(newAddr);
+              if (newPc) setPostcode(newPc.toUpperCase());
+              if (newCity) setLocation(newCity);
+            }}
+          />
+        </div>
 
         {/* Property type */}
         <div className="grid grid-cols-3 gap-2.5">
@@ -516,6 +541,8 @@ const Onboarding = () => {
   const [heatingType, setHeatingType] = useState('');
   const [yearBuilt, setYearBuilt] = useState('');
   const [tenure, setTenure] = useState('');
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
   const [propertyError, setPropertyError] = useState('');
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
@@ -603,6 +630,8 @@ const Onboarding = () => {
         ...(heatingType ? { heating_type: heatingType } : {}),
         ...(yearBuilt   ? { year_built: parseInt(yearBuilt, 10) } : {}),
         ...(tenure      ? { tenure } : {}),
+        ...(lat !== null ? { latitude: lat } : {}),
+        ...(lng !== null ? { longitude: lng } : {}),
       });
       const propertyId = res?.data?.id ?? res?.id;
       if (coverFile && propertyId) {
@@ -730,6 +759,8 @@ const Onboarding = () => {
                   location={location} setLocation={setLocation}
                   propertyType={propertyType} setPropertyType={setPropertyType}
                   role={role} setRole={setRole}
+                  lat={lat} setLat={setLat}
+                  lng={lng} setLng={setLng}
                   coverPreview={coverPreview}
                   onCoverClick={() => coverRef.current?.click()}
                   error={propertyError}

@@ -126,10 +126,12 @@ const Documents = () => {
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
-  const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL);
+  // Stable cache keys (independent of the ?page_size URL) so any uploader/deleter
+  // can reliably invalidate these lists.
+  const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL, { queryKey: ['documents'] });
   const allDocs = useMemo<NormDoc[]>(() => docsPage?.results ?? [], [docsPage]);
 
-  const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL);
+  const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL, { queryKey: ['documents-expiring'] });
 
   // Authoritative counts come from /documents/summary/ — same query key the
   // dashboard uses, so both pages share cache and always agree.
@@ -158,8 +160,8 @@ const Documents = () => {
   const deleteMutation = useDelete({
     mutationFn: deleteFile,
     onSuccess: () => {
-      queryClient.refetchQueries({ queryKey: [DOCS_URL] });
-      queryClient.refetchQueries({ queryKey: [EXPIRY_URL] });
+      queryClient.refetchQueries({ queryKey: ['documents'] });
+      queryClient.refetchQueries({ queryKey: ['documents-expiring'] });
       queryClient.invalidateQueries({ queryKey: ['documents-summary'] });
       queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
       setDeleteDocId(null);
@@ -171,8 +173,8 @@ const Documents = () => {
   const editMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: DocumentUpdatePayload }) => updateDocument(id, data),
     onSuccess: () => {
-      queryClient.refetchQueries({ queryKey: [DOCS_URL] });
-      queryClient.refetchQueries({ queryKey: [EXPIRY_URL] });
+      queryClient.refetchQueries({ queryKey: ['documents'] });
+      queryClient.refetchQueries({ queryKey: ['documents-expiring'] });
       queryClient.invalidateQueries({ queryKey: ['documents-summary'] });
       setEditDoc(null);
       toast.success('Document updated.');

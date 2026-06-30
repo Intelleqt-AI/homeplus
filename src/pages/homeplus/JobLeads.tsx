@@ -1249,7 +1249,7 @@ const JobLeads = () => {
   const addJob = usePost({
     mutationFn: createJob,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
       setCurrentItem(null);
       setCurrentBid(null);
     },
@@ -1260,7 +1260,7 @@ const JobLeads = () => {
     onSuccess: () => {
       toast.success('Bid updated successfully');
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: ['bids'] });
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
       setCurrentItem(null);
       setCurrentBid(null);
     },

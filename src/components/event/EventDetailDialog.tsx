@@ -96,13 +96,20 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
     }
   }, [open, event?.id]);
 
+  // Events feed the calendar (event), the dashboard Timeline & Needs-Attention
+  // cards, and (via logged cost) the Annual Spend tracker — refresh them all on
+  // any event change.
+  const invalidateEventViews = () => {
+    ['event', 'timeline', 'attention', 'annual-spend'].forEach(k =>
+      queryClient.invalidateQueries({ queryKey: [k] }),
+    );
+  };
+
   const completeMut = useMutation({
     mutationFn: ({ id, actualCost }: { id: string; actualCost?: number | null }) =>
       completeEvent(id, actualCost),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['event'] });
-      // A logged cost feeds the Annual Spend Tracker — refresh it too.
-      queryClient.invalidateQueries({ queryKey: ['annual-spend'] });
+      invalidateEventViews();
       toast.success('Marked as completed');
       onOpenChange(false);
     },
@@ -112,7 +119,7 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
   const deleteMut = useMutation({
     mutationFn: ({ id, scope }: { id: string; scope: DeleteScope }) => deleteEvent(id, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['event'] });
+      invalidateEventViews();
       toast.success('Deleted');
       onOpenChange(false);
     },
@@ -122,7 +129,7 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
   const snoozeMut = useMutation({
     mutationFn: ({ days }: { days: 1 | 7 | 14 }) => snoozeEvent(String(event!.id), days),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['event'] });
+      invalidateEventViews();
       toast.success('Task snoozed');
       onOpenChange(false);
     },

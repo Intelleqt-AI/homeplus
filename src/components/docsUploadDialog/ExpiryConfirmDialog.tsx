@@ -106,9 +106,11 @@ const ExpiryConfirmDialog = ({ doc, open, onOpenChange }: Props) => {
     mutationFn: (payload: ConfirmReminderPayload) =>
       confirmDocumentReminder(doc!.id, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/v1/documents/expiring/'] });
-      queryClient.invalidateQueries({ queryKey: ['event'] });
+      // Saving a reminder updates the document's expiry and creates a calendar
+      // event, which feeds the dashboard timeline/attention/recent-activity too.
+      ['documents', 'documents-expiring', 'documents-summary', 'event', 'timeline', 'attention', 'recent-activity'].forEach(k =>
+        queryClient.invalidateQueries({ queryKey: [k] }),
+      );
       toast.success('Reminder added to your calendar');
       onOpenChange(false);
     },

@@ -499,10 +499,16 @@ export default function Properties() {
   const hasNext = !!raw?.next;
   const hasPrev = !!raw?.previous;
 
-  // Invalidate all /api/v1/properties/ queries across all pages/search combos
+  // Invalidate every property cache across pages: the URL-keyed list queries
+  // (this page, Documents) AND the named keys used by the dashboard (['property'])
+  // and Energy & EPC page (['property-raw']).
   const invalidateProperties = () =>
     queryClient.invalidateQueries({
-      predicate: q => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).startsWith('/api/v1/properties/'),
+      predicate: q => {
+        const k = q.queryKey[0];
+        return typeof k === 'string'
+          && (k.startsWith('/api/v1/properties/') || k === 'property' || k === 'property-raw');
+      },
     });
 
   // View/edit modal
