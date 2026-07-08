@@ -391,6 +391,7 @@ export type QuoteRow = {
   tag: string | null;
   tag_kind: 'best_price' | 'fastest' | 'top_rated' | null;
   highlight: boolean;
+  profile_photo_url: string | null;
 };
 
 export type QuotesSummary = {

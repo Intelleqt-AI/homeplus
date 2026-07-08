@@ -1,4 +1,5 @@
 import apiClient, { BASE_URL } from '@/lib/apiClient';
+import { TRADE_OPTIONS } from '@/lib/tradeCategories';
 
 // ─── Generic CRUD ─────────────────────────────────────────────────────────────
 
@@ -64,6 +65,10 @@ export const patchFormData = async <T = any>({ url, data }: { url: string; data:
 
 /** Capitalize first letter of a string (e.g. 'insurance' → 'Insurance') */
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+
+/** Display label for a job.trade value (e.g. 'gas_engineer' → 'Gas Engineer') */
+const tradeLabel = (trade: string) =>
+  TRADE_OPTIONS.find(o => o.value === trade?.toLowerCase())?.label ?? cap((trade || '').replace(/_/g, ' '));
 
 /**
  * Normalize a Django Document object to the legacy Supabase shape so that
@@ -351,7 +356,7 @@ export const updateUserInfo = async ({ userData }: { userData: any }) => {
 const normLead = (job: any) => ({
   id: job.id,
   name: job.title,
-  service: cap(job.trade),
+  service: tradeLabel(job.trade),
   trade: job.trade || 'other',
   category: job.category || '',
   location: job.location || '',
