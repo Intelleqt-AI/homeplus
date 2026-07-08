@@ -73,6 +73,7 @@ interface TradePilotProfile {
   completed_jobs: number;
   avg_rating: number | null;
   total_ratings: number;
+  profile_photo_url: string | null;
 }
 
 interface Bid {
@@ -857,9 +858,17 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="h-11 w-11 rounded-full bg-gray-100 flex items-center justify-center text-lg font-semibold text-gray-600">
-                {bid.bidder.first_name?.[0]?.toUpperCase() || '?'}
-              </div>
+              {bid.tradepilot_profile?.profile_photo_url ? (
+                <img
+                  src={bid.tradepilot_profile.profile_photo_url}
+                  alt={contractorName}
+                  className="h-11 w-11 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="h-11 w-11 rounded-full bg-gray-100 flex items-center justify-center text-lg font-semibold text-gray-600 shrink-0">
+                  {bid.bidder.first_name?.[0]?.toUpperCase() || '?'}
+                </div>
+              )}
               <div>
                 <h2 className="text-base font-semibold text-gray-900">{contractorName}</h2>
                 {bid.company_name && <p className="text-sm text-gray-500">{bid.company_name}</p>}

@@ -971,9 +971,17 @@ const HomePlusDashboard = () => {
                   {quotes.quotes.map((t) => (
                     <div key={t.bid_id}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-[12px] border ${t.highlight ? 'bg-[#FFFBEB] border-[#FDE68A]' : 'bg-white border-[#E8E8E3]'}`}>
-                      <span className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-[13px] text-[#1A1A1A] shrink-0 ${t.highlight ? 'bg-[#FBBF24]' : 'bg-[#F5F5F0]'}`}>
-                        {t.name.charAt(0)}
-                      </span>
+                      {t.profile_photo_url ? (
+                        <img
+                          src={t.profile_photo_url}
+                          alt={t.name}
+                          className="h-8 w-8 rounded-full object-cover shrink-0"
+                        />
+                      ) : (
+                        <span className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-[13px] text-[#1A1A1A] shrink-0 ${t.highlight ? 'bg-[#FBBF24]' : 'bg-[#F5F5F0]'}`}>
+                          {t.name.charAt(0)}
+                        </span>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[13px] font-semibold text-[#1A1A1A]">{t.name}</span>
