@@ -1,4 +1,5 @@
 import apiClient, { BASE_URL } from '@/lib/apiClient';
+import { fetchAllPages } from '@/lib/Api2';
 import { TRADE_OPTIONS } from '@/lib/tradeCategories';
 
 // ─── Generic CRUD ─────────────────────────────────────────────────────────────
@@ -193,8 +194,7 @@ export const fetchDocuments = async (filters: DocumentFilters = {}): Promise<Nor
   if (filters.search)    params.set('search', filters.search);
   if (filters.ordering)  params.set('ordering', filters.ordering);
   const qs = params.toString();
-  const { data: res } = await apiClient.get(`/api/v1/documents/${qs ? `?${qs}` : ''}`);
-  const docs = (res.data ?? res.results ?? []) as unknown[];
+  const docs = await fetchAllPages(`/api/v1/documents/${qs ? `?${qs}` : ''}`);
   return docs.map(normDoc);
 };
 
@@ -206,8 +206,7 @@ export const updateDocument = async (id: string, data: DocumentUpdatePayload): P
 
 /** Docs expiring within 30 days */
 export const fetchExpiringDocuments = async (): Promise<NormDoc[]> => {
-  const { data: res } = await apiClient.get('/api/v1/documents/expiring/');
-  const docs = (res.data ?? res.results ?? []) as unknown[];
+  const docs = await fetchAllPages('/api/v1/documents/expiring/');
   return docs.map(normDoc);
 };
 
@@ -253,8 +252,7 @@ export const uploadFileWithMetadata = async ({
 
 /** List documents — legacy wrapper used by homePack.tsx / HomePlusDashboard.tsx */
 export const listFilesWithMetadata = async (_id?: string): Promise<NormDoc[]> => {
-  const { data: res } = await apiClient.get('/api/v1/documents/');
-  const docs = (res.data ?? res.results ?? []) as unknown[];
+  const docs = await fetchAllPages('/api/v1/documents/');
   return docs.map(normDoc);
 };
 
@@ -399,8 +397,7 @@ const normLead = (job: any) => ({
 });
 
 export const fetchLeads = async () => {
-  const { data: res } = await apiClient.get('/api/v1/jobs/');
-  const jobs: any[] = res.data ?? res.results ?? [];
+  const jobs = await fetchAllPages('/api/v1/jobs/');
   return jobs.map(normLead);
 };
 

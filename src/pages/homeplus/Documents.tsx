@@ -23,7 +23,7 @@ import useDelete from '@/hooks/useDelete';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deleteFile, updateDocument, getDocumentDownloadUrl, type NormDoc, type DocumentUpdatePayload, type PaginatedResponse } from '@/lib/Api';
 import DocsUploadDialog from '@/components/docsUploadDialog';
-import { exportDocumentPack, fetchDocumentSummary, type DocumentSummary } from '@/lib/Api2';
+import { exportDocumentPack, fetchAllPages, fetchDocumentSummary, type DocumentSummary } from '@/lib/Api2';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
 import { cn } from '@/lib/utils';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType, getTradeCategoryLabel } from '@/lib/tradeCategories';
@@ -128,10 +128,25 @@ const Documents = () => {
 
   // Stable cache keys (independent of the ?page_size URL) so any uploader/deleter
   // can reliably invalidate these lists.
-  const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL, { queryKey: ['documents'] });
+  // fetchAllPages walks every page (and tolerates the unpaginated envelope
+  // shape), so accounts with more documents than one server page still see
+  // their full vault.
+  const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL, {
+    queryKey: ['documents'],
+    queryFn: async () => {
+      const results = (await fetchAllPages('/api/v1/documents/')) as NormDoc[];
+      return { count: results.length, next: null, previous: null, results };
+    },
+  });
   const allDocs = useMemo<NormDoc[]>(() => docsPage?.results ?? [], [docsPage]);
 
-  const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL, { queryKey: ['documents-expiring'] });
+  const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL, {
+    queryKey: ['documents-expiring'],
+    queryFn: async () => {
+      const results = (await fetchAllPages('/api/v1/documents/expiring/')) as NormDoc[];
+      return { count: results.length, next: null, previous: null, results };
+    },
+  });
 
   // Authoritative counts come from /documents/summary/ — same query key the
   // dashboard uses, so both pages share cache and always agree.
@@ -338,7 +353,7 @@ const Documents = () => {
             </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
                 { label: 'Total files', value: String(stats.total), Icon: FileText, tint: '#F5F5F0', color: '#1A1A1A' },
                 { label: 'Compliance', value: String(stats.compliance), Icon: ShieldCheck, tint: '#F3E8FF', color: '#A855F7' },

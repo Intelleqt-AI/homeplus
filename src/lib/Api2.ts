@@ -1,5 +1,34 @@
 import apiClient from '@/lib/apiClient';
 
+// ─── Pagination-proof list fetching ──────────────────────────────────────────
+
+/**
+ * Fetch EVERY row of a list endpoint, whichever shape the server returns:
+ *   - success envelope `{data: [...]}` (unpaginated viewsets)
+ *   - DRF page `{count, next, results}` (paginated viewsets) — follows `next`
+ *     links until exhausted.
+ * Per-user collections are small (≤ a few hundred rows), so at page_size=100
+ * this is 1–2 requests in practice. Without this, any account with more rows
+ * than the server page size silently loses data off page 1 (calendar events,
+ * documents, job leads).
+ */
+export const fetchAllPages = async (path: string): Promise<any[]> => {
+  const sep = path.includes('?') ? '&' : '?';
+  let url: string | null = `${path}${sep}page_size=100`;
+  const out: any[] = [];
+  for (let guard = 0; url && guard < 30; guard++) {
+    const { data: res } = await apiClient.get(url);
+    const body = res?.data ?? res;
+    if (Array.isArray(body)) {
+      out.push(...body);
+      break;
+    }
+    out.push(...(body?.results ?? []));
+    url = body?.next ?? null; // absolute URL; axios uses it verbatim (same API origin)
+  }
+  return out;
+};
+
 // ─── Events ──────────────────────────────────────────────────────────────────
 
 const normEvent = (ev: any) => ({
@@ -61,8 +90,7 @@ export const addNewEvent = async (event: any) => {
 };
 
 export const getEvents = async () => {
-  const { data: res } = await apiClient.get('/api/v1/events/');
-  const events: any[] = res.data ?? res.results ?? [];
+  const events = await fetchAllPages('/api/v1/events/');
   return { data: events.map(normEvent) };
 };
 
