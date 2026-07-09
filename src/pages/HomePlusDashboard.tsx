@@ -673,12 +673,13 @@ const HomePlusDashboard = () => {
             </div>
           </div>
 
-          {/* Attention */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+          {/* Attention — shell keeps the grid row sized by System health; card fills it and the list scrolls */}
+          <div className="relative min-h-[280px]">
+          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 lg:absolute lg:inset-0 flex flex-col">
             <Eyebrow icon={AlertCircle} label="Needs attention" trailing={
               <span className="text-[11px] text-[#8B8B8B]">{attentionTotal} item{attentionTotal === 1 ? '' : 's'}</span>
             } />
-            <div className="flex flex-col gap-2 mt-4">
+            <div className="flex flex-col gap-2 mt-4 flex-1 min-h-0 overflow-y-auto pr-1 max-h-[420px] lg:max-h-none">
               {attentionItems.length === 0 ? (
                 <div className="flex items-center gap-3 p-3 rounded-[12px] bg-[#ECFDF5] border border-[#A7F3D0]/70">
                   <span className="h-9 w-9 rounded-[10px] flex items-center justify-center shrink-0 bg-white text-[#10B981]">
@@ -714,6 +715,7 @@ const HomePlusDashboard = () => {
                 );
               })}
             </div>
+          </div>
           </div>
         </div>
 

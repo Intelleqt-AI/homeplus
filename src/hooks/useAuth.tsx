@@ -79,9 +79,10 @@ const extractUser = (res: unknown): unknown => {
 };
 
 const extractError = (err: unknown): string => {
-  const e = err as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } };
-  const errors = e?.response?.data?.errors ?? {};
-  return (Object.values(errors)[0] as string[] | undefined)?.[0] ?? e?.response?.data?.message ?? 'Something went wrong.';
+  const e = err as { response?: { data?: { errors?: Record<string, string | string[]>; message?: string } } };
+  const first = Object.values(e?.response?.data?.errors ?? {})[0];
+  const msg = Array.isArray(first) ? first[0] : first;
+  return msg || e?.response?.data?.message || 'Something went wrong.';
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
