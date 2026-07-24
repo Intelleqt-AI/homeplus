@@ -239,7 +239,11 @@ const Calendar = () => {
           title: ev.title ?? "",
           date: parsedDate,
           time: ev.time ?? "",
-          type: ev.eventType ?? ev.type ?? "maintenance",
+          // Lower-cased: Api2's normEvent title-cases event_type ('maintenance' -> 'Maintenance'),
+          // but every predicate below (and the backend's own EVENT_TYPE_CHOICES) is lowercase, so
+          // the type filters silently matched nothing — "Maintenance" showed 0 of 24 events and
+          // "Custom" showed everything. The sidebar's `capitalize` class re-cases it for display.
+          type: (ev.eventType ?? ev.type ?? "maintenance").toLowerCase(),
           // Prefer the server's date-aware escalation (action_required/overdue);
           // fall back to the local date check for legacy events.
           status:

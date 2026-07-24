@@ -387,6 +387,7 @@ const normLead = (job: any) => ({
     rating_comment: b.rating_comment || '',
     rating_is_anonymous: b.rating_is_anonymous ?? false,
     rated_at: b.rated_at ?? null,
+    conversation_id: b.conversation_id ?? null,
     bidder: {
       first_name: b.contractor_name?.split(' ')[0] || '',
       last_name: b.contractor_name?.split(' ').slice(1).join(' ') || '',
