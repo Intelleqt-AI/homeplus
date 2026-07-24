@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, BellOff, Mail, CheckCircle, Wrench, Star,
-  Trash2, CheckCheck, SlidersHorizontal, AlertTriangle,
+  Trash2, CheckCheck, SlidersHorizontal, AlertTriangle, Unlock,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
@@ -38,6 +38,7 @@ type TypeEntry = {
 // Covers every type the backend can emit; unknown types fall back safely (no crash).
 const TYPE_CONFIG: Record<string, TypeEntry> = {
   new_quote:     { Icon: Mail,        iconCls: 'text-blue-600 bg-blue-50',     badgeCls: 'bg-blue-100 text-blue-700',     label: 'New quote',    cta: 'View quotes' },
+  lead_purchased:{ Icon: Unlock,      iconCls: 'text-indigo-600 bg-indigo-50', badgeCls: 'bg-indigo-100 text-indigo-700', label: 'Lead unlocked', cta: 'View quotes' },
   job_completed: { Icon: CheckCircle, iconCls: 'text-emerald-600 bg-emerald-50', badgeCls: 'bg-green-100 text-green-700',  label: 'Job complete', cta: 'Rate tradesperson' },
   job_status:    { Icon: Wrench,      iconCls: 'text-[#6B6B6B] bg-[#F5F5F0]',  badgeCls: 'bg-gray-100 text-gray-600',     label: 'Update',       cta: 'View job' },
   bid_accepted:  { Icon: CheckCircle, iconCls: 'text-emerald-600 bg-emerald-50', badgeCls: 'bg-green-100 text-green-700',  label: 'Accepted',     cta: 'View job' },
