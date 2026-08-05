@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { usePost } from "@/hooks/usePost";
+import useDelete from "@/hooks/useDelete";
+import { useAuth } from "@/hooks/useAuth";
+import { DeleteAccountDialog } from "./DeleteAccountDialog";
 
 type Fields = { current: string; newPass: string; confirm: string };
 type Errors = Partial<Record<keyof Fields, string>>;
@@ -32,8 +36,22 @@ const Security = () => {
   const [fields, setFields] = useState<Fields>({ current: "", newPass: "", confirm: "" });
   const [show, setShow]     = useState({ current: false, newPass: false, confirm: false });
   const [errors, setErrors] = useState<Errors>({});
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const changePassword = usePost();
+  const deleteAccount = useDelete();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleDeleteAccount = async (password: string) => {
+    await deleteAccount.mutateAsync({
+      url: "/api/v1/auth/delete-account/",
+      data: { password },
+    });
+    await signOut();
+    toast.success("Your account has been deleted.");
+    navigate("/login", { replace: true });
+  };
 
   const set = (k: keyof Fields) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setFields(prev => ({ ...prev, [k]: e.target.value }));
@@ -144,6 +162,28 @@ const Security = () => {
           </form>
         </CardContent>
       </Card>
+
+      <Card className="border-destructive/30">
+        <CardHeader>
+          <CardTitle className="text-destructive">Danger Zone</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Permanently delete your account and all associated data. This cannot be undone.
+            </p>
+            <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
+              Delete Account
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <DeleteAccountDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteAccount}
+      />
     </div>
   );
 };
