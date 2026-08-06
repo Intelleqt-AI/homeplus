@@ -15,6 +15,12 @@ export default defineConfig(({ mode }) => ({
         target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8030',
         changeOrigin: true,
       },
+      // Real-time chat push (Django Channels) — same backend, ws:// upgrade.
+      '/ws': {
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8030',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
   plugins: [
