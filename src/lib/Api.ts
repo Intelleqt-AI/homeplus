@@ -1,4 +1,6 @@
 import apiClient, { BASE_URL } from '@/lib/apiClient';
+import { fetchAllPages } from '@/lib/Api2';
+import { TRADE_OPTIONS } from '@/lib/tradeCategories';
 
 // ─── Generic CRUD ─────────────────────────────────────────────────────────────
 
@@ -65,6 +67,10 @@ export const patchFormData = async <T = any>({ url, data }: { url: string; data:
 /** Capitalize first letter of a string (e.g. 'insurance' → 'Insurance') */
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
+/** Display label for a job.trade value (e.g. 'gas_engineer' → 'Gas Engineer') */
+const tradeLabel = (trade: string) =>
+  TRADE_OPTIONS.find(o => o.value === trade?.toLowerCase())?.label ?? cap((trade || '').replace(/_/g, ' '));
+
 /**
  * Normalize a Django Document object to the legacy Supabase shape so that
  * Documents.tsx, docsUploadDialog.tsx, etc. continue to work without changes.
@@ -101,6 +107,8 @@ export type NormDoc = {
   created_event: string | null;
   /** OCR-suggested expiry date returned by the backend after upload. */
   suggested_expiry?: string | null;
+  /** Set to 'unreadable' when an energy_epc upload could not be AI-rated. */
+  epc_status?: string | null;
   _docId: string;
   // Legacy compat — homePack.tsx and HomePlusDashboard.tsx use these
   publicUrl: null;
@@ -128,6 +136,7 @@ const normDoc = (doc: any): NormDoc => ({
   property_address: doc.property_address ?? null,
   created_event: doc.created_event ?? null,
   suggested_expiry: doc.suggested_expiry ?? null,
+  epc_status: doc.epc_status ?? null,
   _docId: doc.id,
   publicUrl: null,
   metadata: {
@@ -185,8 +194,7 @@ export const fetchDocuments = async (filters: DocumentFilters = {}): Promise<Nor
   if (filters.search)    params.set('search', filters.search);
   if (filters.ordering)  params.set('ordering', filters.ordering);
   const qs = params.toString();
-  const { data: res } = await apiClient.get(`/api/v1/documents/${qs ? `?${qs}` : ''}`);
-  const docs = (res.data ?? res.results ?? []) as unknown[];
+  const docs = await fetchAllPages(`/api/v1/documents/${qs ? `?${qs}` : ''}`);
   return docs.map(normDoc);
 };
 
@@ -198,8 +206,7 @@ export const updateDocument = async (id: string, data: DocumentUpdatePayload): P
 
 /** Docs expiring within 30 days */
 export const fetchExpiringDocuments = async (): Promise<NormDoc[]> => {
-  const { data: res } = await apiClient.get('/api/v1/documents/expiring/');
-  const docs = (res.data ?? res.results ?? []) as unknown[];
+  const docs = await fetchAllPages('/api/v1/documents/expiring/');
   return docs.map(normDoc);
 };
 
@@ -245,8 +252,7 @@ export const uploadFileWithMetadata = async ({
 
 /** List documents — legacy wrapper used by homePack.tsx / HomePlusDashboard.tsx */
 export const listFilesWithMetadata = async (_id?: string): Promise<NormDoc[]> => {
-  const { data: res } = await apiClient.get('/api/v1/documents/');
-  const docs = (res.data ?? res.results ?? []) as unknown[];
+  const docs = await fetchAllPages('/api/v1/documents/');
   return docs.map(normDoc);
 };
 
@@ -348,7 +354,7 @@ export const updateUserInfo = async ({ userData }: { userData: any }) => {
 const normLead = (job: any) => ({
   id: job.id,
   name: job.title,
-  service: cap(job.trade),
+  service: tradeLabel(job.trade),
   trade: job.trade || 'other',
   category: job.category || '',
   location: job.location || '',
@@ -381,6 +387,7 @@ const normLead = (job: any) => ({
     rating_comment: b.rating_comment || '',
     rating_is_anonymous: b.rating_is_anonymous ?? false,
     rated_at: b.rated_at ?? null,
+    conversation_id: b.conversation_id ?? null,
     bidder: {
       first_name: b.contractor_name?.split(' ')[0] || '',
       last_name: b.contractor_name?.split(' ').slice(1).join(' ') || '',
@@ -391,8 +398,7 @@ const normLead = (job: any) => ({
 });
 
 export const fetchLeads = async () => {
-  const { data: res } = await apiClient.get('/api/v1/jobs/');
-  const jobs: any[] = res.data ?? res.results ?? [];
+  const jobs = await fetchAllPages('/api/v1/jobs/');
   return jobs.map(normLead);
 };
 

@@ -19,6 +19,8 @@ import {
   Shield,
   Phone,
   Mail,
+  MessageCircle,
+  Unlock,
   BadgeCheck,
   Upload,
   File as FileIcon,
@@ -26,6 +28,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import ChatPanel from '@/components/chat/ChatPanel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -73,6 +76,7 @@ interface TradePilotProfile {
   completed_jobs: number;
   avg_rating: number | null;
   total_ratings: number;
+  profile_photo_url: string | null;
 }
 
 interface Bid {
@@ -88,6 +92,7 @@ interface Bid {
   rating_comment: string;
   rating_is_anonymous: boolean;
   rated_at: string | null;
+  conversation_id: string | null;
   bidder: { first_name: string; last_name: string; email: string };
   tradepilot_profile: TradePilotProfile | null;
 }
@@ -491,7 +496,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   className={inputCls(locked)}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
                     Trade <span className="text-red-500">*</span>
@@ -552,7 +557,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
           {/* ── Location ─────────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Location</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Area</Label>
                 <Popover open={locationOpen} onOpenChange={locked ? undefined : setLocationOpen}>
@@ -617,7 +622,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
           {/* ── Requirements ─────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Requirements</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Urgency</Label>
                 <select value={urgency} onChange={e => setUrgency(e.target.value)} disabled={locked} className={selectCls(locked)}>
@@ -819,21 +824,28 @@ interface BidDetailModalProps {
   job: Job | null;
   onClose: () => void;
   onAccept: (job: Job, bid: Bid) => void;
+  onMessage: (bid: Bid, job: Job) => void;
 }
 
 const statusColors: Record<string, string> = {
   accepted: 'bg-green-50 text-green-700 border-green-200',
   rejected: 'bg-red-50 text-red-700 border-red-200',
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  purchased: 'bg-indigo-50 text-indigo-700 border-indigo-200',
 };
 
-const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) => {
+// A purchased-but-unquoted bid: the trader unlocked the homeowner's details but
+// hasn't submitted a price yet. Rendered as "Interested — awaiting quote".
+const isInterestedOnly = (b: { status: string }) => b.status === 'purchased';
+
+const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailModalProps) => {
   const [showUnverifiedWarning, setShowUnverifiedWarning] = useState(false);
   if (!bid || !job) return null;
   const profile = bid.tradepilot_profile;
   const contractorName = `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim() || bid.bidder.email;
   const isAccepted = bid.status === 'accepted';
-  const canAccept = !isAccepted && !job.isApproved;
+  const interestedOnly = isInterestedOnly(bid);
+  const canAccept = !isAccepted && !job.isApproved && !interestedOnly;
   const isVerified = profile?.is_verified ?? false;
 
   const handleAcceptClick = () => {
@@ -857,9 +869,17 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="h-11 w-11 rounded-full bg-gray-100 flex items-center justify-center text-lg font-semibold text-gray-600">
-                {bid.bidder.first_name?.[0]?.toUpperCase() || '?'}
-              </div>
+              {bid.tradepilot_profile?.profile_photo_url ? (
+                <img
+                  src={bid.tradepilot_profile.profile_photo_url}
+                  alt={contractorName}
+                  className="h-11 w-11 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="h-11 w-11 rounded-full bg-gray-100 flex items-center justify-center text-lg font-semibold text-gray-600 shrink-0">
+                  {bid.bidder.first_name?.[0]?.toUpperCase() || '?'}
+                </div>
+              )}
               <div>
                 <h2 className="text-base font-semibold text-gray-900">{contractorName}</h2>
                 {bid.company_name && <p className="text-sm text-gray-500">{bid.company_name}</p>}
@@ -868,19 +888,36 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
             <span
               className={`px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColors[bid.status] ?? statusColors.pending}`}
             >
-              {bid.status}
+              {interestedOnly ? 'Interested' : bid.status}
             </span>
           </div>
         </div>
 
         <div className="px-6 py-5 space-y-5">
+          {interestedOnly && (
+            <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+              <Unlock className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>
+                This trader has purchased your contact details and can reach out. They haven't sent a
+                quote yet — message them or wait for their price.
+              </span>
+            </div>
+          )}
           {/* Quote details */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Quote Details</p>
-            <div className="grid grid-cols-3 gap-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+              {interestedOnly ? 'Details' : 'Quote Details'}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-gray-50 rounded-xl px-4 py-3">
                 <p className="text-xs text-gray-500 mb-0.5">Price</p>
-                <p className="text-lg font-bold text-gray-900">£{bid.proposedValue.toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {interestedOnly ? (
+                    <span className="text-sm font-medium text-gray-400">No quote yet</span>
+                  ) : (
+                    `£${bid.proposedValue.toLocaleString()}`
+                  )}
+                </p>
               </div>
               <div className="bg-gray-50 rounded-xl px-4 py-3">
                 <p className="text-xs text-gray-500 mb-0.5">Available</p>
@@ -1045,6 +1082,12 @@ const BidDetailModal = ({ bid, job, onClose, onAccept }: BidDetailModalProps) =>
               <CheckCircle className="h-4 w-4" />
               Bid Accepted
             </div>
+          )}
+          {bid.conversation_id && (
+            <Button variant="outline" onClick={() => onMessage(bid, job)}>
+              <MessageCircle className="h-4 w-4" />
+              Message
+            </Button>
           )}
           <Button variant="outline" onClick={onClose} className={canAccept && !showUnverifiedWarning ? '' : 'flex-1'}>
             Close
@@ -1237,6 +1280,23 @@ const JobLeads = () => {
   const [selectedBidDetail, setSelectedBidDetail] = useState<Bid | null>(null);
   const [selectedBidJob, setSelectedBidJob] = useState<Job | null>(null);
   const [rateBidTarget, setRateBidTarget] = useState<{ job: Job; bid: Bid } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatConversationId, setChatConversationId] = useState<string | null>(null);
+  const [chatTitle, setChatTitle] = useState('');
+  const [chatSubtitle, setChatSubtitle] = useState('');
+
+  const openChat = (bid: Bid, job: Job) => {
+    if (!bid.conversation_id) return;
+    const name =
+      `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim() ||
+      bid.company_name ||
+      bid.bidder.email ||
+      'Trader';
+    setChatConversationId(bid.conversation_id);
+    setChatTitle(name);
+    setChatSubtitle(job.name);
+    setChatOpen(true);
+  };
   const [leads, setLeads] = useState<Job[]>([]);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [editJob, setEditJob] = useState<Job | null>(null);
@@ -1249,7 +1309,7 @@ const JobLeads = () => {
   const addJob = usePost({
     mutationFn: createJob,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
       setCurrentItem(null);
       setCurrentBid(null);
     },
@@ -1260,7 +1320,7 @@ const JobLeads = () => {
     onSuccess: () => {
       toast.success('Bid updated successfully');
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: ['bids'] });
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
       setCurrentItem(null);
       setCurrentBid(null);
     },
@@ -1331,14 +1391,14 @@ const JobLeads = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="hidden sm:flex h-12 w-12 bg-[#F5F5F0] rounded-full items-center justify-center">
                 <Search className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
               </div>
               <div>
                 <p className="text-[#6B6B6B] text-sm mb-0.5">Find tradespeople</p>
-                <h1 className="text-[#1A1A1A] text-2xl font-semibold">Home Improvements & Maintenance</h1>
+                <h1 className="text-[#1A1A1A] text-lg sm:text-2xl font-semibold leading-tight">Home Improvements & Maintenance</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -1354,45 +1414,47 @@ const JobLeads = () => {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-sm">Total Jobs</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Briefcase className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-2xl font-semibold">{leads.length}</p>
+              <p className="text-[#1A1A1A] text-xl sm:text-2xl font-semibold">{leads.length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">All posted jobs</p>
             </div>
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-sm">Active</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#1A1A1A] text-2xl font-semibold">{leads.filter(l => !l.isApproved).length}</p>
+              <p className="text-[#1A1A1A] text-xl sm:text-2xl font-semibold">{leads.filter(l => !l.isApproved).length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">Awaiting quotes</p>
             </div>
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-sm">Quotes Received</span>
                 <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <MessageSquare className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#FBBF24] text-2xl font-semibold">{leads.reduce((acc, l) => acc + l.bids.length, 0)}</p>
+              <p className="text-[#FBBF24] text-xl sm:text-2xl font-semibold">
+                {leads.reduce((acc, l) => acc + l.bids.filter(b => !isInterestedOnly(b)).length, 0)}
+              </p>
               <p className="text-[#8B8B8B] text-xs mt-1">From tradespeople</p>
             </div>
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-sm">Completed</span>
                 <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                   <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#10B981] text-2xl font-semibold">{leads.filter(l => l.isApproved).length}</p>
+              <p className="text-[#10B981] text-xl sm:text-2xl font-semibold">{leads.filter(l => l.isApproved).length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">Jobs completed</p>
             </div>
           </div>
@@ -1486,8 +1548,8 @@ const JobLeads = () => {
               <div className="space-y-3">
                 {filteredLeads.map(job => (
                   <div key={job.id} className="bg-[#F5F5F0] rounded-[12px] px-5 py-4 hover:shadow-sm transition-all">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-start gap-4 flex-1 cursor-pointer" onClick={() => setEditJob(job)}>
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+                      <div className="flex items-start gap-3 sm:flex-1 cursor-pointer" onClick={() => setEditJob(job)}>
                         <div className="h-10 w-10 rounded-[10px] bg-white border border-[#E5E7EB] flex items-center justify-center flex-shrink-0">
                           <Briefcase className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
                         </div>
@@ -1497,7 +1559,7 @@ const JobLeads = () => {
                             {job.bids.length > 0 && <Lock className="h-3 w-3 text-amber-500 shrink-0" />}
                           </div>
                           <p className="text-[#6B6B6B] text-xs mt-0.5">{job.service}</p>
-                          <div className="flex items-center gap-4 mt-2 text-xs text-[#6B6B6B]">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-[#6B6B6B]">
                             <div className="flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
                               <span>{job.location || '—'}</span>
@@ -1515,9 +1577,22 @@ const JobLeads = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
                         {(() => {
                           const s = job.status;
+                          const quotes = job.bids.filter(b => !isInterestedOnly(b)).length;
+                          const interested = job.bids.filter(isInterestedOnly).length;
+                          const openLabel =
+                            quotes > 0
+                              ? {
+                                  cls: 'bg-yellow-50 text-yellow-700',
+                                  label:
+                                    `${quotes} Quote${quotes > 1 ? 's' : ''}` +
+                                    (interested > 0 ? ` · ${interested} interested` : ''),
+                                }
+                              : interested > 0
+                                ? { cls: 'bg-indigo-50 text-indigo-700', label: `${interested} Interested` }
+                                : { cls: 'bg-gray-50 text-gray-600', label: 'Awaiting quotes' };
                           const cfg =
                             s === 'completed'
                               ? { cls: 'bg-green-50 text-green-700', label: 'Completed' }
@@ -1527,12 +1602,7 @@ const JobLeads = () => {
                                   ? { cls: 'bg-purple-50 text-purple-700', label: 'Booked' }
                                   : s === 'cancelled'
                                     ? { cls: 'bg-red-50 text-red-700', label: 'Cancelled' }
-                                    : job.bids.length > 0
-                                      ? {
-                                          cls: 'bg-yellow-50 text-yellow-700',
-                                          label: `${job.bids.length} Quote${job.bids.length > 1 ? 's' : ''}`,
-                                        }
-                                      : { cls: 'bg-gray-50 text-gray-600', label: 'Awaiting quotes' };
+                                    : openLabel;
                           return <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${cfg.cls}`}>{cfg.label}</span>;
                         })()}
 
@@ -1658,18 +1728,27 @@ const JobLeads = () => {
                                 </div>
                                 {bid.company_name && <p className="text-xs text-gray-500 mb-1.5">{bid.company_name}</p>}
                                 <div className="space-y-1 text-xs text-[#6B6B6B]">
-                                  <div className="flex justify-between">
-                                    <span>Price:</span>
-                                    <span className="font-semibold text-[#1A1A1A]">£{bid.proposedValue.toLocaleString()}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Available:</span>
-                                    <span>
-                                      {bid.Available
-                                        ? new Date(bid.Available).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-                                        : '—'}
-                                    </span>
-                                  </div>
+                                  {isInterestedOnly(bid) ? (
+                                    <div className="flex items-center gap-1.5 rounded-md bg-indigo-50 px-2 py-1.5 text-[11px] font-medium text-indigo-700">
+                                      <Unlock className="h-3 w-3 shrink-0" />
+                                      Interested — purchased your details, awaiting quote
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>Price:</span>
+                                        <span className="font-semibold text-[#1A1A1A]">£{bid.proposedValue.toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Available:</span>
+                                        <span>
+                                          {bid.Available
+                                            ? new Date(bid.Available).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                                            : '—'}
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
                                   {profile && (
                                     <div className="flex gap-1.5 mt-2 pt-2 border-t border-gray-100">
                                       {profile.has_insurance && (
@@ -1687,19 +1766,30 @@ const JobLeads = () => {
                                     </div>
                                   )}
                                 </div>
-                                <button
-                                  className={`w-full mt-3 px-3 py-2 text-xs font-medium rounded-full transition-colors ${
-                                    bid.status === 'accepted'
-                                      ? 'bg-green-50 text-green-700 border border-green-200'
-                                      : 'text-[#4A4A4A] bg-[#F5F5F0] hover:bg-[#E8E8E3]'
-                                  }`}
-                                  onClick={() => {
-                                    setSelectedBidDetail(bid);
-                                    setSelectedBidJob(job);
-                                  }}
-                                >
-                                  {bid.status === 'accepted' ? '✓ Accepted — View Details' : 'View Details'}
-                                </button>
+                                <div className="mt-3 flex gap-2">
+                                  <button
+                                    className={`flex-1 px-3 py-2 text-xs font-medium rounded-full transition-colors ${
+                                      bid.status === 'accepted'
+                                        ? 'bg-green-50 text-green-700 border border-green-200'
+                                        : 'text-[#4A4A4A] bg-[#F5F5F0] hover:bg-[#E8E8E3]'
+                                    }`}
+                                    onClick={() => {
+                                      setSelectedBidDetail(bid);
+                                      setSelectedBidJob(job);
+                                    }}
+                                  >
+                                    {bid.status === 'accepted' ? '✓ Accepted — View Details' : 'View Details'}
+                                  </button>
+                                  {bid.conversation_id && (
+                                    <button
+                                      className="flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-full border border-[#E8E8E3] text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors"
+                                      onClick={() => openChat(bid, job)}
+                                    >
+                                      <MessageCircle className="h-3.5 w-3.5" />
+                                      Message
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -1773,6 +1863,15 @@ const JobLeads = () => {
           setSelectedBidJob(null);
         }}
         onAccept={handleApprove}
+        onMessage={openChat}
+      />
+
+      <ChatPanel
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        conversationId={chatConversationId}
+        title={chatTitle}
+        subtitle={chatSubtitle}
       />
 
       <RateTradesmanModal

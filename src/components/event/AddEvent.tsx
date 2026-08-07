@@ -39,9 +39,10 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { LucideIcon } from 'lucide-react';
-import PropertySelect from '@/components/property/PropertySelect';
+import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
+import useFetch from '@/hooks/useFetch';
 import { cn } from '@/lib/utils';
-import { TRADE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
+import { JOB_TRADE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
 
 type EventMode = 'task' | 'reminder';
 
@@ -60,9 +61,7 @@ interface EventTemplate {
 
 const eventSchema = z
   .object({
-    // Optional at the schema level — superRefine below enforces "required for
-    // tasks only" so reminders (e.g. "Bin Day", "Pay phone bill") can be
-    // saved without a property.
+    // Always optional — tasks and reminders alike can be saved without a property.
     propertyId: z.string().optional(),
     title: z.string().min(1, 'Title is required'),
     date: z.string().min(1, 'Date is required'),
@@ -84,13 +83,7 @@ const eventSchema = z
   })
   .superRefine((val, ctx) => {
     if (val.requiresTrade) {
-      if (!val.propertyId) {
-        ctx.addIssue({
-          path: ['propertyId'],
-          code: z.ZodIssueCode.custom,
-          message: 'Property is required for tasks',
-        });
-      }
+      // Property is optional — tasks/reminders can be saved without one.
       if (!val.trade) {
         ctx.addIssue({
           path: ['trade'],
@@ -152,6 +145,11 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
 
   const propertyId = watch('propertyId');
 
+  const { data: propertiesRes } = useFetch<{ results?: PropertyOption[]; data?: PropertyOption[] }>(
+    '/api/v1/properties/',
+  );
+  const properties: PropertyOption[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
+
   useEffect(() => {
     if (isAddEventOpen && initialDate) {
       setValue('date', initialDate);
@@ -162,10 +160,18 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
   useEffect(() => {
     setValue('requiresTrade', eventMode === 'task');
     if (eventMode === 'reminder') {
-      // Reminders default to "other" so the calendar treats them as non-trade items.
       setValue('type', 'other');
+      setValue('propertyId', '');
     }
   }, [eventMode, setValue]);
+
+  // Auto-select the only property when in task mode
+  useEffect(() => {
+    if (eventMode === 'task' && properties.length === 1) {
+      setValue('propertyId', properties[0].id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventMode, properties.length]);
 
   const mutation = usePost({
     mutationFn: addNewEvent,
@@ -295,7 +301,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
         )}
 
         {quickAddOpen && (
-          <div className="absolute top-full right-0 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4">
+          <div className="absolute top-full right-0 mt-2 w-[min(24rem,calc(100vw-2rem))] bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium text-gray-900">What type of task?</h3>
               <Button variant="ghost" size="sm" onClick={() => setQuickAddOpen(false)} className="h-6 w-6 p-0">
@@ -471,6 +477,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                     value={field.value ?? ''}
                     onChange={id => field.onChange(id)}
                     requireMapPin={eventMode === 'task'}
+                    showDropdown={eventMode === 'reminder'}
                   />
                 )}
               />
@@ -515,7 +522,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
-                          {TRADE_OPTIONS.map(opt => (
+                          {JOB_TRADE_OPTIONS.map(opt => (
                             <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
                             </SelectItem>

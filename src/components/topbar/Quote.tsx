@@ -12,7 +12,7 @@ import useFetch from '@/hooks/useFetch';
 import { createJob, postData } from '@/lib/Api';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { categoryConfig } from '@/lib/jobCategories';
-import { TRADE_OPTIONS } from '@/lib/tradeCategories';
+import { TRADE_OPTIONS, JOB_TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { Check, ChevronsUpDown, Upload, File as FileIcon, X, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
@@ -53,6 +53,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   // Location
   const [locationArea, setLocationArea] = useState('');
   const [locationPostcode, setLocationPostcode] = useState('');
+  const [locationAddress, setLocationAddress] = useState('');
   const [locationOpen, setLocationOpen] = useState(false);
 
   // Dynamic Q&A
@@ -86,6 +87,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     setPreferredDate('');
     setLocationArea('');
     setLocationPostcode('');
+    setLocationAddress('');
     setAnswers({});
     setPendingFiles([]);
   };
@@ -119,7 +121,15 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     if (!propertyId || !selectedProperty) return;
     setLocationArea(selectedProperty.location ?? '');
     setLocationPostcode(selectedProperty.postcode ?? '');
+    setLocationAddress(selectedProperty.address ?? '');
   }, [propertyId, selectedProperty]);
+
+  // Auto-select when the user has exactly one property
+  useEffect(() => {
+    if (properties.length === 1 && !propertyId) {
+      setPropertyId(properties[0].id);
+    }
+  }, [properties.length, propertyId]);
 
   const { mutate: submitJob, isPending } = usePost({
     mutationFn: (vars: Record<string, unknown>) => createJob(vars),
@@ -160,10 +170,6 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   };
 
   const handleSubmit = () => {
-    if (!propertyId) {
-      toast.error('Please select a property');
-      return;
-    }
     if (selectedProperty && (selectedProperty.latitude === null || selectedProperty.longitude === null)) {
       toast.error('Selected property has no exact location. Open Settings → Properties to set its map pin.');
       return;
@@ -174,6 +180,10 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     }
     if (!locationPostcode.trim()) {
       toast.error('Postcode is required');
+      return;
+    }
+    if (!preferredDate) {
+      toast.error('Preferred date is required');
       return;
     }
     if (serviceCategories.length > 0 && !category) {
@@ -199,7 +209,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     }
 
     submitJob({
-      property: propertyId,
+      ...(propertyId ? { property: propertyId } : {}),
       title,
       description,
       service,
@@ -228,19 +238,17 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     >
       <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto p-0">
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+        <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-gray-100">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold text-gray-900">Post a Job</DialogTitle>
             <p className="text-sm text-gray-500 mt-0.5">Get quotes from verified local tradespeople</p>
           </DialogHeader>
         </div>
 
-        <div className="px-6 py-5 space-y-6">
+        <div className="px-4 sm:px-6 py-5 space-y-6">
           {/* ── Property ─────────────────────────────────────── */}
           <div>
-            <p className={sectionTitle}>
-              Property <span className="text-red-500">*</span>
-            </p>
+            <p className={sectionTitle}>Property</p>
             <PropertySelect
               value={propertyId}
               onChange={id => setPropertyId(id)}
@@ -263,7 +271,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                   className={inputCls}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
                     Trade <span className="text-red-500">*</span>
@@ -277,7 +285,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                     }}
                     className={selectCls}
                   >
-                    {TRADE_OPTIONS.map(opt => (
+                    {JOB_TRADE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.label}>{opt.label}</option>
                     ))}
                   </select>
@@ -319,7 +327,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
           {/* ── Location ─────────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Location</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Area</Label>
                 <Popover open={locationOpen} onOpenChange={setLocationOpen}>
@@ -376,12 +384,21 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                 <p className="text-xs text-gray-400 mt-1">Auto-filled from area or property · editable</p>
               </div>
             </div>
+            <div className="mt-3">
+              <Label className="text-sm font-medium text-gray-700">Address</Label>
+              <input
+                value={locationAddress}
+                onChange={e => setLocationAddress(e.target.value)}
+                placeholder="Auto-filled from property"
+                className={inputCls}
+              />
+            </div>
           </div>
 
           {/* ── Requirements ─────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Requirements</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Urgency</Label>
                 <select value={urgency} onChange={e => setUrgency(e.target.value)} className={selectCls}>
@@ -399,8 +416,8 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                   <option value="high">High</option>
                 </select>
               </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Preferred Date</Label>
+              <div className="col-span-2 sm:col-span-1">
+                <Label className="text-sm font-medium text-gray-700">Preferred Date <span className="text-red-500">*</span></Label>
                 <input
                   type="date"
                   value={preferredDate}
@@ -524,7 +541,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-100 flex gap-3">
           <Button onClick={handleSubmit} className="flex-1" disabled={isPending || uploading}>
             {uploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Uploading…</> : isPending ? 'Posting…' : 'Post Job'}
           </Button>

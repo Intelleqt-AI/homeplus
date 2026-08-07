@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X, Bell } from 'lucide-react';
+import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X, Bell, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { fetchData } from '@/lib/Api';
@@ -19,6 +19,17 @@ const Sidebar = () => {
   });
   const unreadCount: number = (bellData as { unread_count?: number } | undefined)?.unread_count ?? 0;
 
+  const { data: msgData } = useQuery({
+    queryKey: ['/api/v1/messaging/unread-count/'],
+    queryFn: (): Promise<{ unread_count: number }> =>
+      fetchData('/api/v1/messaging/unread-count/').then(
+        (r: { data?: { unread_count: number } } & { unread_count?: number }) =>
+          r?.data ?? (r as { unread_count: number }),
+      ),
+    refetchInterval: 60 * 1000,
+  });
+  const messagesUnread: number = (msgData as { unread_count?: number } | undefined)?.unread_count ?? 0;
+
   const handleSignOut = () => {
     signOut();
     navigate('/login', { replace: true });
@@ -29,6 +40,7 @@ const Sidebar = () => {
     { icon: Search, label: 'Home Improvements & Maintenance', path: '/dashboard/job-leads' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
     { icon: ClipboardList, label: 'Tasks & Reminders', path: '/dashboard/calendar' },
+    { icon: MessageSquare, label: 'Messages', path: '/dashboard/messages', badge: messagesUnread },
     { icon: Bell, label: 'Notifications', path: '/dashboard/notifications', badge: unreadCount },
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
   ];

@@ -6,7 +6,7 @@ import { fetchDocumentSummary, getEvents } from '@/lib/Api2';
 import { fetchLeads } from '@/lib/Api';
 
 const HowItWorks = () => {
-  const { data: docSummary } = useQuery({ queryKey: ['docSummary'], queryFn: fetchDocumentSummary });
+  const { data: docSummary } = useQuery({ queryKey: ['documents-summary'], queryFn: fetchDocumentSummary });
   const { data: jobsData } = useQuery({ queryKey: ['leads'], queryFn: fetchLeads });
   const { data: eventsData } = useQuery({ queryKey: ['event'], queryFn: getEvents });
 

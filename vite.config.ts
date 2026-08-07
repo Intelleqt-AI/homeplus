@@ -9,9 +9,17 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8081,
     proxy: {
+      // HomePlus and TradePilot share one backend, run locally on port 8030.
+      // Override with VITE_API_PROXY_TARGET if your backend runs elsewhere.
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8030',
         changeOrigin: true,
+      },
+      // Real-time chat push (Django Channels) — same backend, ws:// upgrade.
+      '/ws': {
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8030',
+        changeOrigin: true,
+        ws: true,
       },
     },
   },

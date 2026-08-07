@@ -21,6 +21,13 @@ export const TRADE_OPTIONS: Option[] = [
   { value: 'other',       label: 'Other' },
 ];
 
+export const JOB_TRADE_OPTIONS: Option[] = [
+  { value: 'plumbing',     label: 'Plumbing' },
+  { value: 'gas_engineer', label: 'Gas Engineer' },
+  { value: 'electrical',   label: 'Electrical' },
+  { value: 'roofing',      label: 'Roofing' },
+];
+
 export const DISCIPLINE_OPTIONS: Option[] = [
   { value: 'compliance', label: 'Compliance' },
   { value: 'warranty', label: 'Warranty' },

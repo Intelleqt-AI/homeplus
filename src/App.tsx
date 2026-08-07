@@ -3,6 +3,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/hooks/useAuth';
+import { useMessagingSocket } from '@/hooks/useMessagingSocket';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Index from './pages/Index';
 import Home2 from './pages/Home2';
@@ -27,6 +28,7 @@ import Calendar from './pages/homeplus/Calendar';
 import Settings from './pages/homeplus/Settings';
 import HowItWorks from './pages/homeplus/HowItWorks';
 import NotificationsPage from './pages/homeplus/Notifications';
+import Messages from './pages/homeplus/Messages';
 import EnergyEPC from './pages/homeplus/EnergyEPC';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
@@ -42,10 +44,19 @@ const queryClient = new QueryClient({
   },
 });
 
+// Non-visual — connects the real-time chat push socket once a user is
+// logged in. Must render inside AuthProvider (needs useAuth) and
+// QueryClientProvider (needs useQueryClient), see useMessagingSocket.ts.
+const MessagingSocket = () => {
+  useMessagingSocket();
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
+        <MessagingSocket />
         <GooeyToaster preset="subtle" position="bottom-right" />
         <BrowserRouter>
           <Routes>
@@ -131,6 +142,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <NotificationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/messages"
+              element={
+                <ProtectedRoute>
+                  <Messages />
                 </ProtectedRoute>
               }
             />
