@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Home, Loader2, AlertCircle, Mail, RotateCcw } from 'lucide-react';
+import { Loader2, AlertCircle, Mail, RotateCcw } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth, PENDING_TOKEN_KEY } from '@/hooks/useAuth';
 
@@ -119,9 +119,7 @@ const VerifyEmail = () => {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-hero">
-              <Home className="h-5 w-5 text-primary-foreground" />
-            </div>
+            <img src="/homeplus-logo.png" alt="Home+" className="h-9 w-9 object-contain" />
             <span className="text-2xl font-semibold tracking-tight">Home+</span>
           </Link>
         </div>

@@ -5,7 +5,7 @@ import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/lib/apiClient';
-import Logo from '/home-logo-new.png';
+import Logo from '/homeplus-logo.png';
 
 type TokenState = 'validating' | 'valid' | 'invalid';
 
@@ -91,7 +91,7 @@ const ResetPassword = () => {
   const logoBlock = (
     <div className="text-center mb-8">
       <Link to="/" className="inline-flex items-center gap-2.5">
-        <img src={Logo} className="max-w-[100px]" />
+        <img src={Logo} className="h-16 w-auto object-contain" />
       </Link>
     </div>
   );
@@ -194,7 +194,7 @@ const ResetPassword = () => {
                     autoFocus
                     disabled={loading}
                     required
-                    className={`h-10 bg-white pr-10 ${fieldErrors.newPassword ? 'border-destructive focus-visible:ring-0' : ''}`}
+                    className={`h-10 bg-card pr-10 ${fieldErrors.newPassword ? 'border-destructive focus-visible:ring-0' : ''}`}
                   />
                   <button
                     type="button"
@@ -226,7 +226,7 @@ const ResetPassword = () => {
                     autoComplete="new-password"
                     disabled={loading}
                     required
-                    className={`h-10 bg-white pr-10 ${fieldErrors.confirmPassword ? 'border-destructive focus-visible:ring-0' : ''}`}
+                    className={`h-10 bg-card pr-10 ${fieldErrors.confirmPassword ? 'border-destructive focus-visible:ring-0' : ''}`}
                   />
                   <button
                     type="button"

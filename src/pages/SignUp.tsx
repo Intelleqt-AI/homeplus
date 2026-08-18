@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 const ALL_LOCATIONS = UK_LOCATIONS.flatMap(g => g.items);
-import Logo from '/home-logo-new.png';
+import Logo from '/homeplus-logo.png';
 
 // ── validation ────────────────────────────────────────────────────────────────
 
@@ -127,7 +127,7 @@ const SignUp = () => {
       <header className="border-b bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <img src={Logo} className="max-w-[90px]" />
+            <img src={Logo} className="h-10 w-auto object-contain" />
           </Link>
           <div className="text-sm text-foreground">
             Already have an account?{' '}

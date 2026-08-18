@@ -5,7 +5,7 @@ import { Home, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/lib/apiClient';
-import Logo from '/home-logo-new.png';
+import Logo from '/homeplus-logo.png';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -41,7 +41,7 @@ const ForgotPassword = () => {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2.5">
-            <img src={Logo} className="max-w-[100px]" />
+            <img src={Logo} className="h-16 w-auto object-contain" />
           </Link>
         </div>
 
@@ -106,7 +106,7 @@ const ForgotPassword = () => {
                   autoFocus
                   disabled={loading}
                   required
-                  className="h-10 bg-white"
+                  className="h-10 bg-card"
                 />
               </div>
 

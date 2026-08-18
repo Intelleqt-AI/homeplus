@@ -240,15 +240,15 @@ const Settings = () => {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+        <div className="bg-card rounded-[20px] p-4 md:p-6 border border-border">
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="hidden sm:flex h-12 w-12 bg-[#F5F5F0] rounded-full items-center justify-center">
-                <SettingsIcon className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
+              <div className="hidden sm:flex h-12 w-12 bg-muted rounded-full items-center justify-center">
+                <SettingsIcon className="w-5 h-5 text-foreground" strokeWidth={1.5} />
               </div>
               <div>
-                <p className="text-[#6B6B6B] text-sm mb-0.5">Manage your account</p>
-                <h1 className="text-[#1A1A1A] text-lg sm:text-2xl font-semibold leading-tight">Settings</h1>
+                <p className="text-muted-foreground text-sm mb-0.5">Manage your account</p>
+                <h1 className="text-foreground text-lg sm:text-2xl font-semibold leading-tight">Settings</h1>
               </div>
             </div>
           </div>
@@ -263,10 +263,10 @@ const Settings = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-full whitespace-nowrap text-sm font-medium shrink-0 transition-all ${
-                    isActive ? 'bg-[#1A1A1A] text-white' : 'bg-[#F5F5F0] text-[#4A4A4A] hover:bg-[#E8E8E3]'
+                    isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-border'
                   }`}
                 >
-                  <IconComponent className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-[#FBBF24]'}`} strokeWidth={1.5} />
+                  <IconComponent className={`w-3.5 h-3.5 ${isActive ? 'text-primary-foreground' : 'text-accent'}`} strokeWidth={1.5} />
                   {tab.label}
                 </button>
               );
@@ -282,18 +282,18 @@ const Settings = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`rounded-[16px] px-5 py-4 text-left transition-all ${
-                    isActive ? 'bg-[#1A1A1A]' : 'bg-[#F5F5F0] hover:bg-[#E8E8E3]'
+                    isActive ? 'bg-primary' : 'bg-muted hover:bg-border'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`text-sm ${isActive ? 'text-white' : 'text-[#6B6B6B]'}`}>{tab.label}</span>
+                    <span className={`text-sm ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`}>{tab.label}</span>
                     <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                      isActive ? 'bg-white/10' : 'bg-[#FEF9E7]'
+                      isActive ? 'bg-primary-foreground/10' : 'bg-accent/10'
                     }`}>
-                      <IconComponent className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#FBBF24]'}`} strokeWidth={1.5} />
+                      <IconComponent className={`w-4 h-4 ${isActive ? 'text-primary-foreground' : 'text-accent'}`} strokeWidth={1.5} />
                     </div>
                   </div>
-                  <p className={`text-xs ${isActive ? 'text-white/70' : 'text-[#8B8B8B]'}`}>
+                  <p className={`text-xs ${isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                     {tab.id === 'profile' && 'Your details'}
                     {tab.id === 'notifications' && 'Alerts & emails'}
                     {tab.id === 'security' && 'Password & 2FA'}
@@ -318,12 +318,12 @@ const Settings = () => {
 
           {/* Right sidebar nav */}
           <div className="lg:col-span-1 space-y-4">
-            <div className="bg-white rounded-[16px] p-5 border border-[#E0E0DB]">
+            <div className="bg-card rounded-[16px] p-5 border border-border">
               <div className="flex items-center gap-3 mb-4">
-                <div className="h-9 w-9 bg-[#FEF9E7] rounded-full flex items-center justify-center">
-                  <SettingsIcon className="w-4 h-4 text-[#FBBF24]" />
+                <div className="h-9 w-9 bg-accent/10 rounded-full flex items-center justify-center">
+                  <SettingsIcon className="w-4 h-4 text-accent" />
                 </div>
-                <h3 className="text-[#1A1A1A] text-base font-semibold">Settings Menu</h3>
+                <h3 className="text-foreground text-base font-semibold">Settings Menu</h3>
               </div>
               <nav className="space-y-1">
                 {tabs.map((tab) => {
@@ -334,8 +334,8 @@ const Settings = () => {
                       onClick={() => setActiveTab(tab.id)}
                       className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                         activeTab === tab.id
-                          ? "bg-[#1A1A1A] text-white"
-                          : "text-gray-700 hover:bg-gray-100"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-foreground hover:bg-muted"
                       }`}
                     >
                       <IconComponent className="w-4 h-4 mr-3" />
