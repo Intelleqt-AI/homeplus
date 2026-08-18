@@ -2,12 +2,12 @@ import { Mail, Phone, MapPin } from "lucide-react";
 
 const Footer = () => {
   return (
-    <footer className="bg-gray-50 text-foreground py-16">
+    <footer className="bg-muted text-foreground py-16">
       <div className="container">
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div className="space-y-4">
             <img 
-              src="/lovable-uploads/12a6b0ca-4f79-40fc-a635-9290ed19a8b5.png" 
+              src="/homeplus-logo.png"
               alt="Home+ Logo" 
               className="h-8 w-auto"
             />

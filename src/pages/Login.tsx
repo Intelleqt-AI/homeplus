@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Home, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import Logo from '/home-logo-new.png';
+import Logo from '/homeplus-logo.png';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -41,7 +41,7 @@ const Login = () => {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2.5">
-            <img src={Logo} className="max-w-[100px]" />
+            <img src={Logo} className="h-16 w-auto object-contain" />
           </Link>
         </div>
 
@@ -78,7 +78,7 @@ const Login = () => {
               autoFocus
               disabled={loading}
               required
-              className="h-10 bg-white"
+              className="h-10 bg-card"
             />
           </div>
 
@@ -104,7 +104,7 @@ const Login = () => {
                 autoComplete="current-password"
                 disabled={loading}
                 required
-                className="h-10 pr-10 bg-white"
+                className="h-10 pr-10 bg-card"
               />
               <button
                 type="button"

@@ -12,7 +12,7 @@ const Header = () => {
         <div className="flex items-center gap-2">
           <Link to="/" className="hover:opacity-80 transition-opacity">
             <img 
-              src="/lovable-uploads/12a6b0ca-4f79-40fc-a635-9290ed19a8b5.png" 
+              src="/homeplus-logo.png"
               alt="Home+ Logo" 
               className="h-12 w-auto"
             />

@@ -82,10 +82,10 @@ function Eyebrow({ icon: Icon, label, trailing }: { icon: React.ElementType; lab
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <div className="h-8 w-8 bg-[#F5F5F0] rounded-full flex items-center justify-center">
-          <Icon className="w-4 h-4 text-[#1A1A1A]" />
+        <div className="h-8 w-8 bg-muted rounded-full flex items-center justify-center">
+          <Icon className="w-4 h-4 text-foreground" />
         </div>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
       </div>
       {trailing && <div>{trailing}</div>}
     </div>
@@ -322,7 +322,7 @@ const HomePlusDashboard = () => {
   const attentionTotal: number = attentionResp?.data?.total ?? attentionItems.length;
   const ATTN_BG: Record<AttnTone, string> = { danger: '#FEF2F2', warning: '#FFFBEB', neutral: '#F5F5F0' };
   const ATTN_FG: Record<AttnTone, string> = { danger: '#EF4444', warning: '#F59E0B', neutral: '#6B6B6B' };
-  const ATTN_TAG: Record<AttnTone, string> = { danger: 'bg-red-100 text-red-700', warning: 'bg-yellow-100 text-yellow-800', neutral: 'bg-[#F5F5F0] text-[#6B6B6B]' };
+  const ATTN_TAG: Record<AttnTone, string> = { danger: 'bg-red-100 text-red-700', warning: 'bg-yellow-100 text-yellow-800', neutral: 'bg-muted text-muted-foreground' };
 
   const now_month = now.getMonth();
   const MONTHS_LABELS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
@@ -386,7 +386,7 @@ const HomePlusDashboard = () => {
   const TAG_CLS: Record<string, string> = {
     best_price: 'bg-green-100 text-green-700',
     fastest: 'bg-blue-100 text-blue-700',
-    top_rated: 'bg-[#F5F5F0] text-[#6B6B6B]',
+    top_rated: 'bg-muted text-muted-foreground',
   };
   const recommendedName = quotes?.quotes.find(q => q.bid_id === quotes.recommended_bid_id)?.name ?? 'this trade';
   const refreshQuotes = () => {
@@ -467,27 +467,27 @@ const HomePlusDashboard = () => {
       <div className="space-y-4">
 
         {/* ── PageHeader ─────────────────────────────────────── */}
-        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex items-center justify-between gap-4">
+        <div className="bg-card rounded-[18px] border border-border p-5 flex items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Good morning</p>
-            <h1 className="text-[22px] xs:text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-1 leading-tight xs:leading-none">{firstName}'s home pulse</h1>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Good morning</p>
+            <h1 className="text-[22px] xs:text-[26px] font-bold tracking-tight text-foreground mt-1 leading-tight xs:leading-none">{firstName}'s home pulse</h1>
           </div>
           <div className="flex items-center gap-2.5 shrink-0">
             <Link
               to="/dashboard/notifications"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-[#E8E8E3] bg-white text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-border bg-card text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
             >
               <Bell className="w-4 h-4" />
               <span className="hidden sm:inline">Notifications</span>
               {unreadCount > 0 && (
-                <span className="bg-[#FBBF24] text-[#1A1A1A] rounded-full min-w-[18px] h-[18px] text-[10px] font-bold flex items-center justify-center px-1">
+                <span className="bg-accent text-accent-foreground rounded-full min-w-[18px] h-[18px] text-[10px] font-bold flex items-center justify-center px-1">
                   {unreadCount}
                 </span>
               )}
             </Link>
             <button
               onClick={() => setUploadOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">Upload document</span>
@@ -503,27 +503,27 @@ const HomePlusDashboard = () => {
         {/* ── Vitals strip — 4 tiles ──────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* MOT */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Home MOT score</p>
+          <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Home MOT score</p>
             <div className="flex items-baseline gap-1">
-              <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{homeMotScore}</span>
-              <span className="text-[13px] text-[#8B8B8B]">/ 100</span>
+              <span className="text-[28px] font-bold tracking-tight text-foreground leading-none">{homeMotScore}</span>
+              <span className="text-[13px] text-muted-foreground">/ 100</span>
             </div>
-            <p className="text-[11px] text-[#8B8B8B]">
+            <p className="text-[11px] text-muted-foreground">
               {motTickedTotal === 0 ? 'Run your first check to begin' : `${motTickedTotal} check${motTickedTotal === 1 ? '' : 's'} completed`}
             </p>
             <div className="mt-1"><HealthBar value={homeMotScore} segments={12} /></div>
           </div>
           {/* YTD Spend */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">YTD home spend</p>
-            <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{fmtGBP(ytdSpend)}</span>
-            <p className="text-[11px] text-[#8B8B8B] flex items-center gap-1">
+          <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">YTD home spend</p>
+            <span className="text-[28px] font-bold tracking-tight text-foreground leading-none">{fmtGBP(ytdSpend)}</span>
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
               {ytdDeltaPct == null ? (
                 <span>First year tracked</span>
               ) : (
                 <>
-                  <span className={ytdDeltaPct < 0 ? 'text-green-600' : ytdDeltaPct > 0 ? 'text-red-500' : 'text-[#8B8B8B]'}>
+                  <span className={ytdDeltaPct < 0 ? 'text-green-600' : ytdDeltaPct > 0 ? 'text-red-500' : 'text-muted-foreground'}>
                     {ytdDeltaPct < 0 ? '↓' : ytdDeltaPct > 0 ? '↑' : '→'}
                   </span>
                   {Math.abs(ytdDeltaPct)}% vs last year
@@ -535,13 +535,13 @@ const HomePlusDashboard = () => {
             </div>
           </div>
           {/* Documents */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Documents</p>
+          <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Documents</p>
             <div className="flex items-baseline gap-1">
-              <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{totalDocs}</span>
-              <span className="text-[13px] text-[#8B8B8B]">files</span>
+              <span className="text-[28px] font-bold tracking-tight text-foreground leading-none">{totalDocs}</span>
+              <span className="text-[13px] text-muted-foreground">files</span>
             </div>
-            <p className="text-[11px] text-[#8B8B8B]">
+            <p className="text-[11px] text-muted-foreground">
               {totalDocs === 0 ? 'No documents yet' : `${totalDocs} file${totalDocs === 1 ? '' : 's'} stored`}
             </p>
             <div className="mt-1">
@@ -549,13 +549,13 @@ const HomePlusDashboard = () => {
             </div>
           </div>
           {/* Upcoming events */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Upcoming events</p>
+          <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Upcoming events</p>
             <div className="flex items-baseline gap-1">
-              <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{eventsNext30}</span>
-              <span className="text-[13px] text-[#8B8B8B]">tasks</span>
+              <span className="text-[28px] font-bold tracking-tight text-foreground leading-none">{eventsNext30}</span>
+              <span className="text-[13px] text-muted-foreground">tasks</span>
             </div>
-            <p className="text-[11px] text-[#8B8B8B]">
+            <p className="text-[11px] text-muted-foreground">
               {eventsNext30 === 0 ? 'Nothing scheduled · all clear' : 'Due in next 30 days'}
             </p>
             <div className="mt-1">
@@ -565,9 +565,9 @@ const HomePlusDashboard = () => {
         </div>
 
         {/* ── Timeline ────────────────────────────────────────── */}
-        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+        <div className="bg-card rounded-[18px] border border-border p-5">
           <Eyebrow icon={CalendarDays} label="12-week timeline" trailing={
-            <div className="flex items-center gap-3.5 text-[11px] text-[#8B8B8B]">
+            <div className="flex items-center gap-3.5 text-[11px] text-muted-foreground">
               {([['#10B981','Done'],['#FBBF24','Due'],['#D1D5DB','Future']] as [string,string][]).map(([c,l]) => (
                 <span key={l} className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />
@@ -597,7 +597,7 @@ const HomePlusDashboard = () => {
                       style={{ fontWeight: n.tone === 'now' ? 700 : 500, color: TONE_LABEL[n.tone] }}>
                       {n.label}
                     </p>
-                    <p className="text-[10px] text-[#8B8B8B] mt-0.5">
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
                       {n.diffDays === 0 ? 'today' : n.diffDays > 0 ? `+${n.diffDays}d` : `${n.diffDays}d`}
                     </p>
                   </div>
@@ -610,10 +610,10 @@ const HomePlusDashboard = () => {
         {/* ── Row: SystemHealth + Attention ───────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-4">
           {/* System health */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5">
             <Eyebrow icon={Cpu} label="System health" trailing={
               <Link to="/dashboard/calendar"
-                className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border border-[#E8E8E3] bg-[#F5F5F0] text-[#4A4A4A] hover:bg-[#E8E8E3] transition-colors">
+                className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border border-border bg-muted text-muted-foreground hover:bg-border transition-colors">
                 <Wrench className="w-3 h-3" /> Log work
               </Link>
             } />
@@ -631,28 +631,28 @@ const HomePlusDashboard = () => {
                   const Icon = SYSTEM_ICON[s.key] ?? Cpu;
                   return (
                     <div key={s.key}
-                      className={`flex flex-col gap-2 py-3.5 sm:grid sm:items-center sm:gap-5 sm:[grid-template-columns:160px_1fr_56px] lg:[grid-template-columns:200px_1fr_56px] ${i > 0 ? 'border-t border-[#E8E8E3]' : ''}`}>
+                      className={`flex flex-col gap-2 py-3.5 sm:grid sm:items-center sm:gap-5 sm:[grid-template-columns:160px_1fr_56px] lg:[grid-template-columns:200px_1fr_56px] ${i > 0 ? 'border-t border-border' : ''}`}>
                       {/* Mobile: name + score share one row; sm: wrapper dissolves so both fall into grid cols. */}
                       <div className="flex items-center justify-between gap-3 sm:contents">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="h-8 w-8 rounded-[10px] bg-[#F5F5F0] text-[#1A1A1A] flex items-center justify-center shrink-0">
+                          <span className="h-8 w-8 rounded-[10px] bg-muted text-foreground flex items-center justify-center shrink-0">
                             <Icon className="w-4 h-4" />
                           </span>
                           <div className="min-w-0">
-                            <p className="text-[13.5px] font-semibold text-[#1A1A1A]">{s.name}</p>
-                            <p className="text-[11px] text-[#8B8B8B] truncate">{s.note}</p>
+                            <p className="text-[13.5px] font-semibold text-foreground">{s.name}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{s.note}</p>
                           </div>
                         </div>
                         <div className="text-right shrink-0 sm:order-last">
-                          <span className="text-[24px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.score}</span>
-                          <span className="text-[10px] text-[#8B8B8B] ml-0.5">/100</span>
+                          <span className="text-[24px] font-bold tracking-tight text-foreground leading-none">{s.score}</span>
+                          <span className="text-[10px] text-muted-foreground ml-0.5">/100</span>
                         </div>
                       </div>
                       <div>
                         <HealthBar value={s.score} segments={20} />
-                        <div className="flex justify-between mt-1.5 text-[11px] text-[#6B6B6B]">
+                        <div className="flex justify-between mt-1.5 text-[11px] text-muted-foreground">
                           <span>{s.last}</span>
-                          <span className="text-[#8B8B8B]">{s.next}</span>
+                          <span className="text-muted-foreground">{s.next}</span>
                         </div>
                         {s.forecast && s.status !== 'ok' && (
                           <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -675,26 +675,26 @@ const HomePlusDashboard = () => {
 
           {/* Attention — shell keeps the grid row sized by System health; card fills it and the list scrolls */}
           <div className="relative min-h-[280px]">
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 lg:absolute lg:inset-0 flex flex-col">
+          <div className="bg-card rounded-[18px] border border-border p-5 lg:absolute lg:inset-0 flex flex-col">
             <Eyebrow icon={AlertCircle} label="Needs attention" trailing={
-              <span className="text-[11px] text-[#8B8B8B]">{attentionTotal} item{attentionTotal === 1 ? '' : 's'}</span>
+              <span className="text-[11px] text-muted-foreground">{attentionTotal} item{attentionTotal === 1 ? '' : 's'}</span>
             } />
             <div className="flex flex-col gap-2 mt-4 flex-1 min-h-0 overflow-y-auto pr-1 max-h-[420px] lg:max-h-none">
               {attentionItems.length === 0 ? (
-                <div className="flex items-center gap-3 p-3 rounded-[12px] bg-[#ECFDF5] border border-[#A7F3D0]/70">
-                  <span className="h-9 w-9 rounded-[10px] flex items-center justify-center shrink-0 bg-white text-[#10B981]">
+                <div className="flex items-center gap-3 p-3 rounded-[12px] bg-success/10 border border-success/30">
+                  <span className="h-9 w-9 rounded-[10px] flex items-center justify-center shrink-0 bg-card text-[#10B981]">
                     <CheckCircle className="w-4 h-4" />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-[#1A1A1A]">You're all caught up</p>
-                    <p className="text-[11px] text-[#6B6B6B] mt-0.5">Nothing needs your attention right now.</p>
+                    <p className="text-[13px] font-semibold text-foreground">You're all caught up</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Nothing needs your attention right now.</p>
                   </div>
                 </div>
               ) : attentionItems.map((it, i) => {
                 const Icon = ATTN_ICON[it.icon] ?? AlertCircle;
                 const tone = it.tone as AttnTone;
                 return (
-                  <div key={`${it.title}-${i}`} className="flex items-center gap-3 p-3 rounded-[12px] bg-[#FAFAF7] border border-[#E8E8E3]">
+                  <div key={`${it.title}-${i}`} className="flex items-center gap-3 p-3 rounded-[12px] bg-muted border border-border">
                     <span className="h-9 w-9 rounded-[10px] flex items-center justify-center shrink-0"
                       style={{ background: ATTN_BG[tone], color: ATTN_FG[tone] }}>
                       <Icon className="w-4 h-4" />
@@ -702,13 +702,13 @@ const HomePlusDashboard = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${ATTN_TAG[tone]}`}>{it.tag}</span>
-                        <span className="text-[11px] text-[#8B8B8B]">{it.meta}</span>
+                        <span className="text-[11px] text-muted-foreground">{it.meta}</span>
                       </div>
-                      <p className="text-[13px] font-semibold text-[#1A1A1A] truncate">{it.title}</p>
-                      <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">{it.sub}</p>
+                      <p className="text-[13px] font-semibold text-foreground truncate">{it.title}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{it.sub}</p>
                     </div>
                     <Link to={it.path}
-                      className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors whitespace-nowrap">
+                      className="shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-full border border-border bg-card text-muted-foreground hover:bg-muted transition-colors whitespace-nowrap">
                       {it.cta}
                     </Link>
                   </div>
@@ -722,12 +722,12 @@ const HomePlusDashboard = () => {
         {/* ── Row: Spend + EPC ─────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Spend tracker */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5">
             <Eyebrow icon={PoundSterling} label="Annual spend tracker" trailing={
-              <div className="flex gap-1 bg-[#F5F5F0] p-1 rounded-full">
+              <div className="flex gap-1 bg-muted p-1 rounded-full">
                 {spendYearTabs.map(y => (
                   <button key={y} onClick={() => setSpendYear(y)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all duration-200 ${y === spendYear ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-[#8B8B8B] hover:text-[#4A4A4A]'}`}>
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all duration-200 ${y === spendYear ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-muted-foreground'}`}>
                     {y}
                   </button>
                 ))}
@@ -737,8 +737,8 @@ const HomePlusDashboard = () => {
               {/* Left: BigStat + BarChart */}
               <div className="flex flex-col gap-3">
                 <div>
-                  <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{yearData.total}</span>
-                  <p className="text-[11px] text-[#8B8B8B] mt-1">{yearData.sub}</p>
+                  <span className="text-[28px] font-bold tracking-tight text-foreground leading-none">{yearData.total}</span>
+                  <p className="text-[11px] text-muted-foreground mt-1">{yearData.sub}</p>
                 </div>
                 <div className="h-[72px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -751,8 +751,8 @@ const HomePlusDashboard = () => {
                           cursor={{ fill: '#F5F5F0', radius: 4 }}
                           content={({ active, payload }) =>
                             active && payload?.length ? (
-                              <div className="bg-white border border-[#E8E8E3] rounded-[8px] px-2.5 py-1.5 shadow-sm text-[11px]">
-                                <span className="font-semibold text-[#1A1A1A]">£{payload[0].value}</span>
+                              <div className="bg-card border border-border rounded-[8px] px-2.5 py-1.5 shadow-sm text-[11px]">
+                                <span className="font-semibold text-foreground">£{payload[0].value}</span>
                               </div>
                             ) : null
                           }
@@ -785,8 +785,8 @@ const HomePlusDashboard = () => {
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-[15px] font-bold text-[#1A1A1A] leading-none">{yearData.center}</span>
-                    <span className="text-[9px] text-[#8B8B8B] uppercase tracking-wider mt-0.5">YTD</span>
+                    <span className="text-[15px] font-bold text-foreground leading-none">{yearData.center}</span>
+                    <span className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">YTD</span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
@@ -794,12 +794,12 @@ const HomePlusDashboard = () => {
                     spendCats.map(c => (
                       <div key={c.name} className="flex items-center gap-2 text-[12px]">
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
-                        <span className="flex-1 text-[#4A4A4A] truncate">{c.name}</span>
-                        <span className="font-semibold text-[#1A1A1A]">£{c.v}</span>
+                        <span className="flex-1 text-muted-foreground truncate">{c.name}</span>
+                        <span className="font-semibold text-foreground">£{c.v}</span>
                       </div>
                     ))
                   ) : (
-                    <p className="text-[12px] text-[#8B8B8B]">No categories yet</p>
+                    <p className="text-[12px] text-muted-foreground">No categories yet</p>
                   )}
                 </div>
               </div>
@@ -807,7 +807,7 @@ const HomePlusDashboard = () => {
           </div>
 
           {/* EPC */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5">
             <Eyebrow icon={Leaf} label="Energy & EPC" trailing={
               hasEpcRating ? (
                 <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"
@@ -815,43 +815,43 @@ const HomePlusDashboard = () => {
                   EPC {epc.currentBand}{epc.isEstimate ? ' · est' : ''}
                 </span>
               ) : (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#F5F5F0] text-[#8B8B8B]">AI-powered</span>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">AI-powered</span>
               )
             } />
 
             {hasEpcRating ? (
               <>
                 <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 mt-4 mb-3">
-                  <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">EPC rating</p>
+                  <div className="p-3.5 bg-muted rounded-[12px] border border-border">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">EPC rating</p>
                     <div className="flex items-baseline gap-1.5 mt-1.5">
                       <span className="text-[40px] font-extrabold leading-none tracking-tighter" style={{ color: epcBandColor(epc.currentBand) }}>{epc.currentBand || '—'}</span>
-                      <span className="text-[13px] text-[#6B6B6B]">Score {epc.currentScore ?? '—'} / 100</span>
+                      <span className="text-[13px] text-muted-foreground">Score {epc.currentScore ?? '—'} / 100</span>
                     </div>
-                    <p className="text-[11px] text-[#8B8B8B] mt-1.5">{epc.isEstimate ? 'AI estimate' : epc.validUntil ? `Valid until ${epcDate(epc.validUntil)}` : 'AI-assessed'}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">{epc.isEstimate ? 'AI estimate' : epc.validUntil ? `Valid until ${epcDate(epc.validUntil)}` : 'AI-assessed'}</p>
                   </div>
-                  <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Potential rating</p>
+                  <div className="p-3.5 bg-muted rounded-[12px] border border-border">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Potential rating</p>
                     <div className="flex items-baseline gap-1.5 mt-1.5">
                       <span className="text-[40px] font-extrabold leading-none tracking-tighter" style={{ color: epcBandColor(epc.potentialBand ?? epc.currentBand) }}>{epc.potentialBand ?? '—'}</span>
-                      <span className="text-[13px] text-[#6B6B6B]">{epc.potentialScore != null ? `Score ${epc.potentialScore} / 100` : '—'}</span>
+                      <span className="text-[13px] text-muted-foreground">{epc.potentialScore != null ? `Score ${epc.potentialScore} / 100` : '—'}</span>
                     </div>
-                    <p className="text-[11px] text-[#8B8B8B] mt-1.5">With recommended changes</p>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">With recommended changes</p>
                   </div>
                 </div>
-                <div className="flex flex-col gap-3 p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px] sm:flex-row sm:items-start">
+                <div className="flex flex-col gap-3 p-3 bg-warning/10 border border-warning/30 rounded-[12px] sm:flex-row sm:items-start">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <span className="h-8 w-8 rounded-[10px] bg-[#FBBF24] text-[#1A1A1A] flex items-center justify-center shrink-0">
+                  <span className="h-8 w-8 rounded-[10px] bg-accent text-accent-foreground flex items-center justify-center shrink-0">
                     <Star className="w-4 h-4" />
                   </span>
                   <div className="flex-1 min-w-0">
                     {epc.recommendations.length > 0 ? (
                       <>
                         <div className="flex items-center gap-1.5">
-                          <p className="text-[13px] font-semibold text-[#1A1A1A] truncate">{epc.recommendations[0].title}</p>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#1A1A1A] text-white shrink-0">AI</span>
+                          <p className="text-[13px] font-semibold text-foreground truncate">{epc.recommendations[0].title}</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground shrink-0">AI</span>
                         </div>
-                        <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
                           {epc.recommendations[0].detail || 'Recommended improvement'}
                           {epc.recommendations[0].saving ? ` · saves ${epc.recommendations[0].saving}` : ''}
                           {epc.recommendations.length > 1 ? ` · +${epc.recommendations.length - 1} more` : ''}
@@ -859,20 +859,20 @@ const HomePlusDashboard = () => {
                       </>
                     ) : epc.isEstimate ? (
                       <>
-                        <p className="text-[13px] font-semibold text-[#1A1A1A]">AI estimate from your upload</p>
-                        <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">Upload your EPC certificate for an exact, verified rating</p>
+                        <p className="text-[13px] font-semibold text-foreground">AI estimate from your upload</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">Upload your EPC certificate for an exact, verified rating</p>
                       </>
                     ) : (
                       <>
-                        <p className="text-[13px] font-semibold text-[#1A1A1A]">AI-rated from your certificate</p>
-                        <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">Upload a newer certificate to refresh your rating</p>
+                        <p className="text-[13px] font-semibold text-foreground">AI-rated from your certificate</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">Upload a newer certificate to refresh your rating</p>
                       </>
                     )}
                   </div>
                   </div>
                   <button
                     onClick={() => setEpcUploadOpen(true)}
-                    className="shrink-0 flex items-center justify-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors whitespace-nowrap w-full sm:w-auto sm:justify-start">
+                    className="shrink-0 flex items-center justify-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-border bg-card text-muted-foreground hover:bg-muted transition-colors whitespace-nowrap w-full sm:w-auto sm:justify-start">
                     <Upload className="w-3 h-3" /> Update
                   </button>
                 </div>
@@ -880,36 +880,36 @@ const HomePlusDashboard = () => {
             ) : (
               <>
                 <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 mt-4 mb-3">
-                  <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">EPC rating</p>
+                  <div className="p-3.5 bg-muted rounded-[12px] border border-border">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">EPC rating</p>
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <AlertCircle className="w-5 h-5 text-[#FBBF24] shrink-0" />
+                      <AlertCircle className="w-5 h-5 text-accent shrink-0" />
                       <span className="text-[13px] font-medium text-[#9CA3AF]">Upload to see your rating</span>
                     </div>
-                    <p className="text-[11px] text-[#8B8B8B] mt-1.5">AI-assessed</p>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">AI-assessed</p>
                   </div>
-                  <div className="p-3.5 bg-[#FAFAF7] rounded-[12px] border border-[#E8E8E3]">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Potential rating</p>
+                  <div className="p-3.5 bg-muted rounded-[12px] border border-border">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Potential rating</p>
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <AlertCircle className="w-5 h-5 text-[#FBBF24] shrink-0" />
+                      <AlertCircle className="w-5 h-5 text-accent shrink-0" />
                       <span className="text-[13px] font-medium text-[#9CA3AF]">Upload to see your rating</span>
                     </div>
-                    <p className="text-[11px] text-[#8B8B8B] mt-1.5">With recommended changes</p>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">With recommended changes</p>
                   </div>
                 </div>
-                <div className="flex flex-col gap-3 p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px] sm:flex-row sm:items-center">
+                <div className="flex flex-col gap-3 p-3 bg-warning/10 border border-warning/30 rounded-[12px] sm:flex-row sm:items-center">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className="h-8 w-8 rounded-[10px] bg-[#FBBF24] text-[#1A1A1A] flex items-center justify-center shrink-0">
+                    <span className="h-8 w-8 rounded-[10px] bg-accent text-accent-foreground flex items-center justify-center shrink-0">
                       <AlertCircle className="w-4 h-4" />
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-[#1A1A1A]">Upload a document for your AI EPC rating</p>
-                      <p className="text-[11px] text-[#6B6B6B] mt-0.5 leading-snug">Add your EPC certificate or a photo — our AI reads it and scores your rating instantly</p>
+                      <p className="text-[13px] font-semibold text-foreground">Upload a document for your AI EPC rating</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">Add your EPC certificate or a photo — our AI reads it and scores your rating instantly</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setEpcUploadOpen(true)}
-                    className="shrink-0 flex items-center justify-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors whitespace-nowrap w-full sm:w-auto sm:justify-start">
+                    className="shrink-0 flex items-center justify-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-border bg-card text-muted-foreground hover:bg-muted transition-colors whitespace-nowrap w-full sm:w-auto sm:justify-start">
                     <Upload className="w-3 h-3" /> Upload
                   </button>
                 </div>
@@ -921,7 +921,7 @@ const HomePlusDashboard = () => {
         {/* ── Row: Activity + TradePilot + DocsGlance ─────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Activity */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5">
             <Eyebrow icon={Clock} label="Recent activity" />
             <div className="mt-4">
               {recentActivity.length === 0 ? (
@@ -936,15 +936,15 @@ const HomePlusDashboard = () => {
                 recentActivity.map((it, i) => {
                   const Icon = ACTIVITY_ICON[it.type] ?? Bell;
                   return (
-                    <div key={it.id ?? i} className={`flex items-start gap-3 py-2.5 ${i > 0 ? 'border-t border-[#E8E8E3]' : ''}`}>
-                      <span className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${it.good ? 'bg-[#ECFDF5] text-[#10B981]' : 'bg-[#F5F5F0] text-[#4A4A4A]'}`}>
+                    <div key={it.id ?? i} className={`flex items-start gap-3 py-2.5 ${i > 0 ? 'border-t border-border' : ''}`}>
+                      <span className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${it.good ? 'bg-[#ECFDF5] text-[#10B981]' : 'bg-muted text-muted-foreground'}`}>
                         <Icon className="w-3.5 h-3.5" />
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-[#1A1A1A] leading-snug">{it.text}</p>
-                        {it.sub && <p className="text-[11px] text-[#8B8B8B] mt-0.5">{it.sub}</p>}
+                        <p className="text-[13px] font-medium text-foreground leading-snug">{it.text}</p>
+                        {it.sub && <p className="text-[11px] text-muted-foreground mt-0.5">{it.sub}</p>}
                       </div>
-                      <span className="text-[11px] text-[#8B8B8B] shrink-0">{activityTime(it.timestamp)}</span>
+                      <span className="text-[11px] text-muted-foreground shrink-0">{activityTime(it.timestamp)}</span>
                     </div>
                   );
                 })
@@ -953,26 +953,26 @@ const HomePlusDashboard = () => {
           </div>
 
           {/* TradePilot */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5">
             <Eyebrow icon={Wrench} label="TradePilot — quotes in" trailing={
               quotes?.job
                 ? <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">Awaiting decision</span>
                 : awaitingJobsCount > 0
-                  ? <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#F5F5F0] text-[#6B6B6B]">{awaitingJobsCount} active</span>
+                  ? <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{awaitingJobsCount} active</span>
                   : undefined
             } />
             {quotes?.job ? (
               <>
-                <div className="mt-3 p-3.5 bg-[#F5F5F0] rounded-[14px] mb-3">
-                  <p className="text-[14px] font-semibold text-[#1A1A1A] truncate">{quotes.job.title}</p>
-                  <p className="text-[12px] text-[#6B6B6B] mt-0.5">
+                <div className="mt-3 p-3.5 bg-muted rounded-[14px] mb-3">
+                  <p className="text-[14px] font-semibold text-foreground truncate">{quotes.job.title}</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">
                     {quotes.job.trades_responded} verified{quotes.job.location ? ` ${quotes.job.location}` : ''} trade{quotes.job.trades_responded === 1 ? '' : 's'} responded · avg {quotes.job.avg_response} response
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
                   {quotes.quotes.map((t) => (
                     <div key={t.bid_id}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-[12px] border ${t.highlight ? 'bg-[#FFFBEB] border-[#FDE68A]' : 'bg-white border-[#E8E8E3]'}`}>
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-[12px] border ${t.highlight ? 'bg-warning/10 border-warning/30' : 'bg-card border-border'}`}>
                       {t.profile_photo_url ? (
                         <img
                           src={t.profile_photo_url}
@@ -980,22 +980,22 @@ const HomePlusDashboard = () => {
                           className="h-8 w-8 rounded-full object-cover shrink-0"
                         />
                       ) : (
-                        <span className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-[13px] text-[#1A1A1A] shrink-0 ${t.highlight ? 'bg-[#FBBF24]' : 'bg-[#F5F5F0]'}`}>
+                        <span className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-[13px] text-foreground shrink-0 ${t.highlight ? 'bg-accent' : 'bg-muted'}`}>
                           {t.name.charAt(0)}
                         </span>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[13px] font-semibold text-[#1A1A1A]">{t.name}</span>
+                          <span className="text-[13px] font-semibold text-foreground">{t.name}</span>
                           {t.tag && t.tag_kind && (
                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${TAG_CLS[t.tag_kind]}`}>{t.tag}</span>
                           )}
                         </div>
-                        <span className="text-[11px] text-[#8B8B8B]">
+                        <span className="text-[11px] text-muted-foreground">
                           {t.rating != null ? `★ ${t.rating} · ` : ''}{t.jobs} jobs
                         </span>
                       </div>
-                      <span className="text-[15px] font-bold text-[#1A1A1A] shrink-0">{t.price}</span>
+                      <span className="text-[15px] font-bold text-foreground shrink-0">{t.price}</span>
                     </div>
                   ))}
                 </div>
@@ -1003,13 +1003,13 @@ const HomePlusDashboard = () => {
                   <button
                     onClick={acceptQuote}
                     disabled={quoteBusy || !quotes.recommended_bid_id}
-                    className="flex-1 text-center text-xs font-semibold px-3 py-2 rounded-full bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors disabled:opacity-60">
+                    className="flex-1 text-center text-xs font-semibold px-3 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60">
                     Accept {recommendedName}
                   </button>
                   <button
                     onClick={declineAllQuotes}
                     disabled={quoteBusy}
-                    className="text-xs font-medium px-3 py-2 rounded-full border border-[#E8E8E3] text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors disabled:opacity-60">
+                    className="text-xs font-medium px-3 py-2 rounded-full border border-border text-muted-foreground hover:bg-muted transition-colors disabled:opacity-60">
                     Decline all
                   </button>
                 </div>
@@ -1034,10 +1034,10 @@ const HomePlusDashboard = () => {
           </div>
 
           {/* DocsGlance */}
-          <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5">
             <Eyebrow icon={FolderOpen} label="Documents at a glance" trailing={
               <Link to="/dashboard/documents"
-                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-[#E8E8E3] bg-[#F5F5F0] text-[#4A4A4A] hover:bg-[#E8E8E3] transition-colors">
+                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-border bg-muted text-muted-foreground hover:bg-border transition-colors">
                 Open <ArrowRight className="w-3 h-3" />
               </Link>
             } />
@@ -1053,23 +1053,23 @@ const HomePlusDashboard = () => {
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-3.5 py-3 my-3 border-y border-[#E8E8E3]">
+                <div className="flex items-center gap-3.5 py-3 my-3 border-y border-border">
                   <div className="shrink-0">
-                    <span className="text-[28px] font-bold tracking-tight text-[#1A1A1A] leading-none">{totalDocs}</span>
-                    <span className="text-[12px] text-[#8B8B8B] ml-1.5">files stored</span>
+                    <span className="text-[28px] font-bold tracking-tight text-foreground leading-none">{totalDocs}</span>
+                    <span className="text-[12px] text-muted-foreground ml-1.5">files stored</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 xs:grid-cols-3 gap-2">
                   {DOC_CATS.map(c => {
                     const count = docsByDiscipline[c.key] ?? 0;
                     return (
-                      <div key={c.key} className="p-2.5 rounded-[10px] bg-[#FAFAF7] border border-[#E8E8E3]">
+                      <div key={c.key} className="p-2.5 rounded-[10px] bg-muted border border-border">
                         <span className="inline-flex h-6 w-6 rounded-[7px] items-center justify-center mb-1.5"
                           style={{ background: c.bg, color: c.color }}>
                           <c.Icon className="w-3 h-3" />
                         </span>
-                        <p className="text-[12px] font-semibold text-[#1A1A1A]">{c.name}</p>
-                        <p className="text-[11px] text-[#8B8B8B] mt-0.5">{count} {count === 1 ? 'file' : 'files'}</p>
+                        <p className="text-[12px] font-semibold text-foreground">{c.name}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{count} {count === 1 ? 'file' : 'files'}</p>
                       </div>
                     );
                   })}
@@ -1080,17 +1080,17 @@ const HomePlusDashboard = () => {
         </div>
 
         {/* ── Build your home MOT score — answer questions ────── */}
-        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
+        <div className="bg-card rounded-[18px] border border-border p-5">
           <Eyebrow
             icon={ClipboardList}
             label="Build your home MOT score"
             trailing={
-              <span className="text-[13px] text-[#8B8B8B]">
-                <b className="text-[#1A1A1A] font-bold">{homeMotScore}</b> / 100
+              <span className="text-[13px] text-muted-foreground">
+                <b className="text-foreground font-bold">{homeMotScore}</b> / 100
               </span>
             }
           />
-          <p className="text-[11px] text-[#8B8B8B] mt-2">Three 60-second checks. Each one grows your score.</p>
+          <p className="text-[11px] text-muted-foreground mt-2">Three 60-second checks. Each one grows your score.</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
             {(['A', 'B', 'C'] as HomeMotStep[]).map((step) => {
               const cfg = STEP_CONFIG[step];
@@ -1103,21 +1103,21 @@ const HomePlusDashboard = () => {
                   key={step}
                   type="button"
                   onClick={() => setMotStep(step)}
-                  className="text-left rounded-[14px] border border-[#E8E8E3] bg-white hover:bg-[#F5F5F0] hover:shadow-sm transition-all p-4 flex flex-col gap-3"
+                  className="text-left rounded-[14px] border border-border bg-card hover:bg-muted hover:shadow-sm transition-all p-4 flex flex-col gap-3"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-full bg-[#F5F5F0] flex items-center justify-center shrink-0">
-                      <StepIcon className="w-4 h-4 text-[#1A1A1A]" />
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                      <StepIcon className="w-4 h-4 text-foreground" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[13px] font-semibold text-[#1A1A1A] leading-none">Step {step}</p>
-                      <p className="text-[11px] text-[#8B8B8B] mt-0.5 truncate">{STEP_LABEL[step]}</p>
+                      <p className="text-[13px] font-semibold text-foreground leading-none">Step {step}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{STEP_LABEL[step]}</p>
                     </div>
                   </div>
                   <HealthBar value={pct} segments={total} />
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-[#8B8B8B]">{done}/{total} ticked</span>
-                    <span className="font-semibold text-[#1A1A1A]">+{motEarned(step)} pts</span>
+                    <span className="text-muted-foreground">{done}/{total} ticked</span>
+                    <span className="font-semibold text-foreground">+{motEarned(step)} pts</span>
                   </div>
                 </button>
               );

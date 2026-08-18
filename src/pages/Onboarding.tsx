@@ -70,7 +70,7 @@ function StepPhone({
       </div>
 
       <div className="space-y-2">
-        <div className={`flex items-center gap-0 rounded-2xl border-2 bg-white overflow-hidden transition-colors ${
+        <div className={`flex items-center gap-0 rounded-2xl border-2 bg-card overflow-hidden transition-colors ${
           error ? 'border-red-400' : 'border-border focus-within:border-foreground'
         }`}>
           <div className="flex items-center gap-2 px-4 py-4 border-r border-border bg-muted shrink-0">
@@ -165,7 +165,7 @@ function StepProperty({
       {/* Cover photo */}
       <div
         onClick={onCoverClick}
-        className="relative rounded-2xl overflow-hidden h-36 border-2 border-dashed border-border bg-white cursor-pointer hover:border-foreground transition-colors"
+        className="relative rounded-2xl overflow-hidden h-36 border-2 border-dashed border-border bg-card cursor-pointer hover:border-foreground transition-colors"
       >
         {coverPreview ? (
           <img src={coverPreview} alt="Cover preview" className="w-full h-full object-cover" />
@@ -189,7 +189,7 @@ function StepProperty({
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="Property name (e.g. Main Home)"
-          className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+          className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
         />
 
         <div className="grid grid-cols-3 gap-3">
@@ -198,14 +198,14 @@ function StepProperty({
             value={address}
             onChange={e => setAddress(e.target.value)}
             placeholder="Address"
-            className="col-span-2 rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+            className="col-span-2 rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
           />
           <input
             type="text"
             value={postcode}
             onChange={e => setPostcode(e.target.value.toUpperCase())}
             placeholder="Postcode"
-            className="rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors uppercase"
+            className="rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors uppercase"
           />
         </div>
 
@@ -215,7 +215,7 @@ function StepProperty({
             <button
               type="button"
               className={cn(
-                'w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3.5 text-[15px] font-medium outline-none transition-colors',
+                'w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium outline-none transition-colors',
                 'flex items-center justify-between gap-2',
                 !location ? 'text-muted-foreground/50' : 'text-foreground',
               )}
@@ -277,7 +277,7 @@ function StepProperty({
               className={`flex flex-col items-center gap-1.5 rounded-2xl border-2 py-3.5 px-2 transition-all ${
                 propertyType === t.value
                   ? 'border-accent bg-gradient-hero text-accent-foreground'
-                  : 'border-border bg-white text-foreground hover:border-foreground'
+                  : 'border-border bg-card text-foreground hover:border-foreground'
               }`}
             >
               <t.icon className="w-5 h-5" />
@@ -299,7 +299,7 @@ function StepProperty({
               className={`flex flex-col items-start gap-0.5 rounded-2xl border-2 py-3.5 px-4 text-left transition-all ${
                 role === r.value
                   ? 'border-accent bg-gradient-hero text-accent-foreground'
-                  : 'border-border bg-white text-foreground hover:border-foreground'
+                  : 'border-border bg-card text-foreground hover:border-foreground'
               }`}
             >
               <r.icon className="w-4 h-4 mb-1" />
@@ -321,7 +321,7 @@ function StepProperty({
               value={bedrooms}
               onChange={e => setBedrooms(e.target.value)}
               placeholder="e.g. 3"
-              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
             />
           </div>
           <div>
@@ -333,7 +333,7 @@ function StepProperty({
               value={bathrooms}
               onChange={e => setBathrooms(e.target.value)}
               placeholder="e.g. 1"
-              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
             />
           </div>
         </div>
@@ -344,7 +344,7 @@ function StepProperty({
           <select
             value={heatingType}
             onChange={e => setHeatingType(e.target.value)}
-            className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground outline-none transition-colors"
+            className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground outline-none transition-colors"
           >
             <option value="">Select heating type (optional)</option>
             {HEATING_TYPES.map(h => (
@@ -364,7 +364,7 @@ function StepProperty({
               value={yearBuilt}
               onChange={e => setYearBuilt(e.target.value)}
               placeholder="e.g. 1985"
-              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
             />
           </div>
           <div>
@@ -372,7 +372,7 @@ function StepProperty({
             <select
               value={tenure}
               onChange={e => setTenure(e.target.value)}
-              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-white px-4 py-3 text-[15px] font-medium text-foreground outline-none transition-colors"
+              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground outline-none transition-colors"
             >
               <option value="">Select</option>
               {TENURE_TYPES.map(t => (
@@ -418,7 +418,7 @@ function StepNotifications({
             className={`w-full flex items-center justify-between rounded-2xl border-2 px-5 py-4 text-left transition-all ${
               prefs[item.key]
                 ? 'border-accent bg-gradient-hero text-accent-foreground'
-                : 'border-border bg-white text-foreground hover:border-foreground'
+                : 'border-border bg-card text-foreground hover:border-foreground'
             }`}
           >
             <div>
@@ -472,9 +472,9 @@ function StepLoading({ onDone }: { onDone: () => void }) {
         <motion.div
           animate={{ scale: [1, 1.06, 1], opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-          className="w-24 h-24 rounded-[28px] bg-foreground flex items-center justify-center"
+          className="w-24 h-24 rounded-[28px] flex items-center justify-center"
         >
-          <Home className="w-10 h-10 text-accent" strokeWidth={1.5} />
+          <img src="/homeplus-logo.png" alt="Home+" className="w-16 h-16 object-contain" />
         </motion.div>
         <motion.div
           animate={{ scale: [1.1, 1.4, 1.1], opacity: [0.12, 0, 0.12] }}
@@ -701,9 +701,7 @@ const Onboarding = () => {
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-5">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-foreground flex items-center justify-center">
-            <Home className="w-4 h-4 text-accent" strokeWidth={1.5} />
-          </div>
+          <img src="/homeplus-logo.png" alt="Home+" className="w-8 h-8 object-contain" />
           <span className="text-[17px] font-semibold text-foreground">Home+</span>
         </div>
 
