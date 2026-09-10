@@ -388,11 +388,11 @@ function StepProperty({
 }
 
 function StepNotifications({
-  prefs, setPrefs,
-}: { prefs: NotifPrefs; setPrefs: (p: NotifPrefs) => void }) {
+  prefs, setPrefs, hasPhone,
+}: { prefs: NotifPrefs; setPrefs: (p: NotifPrefs) => void; hasPhone: boolean }) {
   const items: { key: keyof NotifPrefs; label: string; desc: string }[] = [
     { key: 'email_notifications', label: 'Email updates',      desc: 'Reminders, certificates, service alerts' },
-    { key: 'sms_notifications',   label: 'SMS alerts',         desc: 'Urgent alerts to your phone' },
+    { key: 'sms_notifications',   label: 'SMS alerts',         desc: hasPhone ? 'Urgent alerts to your phone' : 'Add a phone number to enable this' },
     { key: 'calendar_reminders',  label: 'Calendar events',    desc: 'Add jobs and services to your calendar' },
     { key: 'marketing_emails',    label: 'Tips & offers',      desc: 'Home advice, deals, product news' },
   ];
@@ -410,30 +410,37 @@ function StepNotifications({
       </div>
 
       <div className="space-y-3">
-        {items.map(item => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => setPrefs({ ...prefs, [item.key]: !prefs[item.key] })}
-            className={`w-full flex items-center justify-between rounded-2xl border-2 px-5 py-4 text-left transition-all ${
-              prefs[item.key]
-                ? 'border-accent bg-gradient-hero text-accent-foreground'
-                : 'border-border bg-card text-foreground hover:border-foreground'
-            }`}
-          >
-            <div>
-              <p className="text-[15px] font-semibold">{item.label}</p>
-              <p className={`text-xs mt-0.5 ${prefs[item.key] ? 'text-accent-foreground/60' : 'text-muted-foreground'}`}>{item.desc}</p>
-            </div>
-            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-              prefs[item.key] ? 'border-accent-foreground bg-accent-foreground' : 'border-border'
-            }`}>
-              {prefs[item.key] && (
-                <div className="w-2.5 h-2.5 rounded-full bg-accent" />
-              )}
-            </div>
-          </button>
-        ))}
+        {items.map(item => {
+          const disabled = item.key === 'sms_notifications' && !hasPhone;
+          const checked = !disabled && prefs[item.key];
+          return (
+            <button
+              key={item.key}
+              type="button"
+              disabled={disabled}
+              onClick={() => !disabled && setPrefs({ ...prefs, [item.key]: !prefs[item.key] })}
+              className={`w-full flex items-center justify-between rounded-2xl border-2 px-5 py-4 text-left transition-all ${
+                disabled
+                  ? 'border-border bg-muted/50 text-muted-foreground cursor-not-allowed opacity-60'
+                  : checked
+                    ? 'border-accent bg-gradient-hero text-accent-foreground'
+                    : 'border-border bg-card text-foreground hover:border-foreground'
+              }`}
+            >
+              <div>
+                <p className="text-[15px] font-semibold">{item.label}</p>
+                <p className={`text-xs mt-0.5 ${disabled ? 'text-muted-foreground' : checked ? 'text-accent-foreground/60' : 'text-muted-foreground'}`}>{item.desc}</p>
+              </div>
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                checked ? 'border-accent-foreground bg-accent-foreground' : 'border-border'
+              }`}>
+                {checked && (
+                  <div className="w-2.5 h-2.5 rounded-full bg-accent" />
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -544,6 +551,7 @@ const Onboarding = () => {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [propertyError, setPropertyError] = useState('');
+  const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
@@ -618,7 +626,7 @@ const Onboarding = () => {
     setPropertyError('');
     setSubmitting(true);
     try {
-      const { data: res } = await apiClient.post('/api/v1/properties/', {
+      const payload = {
         name:          propertyName.trim() || undefined,
         address:       address.trim(),
         postcode:      postcode.trim().toUpperCase(),
@@ -632,8 +640,12 @@ const Onboarding = () => {
         ...(tenure      ? { tenure } : {}),
         ...(lat !== null ? { latitude: lat } : {}),
         ...(lng !== null ? { longitude: lng } : {}),
-      });
-      const propertyId = res?.data?.id ?? res?.id;
+      };
+      const { data: res } = createdPropertyId
+        ? await apiClient.patch(`/api/v1/properties/${createdPropertyId}/`, payload)
+        : await apiClient.post('/api/v1/properties/', payload);
+      const propertyId = res?.data?.id ?? res?.id ?? createdPropertyId;
+      if (propertyId) setCreatedPropertyId(propertyId);
       if (coverFile && propertyId) {
         const fd = new FormData();
         fd.append('file', coverFile);
@@ -667,6 +679,11 @@ const Onboarding = () => {
     advance();
   };
 
+  const handlePhoneSkip = () => {
+    setPhoneError('');
+    advance();
+  };
+
   const handlePropertySkip = () => {
     setPropertyError('');
     advance();
@@ -674,8 +691,9 @@ const Onboarding = () => {
 
   const handleNotifContinue = async () => {
     setSubmitting(true);
+    const payload = phone.trim() ? notifPrefs : { ...notifPrefs, sms_notifications: false };
     try {
-      await apiClient.patch('/api/v1/auth/notification-preferences/', notifPrefs);
+      await apiClient.patch('/api/v1/auth/notification-preferences/', payload);
     } catch {
       // non-critical
     } finally {
@@ -782,7 +800,7 @@ const Onboarding = () => {
                 animate="center"
                 exit="exit"
               >
-                <StepNotifications prefs={notifPrefs} setPrefs={setNotifPrefs} />
+                <StepNotifications prefs={notifPrefs} setPrefs={setNotifPrefs} hasPhone={!!phone.trim()} />
               </motion.div>
             )}
 
@@ -811,17 +829,26 @@ const Onboarding = () => {
           <div className="max-w-lg mx-auto space-y-3">
             {/* Primary CTA */}
             {step === 0 && (
-              <button
-                onClick={handlePhoneContinue}
-                disabled={submitting}
-                className="w-full flex items-center justify-center gap-2 bg-foreground text-white rounded-2xl py-4 text-[16px] font-semibold hover:bg-foreground/90 active:scale-[0.98] transition-all disabled:opacity-50"
-              >
-                {submitting ? (
-                  <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                ) : (
-                  <><span>Continue</span><ArrowRight className="w-4 h-4" /></>
-                )}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handlePhoneContinue}
+                  disabled={submitting}
+                  className="flex-1 flex items-center justify-center gap-2 bg-foreground text-white rounded-2xl py-4 text-[16px] font-semibold hover:bg-foreground/90 active:scale-[0.98] transition-all disabled:opacity-50"
+                >
+                  {submitting ? (
+                    <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  ) : (
+                    <><span>Continue</span><ArrowRight className="w-4 h-4" /></>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePhoneSkip}
+                  className="shrink-0 text-[14px] font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                >
+                  Skip <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             )}
 
             {step === 1 && (

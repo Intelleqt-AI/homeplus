@@ -43,7 +43,6 @@ import { usePost } from '@/hooks/usePost';
 import usePatch from '@/hooks/usePatch';
 import Quote from '@/components/topbar/Quote';
 import { toast } from '@/lib/toast';
-import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { categoryConfig } from '@/lib/jobCategories';
 import { TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { cn } from '@/lib/utils';
@@ -202,10 +201,11 @@ interface EditJobModalProps {
 const TRADE_LABELS = TRADE_OPTIONS.map(t => t.label);
 
 const URGENCY_BADGE: Record<string, { label: string; color: string }> = {
-  emergency: { label: 'Emergency',  color: 'bg-red-100 text-red-700 border-red-200' },
-  urgent:    { label: 'Urgent',     color: 'bg-orange-100 text-orange-700 border-orange-200' },
-  normal:    { label: 'This Month', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  flexible:  { label: 'Flexible',   color: 'bg-gray-100 text-gray-600 border-gray-200' },
+  within_1_week:   { label: 'Within 1 Week',  color: 'bg-red-100 text-red-700 border-red-200' },
+  within_2_weeks:  { label: 'Within 2 Weeks', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  within_1_month:  { label: 'Within 1 Month', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  within_2_months: { label: 'Within 2 Months', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  flexible:        { label: 'Flexible',       color: 'bg-gray-100 text-gray-600 border-gray-200' },
 };
 
 const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) => {
@@ -266,14 +266,12 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
   const [description, setDescription] = useState('');
   const [service, setService] = useState('Plumbing');
   const [category, setCategory] = useState('');
-  const [urgency, setUrgency] = useState('normal');
+  const [urgency, setUrgency] = useState('within_2_weeks');
   const [priority, setPriority] = useState('medium');
-  const [preferredDate, setPreferredDate] = useState('');
 
   // location
   const [locationArea, setLocationArea] = useState('');
   const [locationPostcode, setLocationPostcode] = useState('');
-  const [locationOpen, setLocationOpen] = useState(false);
 
   // answers
   const [answers, setAnswers] = useState<Record<string, string | number | undefined>>({});
@@ -282,6 +280,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
   const { data: propertiesRes } = useFetch<{ results?: PropertyData[]; data?: PropertyData[] }>('/api/v1/properties/');
   const properties: PropertyData[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
   const selectedProperty = properties.find(p => p.id === propertyId);
+  const propertyHasPostcode = !!selectedProperty?.postcode;
 
   // populate form when job changes
   useEffect(() => {
@@ -293,15 +292,13 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
     const svc = job.service ?? 'Plumbing';
     setService(TRADE_LABELS.includes(svc) ? svc : 'Plumbing');
     setCategory(job.category ?? '');
-    setUrgency(job.urgency ?? 'normal');
+    setUrgency(job.urgency ?? 'within_2_weeks');
     setPriority(job.priority ?? 'medium');
     setLocationArea(job.location ?? '');
     setLocationPostcode(job.postcode ?? '');
-    setPreferredDate(job.preferred_date ?? '');
     setAnswers((job.answers as Record<string, string | number | undefined>) ?? {});
     setDeleteConfirm(false);
     setPropertyOpen(false);
-    setLocationOpen(false);
   }, [job]);
 
   const { mutate: saveJob, isPending: saving } = usePost({
@@ -357,7 +354,6 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
       priority,
       location: locationArea.trim(),
       postcode: locationPostcode.trim(),
-      ...(preferredDate ? { preferred_date: preferredDate } : { preferred_date: null }),
       answers,
     });
   };
@@ -554,55 +550,10 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
             </div>
           </div>
 
-          {/* ── Location ─────────────────────────────────────── */}
-          <div>
-            <p className={sectionTitle}>Location</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Area</Label>
-                <Popover open={locationOpen} onOpenChange={locked ? undefined : setLocationOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={locked}
-                      className={cn(
-                        'w-full mt-1 h-10 px-3 rounded-lg border text-sm flex items-center justify-between gap-1 bg-white border-gray-200 hover:bg-gray-50 transition-colors',
-                        !locationArea && 'text-gray-400',
-                        locked && 'opacity-50 cursor-not-allowed hover:bg-white',
-                      )}
-                    >
-                      <span className="truncate">{locationArea || 'Select area'}</span>
-                      <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search area…" />
-                      <CommandList>
-                        <CommandEmpty>No area found.</CommandEmpty>
-                        {UK_LOCATIONS.map(group => (
-                          <CommandGroup key={group.group} heading={group.group}>
-                            {group.items.map(item => (
-                              <CommandItem
-                                key={item}
-                                value={item}
-                                onSelect={val => {
-                                  setLocationArea(val);
-                                  setLocationPostcode(LOCATION_POSTCODE[val] ?? '');
-                                  setLocationOpen(false);
-                                }}
-                              >
-                                <Check className={cn('mr-2 h-3.5 w-3.5', locationArea === item ? 'opacity-100' : 'opacity-0')} />
-                                {item}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        ))}
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
+          {/* ── Location (only when the property doesn't already cover it) ── */}
+          {!propertyHasPostcode && (
+            <div>
+              <p className={sectionTitle}>Location</p>
               <div>
                 <Label className="text-sm font-medium text-gray-700">
                   Postcode <span className="text-red-500">*</span>
@@ -614,22 +565,23 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   placeholder="e.g. SW1A"
                   className={`${inputCls(locked)} uppercase`}
                 />
-                <p className="text-xs text-gray-400 mt-1">Auto-filled from area or property · editable</p>
+                <p className="text-xs text-gray-400 mt-1">We need this to match you with local trades</p>
               </div>
             </div>
-          </div>
+          )}
 
           {/* ── Requirements ─────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Requirements</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label className="text-sm font-medium text-gray-700">Urgency</Label>
+                <Label className="text-sm font-medium text-gray-700">Timeframe</Label>
                 <select value={urgency} onChange={e => setUrgency(e.target.value)} disabled={locked} className={selectCls(locked)}>
-                  <option value="emergency">Emergency (same day)</option>
-                  <option value="urgent">Urgent (within 48h)</option>
-                  <option value="normal">Normal (within 2 weeks)</option>
-                  <option value="flexible">Flexible</option>
+                  <option value="within_1_week">Within 1 week</option>
+                  <option value="within_2_weeks">Within 2 weeks</option>
+                  <option value="within_1_month">Within 1 month</option>
+                  <option value="within_2_months">Within 2 months</option>
+                  <option value="flexible">3+ months / Flexible</option>
                 </select>
               </div>
               <div>
@@ -639,17 +591,6 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                 </select>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Preferred Date</Label>
-                <input
-                  type="date"
-                  value={preferredDate}
-                  onChange={e => setPreferredDate(e.target.value)}
-                  disabled={locked}
-                  min={new Date().toISOString().split('T')[0]}
-                  className={inputCls(locked)}
-                />
               </div>
             </div>
           </div>
@@ -756,7 +697,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.docx"
                   className="hidden"
                   onChange={e => e.target.files && handleUploadFiles(e.target.files)}
                 />
@@ -1520,17 +1461,18 @@ const JobLeads = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] font-semibold text-[#6B6B6B] uppercase tracking-wide block mb-1">Urgency</label>
+                      <label className="text-[10px] font-semibold text-[#6B6B6B] uppercase tracking-wide block mb-1">Timeframe</label>
                       <select
                         value={filters.urgency}
                         onChange={e => setFilters(f => ({ ...f, urgency: e.target.value }))}
                         className="w-full px-3 py-2 text-sm border border-[#E8E8E3] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary"
                       >
                         <option value="">All</option>
-                        <option value="emergency">Emergency</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="normal">Normal</option>
-                        <option value="flexible">Flexible</option>
+                        <option value="within_1_week">Within 1 week</option>
+                        <option value="within_2_weeks">Within 2 weeks</option>
+                        <option value="within_1_month">Within 1 month</option>
+                        <option value="within_2_months">Within 2 months</option>
+                        <option value="flexible">3+ months / Flexible</option>
                       </select>
                     </div>
                   </div>

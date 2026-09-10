@@ -5,14 +5,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Home, ArrowRight, Check, Shield, Users, Star, Eye, EyeOff, Loader2, AlertCircle, ChevronsUpDown } from 'lucide-react';
+import { Home, ArrowRight, Check, Shield, Users, Star, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { cn } from '@/lib/utils';
-import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
-const ALL_LOCATIONS = UK_LOCATIONS.flatMap(g => g.items);
 import Logo from '/homeplus-logo.png';
 
 // ── validation ────────────────────────────────────────────────────────────────
@@ -26,7 +21,6 @@ function validateStep1(data: typeof INITIAL) {
   else if (!/(?=.*[a-zA-Z])(?=.*\d)/.test(data.password)) e.password = 'Include at least one letter and one number.';
   if (!data.confirmPassword) e.confirmPassword = 'Please confirm your password.';
   else if (data.password !== data.confirmPassword) e.confirmPassword = 'Passwords do not match.';
-  if (!data.location) e.location = 'Select your area.';
   if (!data.postCode) e.postCode = 'Postcode is required.';
   return e;
 }
@@ -48,7 +42,6 @@ const INITIAL = {
   firstName: '',
   lastName: '',
   propertyType: '',
-  location: '',
   postCode: '',
   agreeToTerms: false,
 };
@@ -67,7 +60,6 @@ const SignUp = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [locationOpen, setLocationOpen] = useState(false);
   const [formData, setFormData] = useState(INITIAL);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState('');
@@ -109,7 +101,6 @@ const SignUp = () => {
       last_name: formData.lastName,
       property_type: formData.propertyType,
       postcode: formData.postCode.trim().toUpperCase(),
-      location: formData.location,
     });
 
     if (error) {
@@ -275,77 +266,17 @@ const SignUp = () => {
                       {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>Area</Label>
-                        <Popover open={locationOpen} onOpenChange={setLocationOpen}>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              className={cn(
-                                'w-full h-10 px-3 rounded-md border text-sm flex items-center justify-between gap-1 bg-background',
-                                'hover:bg-muted/40 transition-colors',
-                                errors.location ? 'border-destructive' : 'border-input',
-                                !formData.location && 'text-muted-foreground',
-                              )}
-                            >
-                              <span className="truncate">{formData.location || 'Select area'}</span>
-                              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64 p-0" align="start">
-                            <Command>
-                              <CommandInput placeholder="Search area…" />
-                              <CommandList>
-                                <CommandEmpty>No area found.</CommandEmpty>
-                                {UK_LOCATIONS.map(group => (
-                                  <CommandGroup key={group.group} heading={group.group}>
-                                    {group.items.map(item => (
-                                      <CommandItem
-                                        key={item}
-                                        value={item}
-                                        onSelect={val => {
-                                          setFormData(prev => ({ ...prev, location: val, postCode: LOCATION_POSTCODE[val] ?? '' }));
-                                          setErrors(prev => {
-                                            const next = { ...prev };
-                                            delete next.location;
-                                            delete next.postCode;
-                                            return next;
-                                          });
-                                          setLocationOpen(false);
-                                        }}
-                                      >
-                                        <Check
-                                          className={cn('mr-2 h-3.5 w-3.5', formData.location === item ? 'opacity-100' : 'opacity-0')}
-                                        />
-                                        {item}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                ))}
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                        {errors.location && <p className="text-xs text-destructive">{errors.location}</p>}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor="postCode">Postcode</Label>
-                        <Input
-                          id="postCode"
-                          placeholder="Auto-filled"
-                          value={formData.postCode}
-                          onChange={e => update('postCode')(e.target.value.toUpperCase())}
-                          autoComplete="postal-code"
-                          className={`uppercase ${errors.postCode ? 'border-destructive focus-visible:ring-0' : ''}`}
-                        />
-                        {errors.postCode ? (
-                          <p className="text-xs text-destructive">{errors.postCode}</p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">Edit if incorrect</p>
-                        )}
-                      </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="postCode">Postcode</Label>
+                      <Input
+                        id="postCode"
+                        placeholder="e.g. NW1 4NP"
+                        value={formData.postCode}
+                        onChange={e => update('postCode')(e.target.value.toUpperCase())}
+                        autoComplete="postal-code"
+                        className={`uppercase ${errors.postCode ? 'border-destructive focus-visible:ring-0' : ''}`}
+                      />
+                      {errors.postCode && <p className="text-xs text-destructive">{errors.postCode}</p>}
                     </div>
                   </div>
                 )}
@@ -417,7 +348,6 @@ const SignUp = () => {
                       {[
                         ['Name', `${formData.firstName} ${formData.lastName}`],
                         ['Email', formData.email],
-                        ['Area', formData.location],
                         ['Postcode', formData.postCode],
                         [
                           'Property',

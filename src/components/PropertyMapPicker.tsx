@@ -86,6 +86,7 @@ const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) =
   const [loading, setLoading] = useState(false);
   const lastLookedUp = useRef<string>('');
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Debounced autocomplete search
   useEffect(() => {
@@ -139,6 +140,7 @@ const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) =
     setShowSuggestions(false);
     setSuggestions([]);
     onChange({ lat: s.lat, lng: s.lng, address: s.display_name, postcode: s.postcode, city: s.city });
+    inputRef.current?.blur();
   };
 
   const center: [number, number] = lat !== null && lng !== null ? [lat, lng] : UK_CENTER;
@@ -151,6 +153,7 @@ const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) =
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
+            ref={inputRef}
             type="text"
             value={search}
             onChange={e => {

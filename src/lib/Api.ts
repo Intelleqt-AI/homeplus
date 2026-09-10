@@ -361,7 +361,7 @@ const normLead = (job: any) => ({
   postcode: job.postcode || '',
   description: job.description || '',
   priority: job.priority || 'medium',
-  urgency: job.urgency || 'normal',
+  urgency: job.urgency || 'within_2_weeks',
   preferred_date: job.preferred_date ?? null,
   property: job.property ?? null,
   homeID: null,
@@ -427,7 +427,7 @@ export const createJob = async (job: any) => {
     location: job.location || '',
     postcode: job.postcode || '',
     priority: job.priority || 'medium',
-    urgency: job.urgency || 'normal',
+    urgency: job.urgency || 'within_2_weeks',
     answers: job.answers || {},
   };
   if (job.property) payload.property = job.property;
