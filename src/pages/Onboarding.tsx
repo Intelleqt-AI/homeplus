@@ -653,19 +653,16 @@ const Onboarding = () => {
           headers: { 'Content-Type': 'multipart/form-data' },
         }).catch(() => {});
       }
-      // Auto-pull EPC band from the UK EPC Register (public API, no auth required)
+      // Auto-pull EPC band from the UK EPC Register via the backend proxy
+      // (the register's API has no CORS headers, so this can't be called directly).
       if (propertyId && postcode.trim()) {
         try {
-          const epcRes = await fetch(
-            `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encodeURIComponent(postcode.trim().toUpperCase())}&size=1`,
-            { headers: { Accept: 'application/json' } },
-          );
-          if (epcRes.ok) {
-            const epcData = await epcRes.json();
-            const band = epcData?.rows?.[0]?.['current-energy-rating'];
-            if (band) {
-              await apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {});
-            }
+          const epcRes = await apiClient.get('/api/v1/properties/epc-lookup/', {
+            params: { postcode: postcode.trim().toUpperCase() },
+          });
+          const band = epcRes?.data?.data?.band;
+          if (band) {
+            await apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {});
           }
         } catch {
           // Non-critical — user can set EPC band manually in Settings

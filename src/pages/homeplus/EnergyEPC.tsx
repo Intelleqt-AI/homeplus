@@ -110,13 +110,8 @@ const EnergyEPC = () => {
     if (!pc) { toast.error('Enter a postcode first'); return; }
     setLookupLoading(true);
     try {
-      const res = await fetch(
-        `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encodeURIComponent(pc)}&size=1`,
-        { headers: { Accept: 'application/json' } },
-      );
-      if (!res.ok) throw new Error();
-      const json = await res.json();
-      const band = json?.rows?.[0]?.['current-energy-rating'] as string | undefined;
+      const res = await apiClient.get('/api/v1/properties/epc-lookup/', { params: { postcode: pc } });
+      const band = res?.data?.data?.band as string | undefined;
       if (band && BANDS.includes(band as EpcBand)) {
         await saveBand(band as EpcBand);
       } else {
