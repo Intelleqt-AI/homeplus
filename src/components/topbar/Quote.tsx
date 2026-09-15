@@ -22,6 +22,8 @@ export type QuotePrefill = {
   category?: string;
   /** Pre-select a property by id. Postcode + area auto-fill once it resolves. */
   property?: string;
+  /** One of the Timeframe <select> values below (e.g. 'within_1_week'). */
+  timeframe?: string;
 };
 
 interface QuoteProps {
@@ -106,7 +108,8 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     }
     if (prefill.category) setCategory(prefill.category);
     if (prefill.property) setPropertyId(prefill.property);
-  }, [open, prefill?.title, prefill?.service, prefill?.category, prefill?.property]);
+    if (prefill.timeframe) setUrgency(prefill.timeframe);
+  }, [open, prefill?.title, prefill?.service, prefill?.category, prefill?.property, prefill?.timeframe]);
 
   // Whenever the selected property changes (from either the picker or a
   // prefill), populate the location fields from it. Without this, prefilled

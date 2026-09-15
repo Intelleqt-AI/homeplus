@@ -51,6 +51,21 @@ import { getEvents } from "@/lib/Api2";
 import usePatch from "@/hooks/usePatch";
 import { toast } from "sonner";
 
+// Buckets a task's due date into the same Timeframe options Quote.tsx offers,
+// so "Get Quotes" defaults to the option that actually matches how soon the
+// task is due instead of always defaulting to 2 weeks.
+const timeframeFromDate = (date: Date | string | null | undefined): string | undefined => {
+  if (!date) return undefined;
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return undefined;
+  const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+  if (days <= 7) return "within_1_week"; // includes overdue/today — most urgent
+  if (days <= 14) return "within_2_weeks";
+  if (days <= 30) return "within_1_month";
+  if (days <= 60) return "within_2_months";
+  return "flexible";
+};
+
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<"month" | "list">(
@@ -84,6 +99,7 @@ const Calendar = () => {
     property?: string | null;
     trade?: string | null;
     tradeCategory?: string | null;
+    date?: Date | string | null;
   }) => {
     // Quote.tsx's `service` is the *display label* ('Gas Engineer'),
     // and `category` is the subcategory's display label ('Boilers').
@@ -102,6 +118,7 @@ const Calendar = () => {
       service: serviceLabel,
       category: categoryLabel,
       property: event.property ?? undefined,
+      timeframe: timeframeFromDate(event.date),
     });
     setQuoteOpen(true);
   };
@@ -1050,6 +1067,7 @@ const Calendar = () => {
             property: ev.property ?? null,
             trade: ev.trade ?? null,
             tradeCategory: ev.tradeCategory ?? null,
+            date: ev.date ?? null,
           })
         }
       />
