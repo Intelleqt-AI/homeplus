@@ -23,7 +23,11 @@ export async function postcodeToLatLng(pc: string): Promise<LatLng | null> {
   }
   // 2) Outcode (area-code) fallback
   try {
-    const outward = cleaned.length > 3 ? cleaned.slice(0, -3) : cleaned;
+    // UK inward codes are always 1 digit + 2 letters — only strip a trailing
+    // inward code when one is actually present. A bare outcode like "EC1A"
+    // has no digit+letter+letter suffix, so it's used as-is.
+    const hasInwardCode = /\d[A-Z]{2}$/.test(cleaned);
+    const outward = hasInwardCode ? cleaned.slice(0, -3) : cleaned;
     const res2 = await fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(outward)}`);
     if (!res2.ok) return null;
     const body = await res2.json();
