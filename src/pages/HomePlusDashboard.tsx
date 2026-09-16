@@ -26,9 +26,10 @@ import {
 
 // ── Inline primitives ─────────────────────────────────────────────────────────
 
-function HealthBar({ value, segments = 20 }: { value: number; segments?: number }) {
-  const filled = Math.round((value / 100) * segments);
-  const color = value >= 80 ? '#10B981' : value >= 60 ? '#FBBF24' : '#EF4444';
+function HealthBar({ value, max = 100, segments = 20 }: { value: number; max?: number; segments?: number }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  const filled = Math.round((pct / 100) * segments);
+  const color = pct >= 80 ? '#10B981' : pct >= 60 ? '#FBBF24' : '#EF4444';
   return (
     <div className="flex gap-0.5">
       {Array.from({ length: segments }).map((_, i) => (
@@ -171,10 +172,12 @@ const HomePlusDashboard = () => {
   // tile and the "Build your home MOT score" step card below.
   const motScore = (scoreResp?.data ?? null) as {
     score?: number;
+    max?: number;
     breakdown?: Record<string, number>;
     answers?: Record<HomeMotStep, Record<string, boolean>>;
   } | null;
   const homeMotScore: number = motScore?.score ?? 0;
+  const homeMotMax: number = motScore?.max ?? 50;
   const motAnswers: Record<HomeMotStep, Record<string, boolean>> =
     motScore?.answers ?? { A: {}, B: {}, C: {} };
 
@@ -507,12 +510,12 @@ const HomePlusDashboard = () => {
             <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Home MOT score</p>
             <div className="flex items-baseline gap-1">
               <span className="text-[28px] font-bold tracking-tight text-foreground leading-none">{homeMotScore}</span>
-              <span className="text-[13px] text-muted-foreground">/ 100</span>
+              <span className="text-[13px] text-muted-foreground">/ {homeMotMax}</span>
             </div>
             <p className="text-[11px] text-muted-foreground">
               {motTickedTotal === 0 ? 'Run your first check to begin' : `${motTickedTotal} check${motTickedTotal === 1 ? '' : 's'} completed`}
             </p>
-            <div className="mt-1"><HealthBar value={homeMotScore} segments={12} /></div>
+            <div className="mt-1"><HealthBar value={homeMotScore} max={homeMotMax} segments={12} /></div>
           </div>
           {/* YTD Spend */}
           <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col gap-2">
