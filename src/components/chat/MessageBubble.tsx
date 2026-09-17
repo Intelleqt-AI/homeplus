@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { MoreVertical } from 'lucide-react';
+import { Download, FileText, MoreVertical } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +43,10 @@ export interface ChatMessage {
   edited_at: string | null;
   is_deleted: boolean;
   is_reported_by_me: boolean;
+  attachment_url?: string | null;
+  attachment_file_name?: string;
+  attachment_file_size?: number | null;
+  attachment_type?: 'image' | 'video' | 'pdf' | 'docx' | '';
 }
 
 interface MenuAction {
@@ -61,6 +65,50 @@ interface MessageBubbleProps {
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+
+const fmtFileSize = (bytes?: number | null) => {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const AttachmentContent = ({ m }: { m: ChatMessage }) => {
+  if (!m.attachment_url || !m.attachment_type) return null;
+  if (m.attachment_type === 'image') {
+    return (
+      <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" className="block">
+        <img
+          src={m.attachment_url}
+          alt={m.attachment_file_name || 'Image attachment'}
+          className="max-h-64 w-full rounded-lg object-cover"
+        />
+      </a>
+    );
+  }
+  if (m.attachment_type === 'video') {
+    return (
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <video src={m.attachment_url} controls className="max-h-64 w-full rounded-lg" />
+    );
+  }
+  // pdf / docx — a downloadable file chip.
+  return (
+    <a
+      href={m.attachment_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        'flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs no-underline',
+        m.is_mine ? 'border-white/30 bg-white/10' : 'border-gray-200 bg-gray-50',
+      )}
+    >
+      <FileText className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{m.attachment_file_name || 'Attachment'}</span>
+      {m.attachment_file_size ? <span className="shrink-0 opacity-70">{fmtFileSize(m.attachment_file_size)}</span> : null}
+      <Download className="h-3.5 w-3.5 shrink-0" />
+    </a>
+  );
+};
 
 const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProps) => {
   const queryClient = useQueryClient();
@@ -169,7 +217,12 @@ const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProp
                   : 'border border-gray-200 bg-white text-gray-800',
               )}
             >
-              <p className="whitespace-pre-wrap break-words">{m.body}</p>
+              {m.attachment_url && (
+                <div className={cn(m.body ? 'mb-1.5' : undefined)}>
+                  <AttachmentContent m={m} />
+                </div>
+              )}
+              {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
               <p className={cn('mt-1 flex items-center gap-1 text-[10px]', m.is_mine ? 'opacity-80' : 'text-gray-400')}>
                 {fmtTime(m.created_at)}
                 {m.is_edited && <span>· edited</span>}

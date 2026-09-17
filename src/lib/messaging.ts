@@ -58,3 +58,26 @@ export const reportMessage = (
 
 export const fetchMessageHistory = (conversationId: string, messageId: string) =>
   fetchData(`${BASE}/conversations/${conversationId}/messages/${messageId}/history/`);
+
+export type AttachmentType = 'image' | 'video' | 'pdf' | 'docx';
+
+export type PresignedUpload = {
+  upload: { method: 'POST' | 'PUT'; url: string; fields?: Record<string, string> | null };
+  s3_key: string;
+  attachment_type: AttachmentType;
+  file_name: string;
+};
+
+/** Ask the backend for direct-upload instructions for a chat attachment.
+ * Uploads the file's bytes straight to S3 (or, in local dev, a same-app
+ * fallback endpoint) — never through this API call itself. */
+export const presignAttachment = async (
+  conversationId: string,
+  file: File,
+): Promise<PresignedUpload> => {
+  const res: any = await postData({
+    url: `${BASE}/conversations/${conversationId}/attachments/presign/`,
+    data: { file_name: file.name, content_type: file.type, file_size: file.size },
+  });
+  return res.data;
+};

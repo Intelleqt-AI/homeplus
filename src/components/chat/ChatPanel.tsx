@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -13,21 +13,32 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Ban, Info, Loader2, Save, Send, X } from 'lucide-react';
+import { Ban, FileText, Info, Loader2, Paperclip, Save, Send, X } from 'lucide-react';
 import useFetch from '@/hooks/useFetch';
 import {
   blockConversation,
   CONVERSATIONS_URL,
   editMessage,
   getMessagesUrl,
+  presignAttachment,
   unblockConversation,
   UNREAD_URL,
+  type AttachmentType,
 } from '@/lib/messaging';
+import { uploadAttachment, validateAttachmentClientSide } from '@/lib/attachmentUpload';
 import { postData } from '@/lib/Api';
 import { toast } from '@/lib/toast';
 import MessageBubble, { type ChatMessage } from './MessageBubble';
 import JobInfoDialog from './JobInfoDialog';
 import TraderDetailsDialog from './TraderDetailsDialog';
+
+const ATTACHMENT_ACCEPT = 'image/*,video/*,application/pdf,.doc,.docx';
+
+type PendingAttachment = {
+  file: File;
+  s3_key: string;
+  attachment_type: AttachmentType;
+};
 
 interface ChatConversationBid {
   id: string;
@@ -87,6 +98,10 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [jobInfoOpen, setJobInfoOpen] = useState(false);
   const [traderDetailsOpen, setTraderDetailsOpen] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
+  const [attachmentProgress, setAttachmentProgress] = useState<number | null>(null);
+  const [isAttaching, setIsAttaching] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const messagesUrl =
@@ -119,6 +134,9 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
     if (!open) {
       setEditingMessageId(null);
       setDraft('');
+      setPendingAttachment(null);
+      setAttachmentProgress(null);
+      setIsAttaching(false);
     }
   }, [open, conversationId]);
 
@@ -128,16 +146,56 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
   };
 
   const sendMutation = useMutation({
-    mutationFn: (body: string) =>
-      postData({ url: getMessagesUrl(conversationId!), data: { body } }),
+    mutationFn: ({ body, attachment }: { body: string; attachment: PendingAttachment | null }) =>
+      postData({
+        url: getMessagesUrl(conversationId!),
+        data: {
+          body,
+          ...(attachment && {
+            attachment_s3_key: attachment.s3_key,
+            attachment_file_name: attachment.file.name,
+            attachment_file_size: attachment.file.size,
+            attachment_content_type: attachment.file.type,
+            attachment_type: attachment.attachment_type,
+          }),
+        },
+      }),
     onSuccess: () => {
       setDraft('');
+      setPendingAttachment(null);
       invalidateThread();
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || 'Failed to send message.');
     },
   });
+
+  const handleAttachClick = () => fileInputRef.current?.click();
+
+  const handleFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !conversationId) return;
+    const clientError = validateAttachmentClientSide(file);
+    if (clientError) {
+      toast.error(clientError);
+      return;
+    }
+    setIsAttaching(true);
+    setAttachmentProgress(0);
+    try {
+      const presigned = await presignAttachment(conversationId, file);
+      await uploadAttachment(file, presigned, setAttachmentProgress);
+      setPendingAttachment({ file, s3_key: presigned.s3_key, attachment_type: presigned.attachment_type });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to attach file.');
+    } finally {
+      setIsAttaching(false);
+      setAttachmentProgress(null);
+    }
+  };
+
+  const handleRemoveAttachment = () => setPendingAttachment(null);
 
   const editMutation = useMutation({
     mutationFn: (body: string) => editMessage(conversationId!, editingMessageId!, body),
@@ -185,12 +243,13 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
 
   const handleSend = () => {
     const body = draft.trim();
-    if (!body || !conversationId) return;
+    if (!conversationId) return;
     if (editingMessageId) {
-      if (isSameAsOriginal) return;
+      if (!body || isSameAsOriginal) return;
       editMutation.mutate(body);
     } else {
-      sendMutation.mutate(body);
+      if (!body && !pendingAttachment) return;
+      sendMutation.mutate({ body, attachment: pendingAttachment });
     }
   };
 
@@ -284,6 +343,13 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
 
         {canSend ? (
           <div className="flex items-end gap-2 border-t border-gray-100 px-4 py-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ATTACHMENT_ACCEPT}
+              className="hidden"
+              onChange={handleFileSelected}
+            />
             <div className="flex flex-1 flex-col gap-1.5">
               {editingMessageId && (
                 <div className="flex items-center justify-between text-[11px] text-gray-400">
@@ -295,6 +361,26 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
                   >
                     <X className="h-3 w-3" /> Cancel
                   </button>
+                </div>
+              )}
+              {(isAttaching || pendingAttachment) && !editingMessageId && (
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-600">
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {isAttaching ? 'Uploading…' : pendingAttachment?.file.name}
+                    {isAttaching && attachmentProgress != null ? ` ${attachmentProgress}%` : ''}
+                  </span>
+                  {isAttaching ? (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-gray-400" />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleRemoveAttachment}
+                      className="shrink-0 text-gray-400 hover:text-gray-700"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
               <Textarea
@@ -314,10 +400,26 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
                 }}
               />
             </div>
+            {!editingMessageId && (
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={handleAttachClick}
+                disabled={isAttaching}
+                title="Attach a file"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               size="icon"
               onClick={handleSend}
-              disabled={!draft.trim() || isSending || isSaving || (!!editingMessageId && isSameAsOriginal)}
+              disabled={
+                isSending ||
+                isSaving ||
+                isAttaching ||
+                (editingMessageId ? !draft.trim() || isSameAsOriginal : !draft.trim() && !pendingAttachment)
+              }
               title={editingMessageId ? 'Save' : 'Send'}
             >
               {isSending || isSaving ? (
