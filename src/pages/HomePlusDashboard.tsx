@@ -595,8 +595,8 @@ const HomePlusDashboard = () => {
                   }}>
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: TONE_COLOR[n.tone] }} />
                   </span>
-                  <div className="text-center">
-                    <p className="text-[11px] leading-tight whitespace-nowrap"
+                  <div className="text-center w-full">
+                    <p className="text-[11px] leading-tight line-clamp-2 break-words"
                       style={{ fontWeight: n.tone === 'now' ? 700 : 500, color: TONE_LABEL[n.tone] }}>
                       {n.label}
                     </p>

@@ -34,6 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { createJob, fetchLeads, modifyBid, updateJob, deleteJob, rateBid, postData, deleteData } from '@/lib/Api';
@@ -497,42 +498,49 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   <Label className="text-sm font-medium text-gray-700">
                     Trade <span className="text-red-500">*</span>
                   </Label>
-                  <select
+                  <Select
                     value={service}
-                    onChange={e => {
-                      setService(e.target.value);
+                    onValueChange={v => {
+                      setService(v);
                       setCategory('');
                       setAnswers({});
                     }}
                     disabled={locked}
-                    className={selectCls(locked)}
                   >
-                    {TRADE_LABELS.map(t => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRADE_LABELS.map(t => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 {serviceCategories.length > 0 && (
                   <div>
                     <Label className="text-sm font-medium text-gray-700">Category</Label>
-                    <select
+                    <Select
                       value={category}
-                      onChange={e => {
-                        setCategory(e.target.value);
+                      onValueChange={v => {
+                        setCategory(v);
                         setAnswers({});
                       }}
                       disabled={locked}
-                      className={selectCls(locked)}
                     >
-                      <option value="">Select category</option>
-                      {serviceCategories.map(cat => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {serviceCategories.map(cat => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </div>
@@ -576,21 +584,31 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Timeframe</Label>
-                <select value={urgency} onChange={e => setUrgency(e.target.value)} disabled={locked} className={selectCls(locked)}>
-                  <option value="within_1_week">Within 1 week</option>
-                  <option value="within_2_weeks">Within 2 weeks</option>
-                  <option value="within_1_month">Within 1 month</option>
-                  <option value="within_2_months">Within 2 months</option>
-                  <option value="flexible">3+ months / Flexible</option>
-                </select>
+                <Select value={urgency} onValueChange={setUrgency} disabled={locked}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="within_1_week">Within 1 week</SelectItem>
+                    <SelectItem value="within_2_weeks">Within 2 weeks</SelectItem>
+                    <SelectItem value="within_1_month">Within 1 month</SelectItem>
+                    <SelectItem value="within_2_months">Within 2 months</SelectItem>
+                    <SelectItem value="flexible">3+ months / Flexible</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="text-sm font-medium text-gray-700">Priority</Label>
-                <select value={priority} onChange={e => setPriority(e.target.value)} disabled={locked} className={selectCls(locked)}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
+                <Select value={priority} onValueChange={setPriority} disabled={locked}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -610,19 +628,22 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                         {q.required && <span className="text-red-500 ml-1">*</span>}
                       </Label>
                       {q.question_type === 'multiple_choice' && (
-                        <select
+                        <Select
                           value={String(answers[q.output_key] ?? '')}
-                          onChange={e => handleAnswerChange(q.output_key, e.target.value)}
+                          onValueChange={v => handleAnswerChange(q.output_key, v)}
                           disabled={locked}
-                          className={`${selectCls(locked)} mt-1`}
                         >
-                          <option value="">Select an option</option>
-                          {q.options?.map(opt => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select an option" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {q.options?.map(opt => (
+                              <SelectItem key={opt} value={opt}>
+                                {opt}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       )}
                       {q.question_type === 'text' && (
                         <textarea
@@ -1434,46 +1455,58 @@ const JobLeads = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="text-[10px] font-semibold text-[#6B6B6B] uppercase tracking-wide block mb-1">Status</label>
-                      <select
-                        value={filters.status}
-                        onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-[#E8E8E3] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      <Select
+                        value={filters.status || 'all'}
+                        onValueChange={v => setFilters(f => ({ ...f, status: v === 'all' ? '' : v }))}
                       >
-                        <option value="">All</option>
-                        <option value="open">Open</option>
-                        <option value="todo">Booked</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                        <SelectTrigger className="w-full bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="open">Open</SelectItem>
+                          <SelectItem value="todo">Booked</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <label className="text-[10px] font-semibold text-[#6B6B6B] uppercase tracking-wide block mb-1">Trade</label>
-                      <select
-                        value={filters.trade}
-                        onChange={e => setFilters(f => ({ ...f, trade: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-[#E8E8E3] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      <Select
+                        value={filters.trade || 'all'}
+                        onValueChange={v => setFilters(f => ({ ...f, trade: v === 'all' ? '' : v }))}
                       >
-                        <option value="">All</option>
-                        {[...new Set(leads.map(j => j.trade).filter(Boolean))].map(t => (
-                          <option key={t} value={t}>{t.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          {[...new Set(leads.map(j => j.trade).filter(Boolean))].map(t => (
+                            <SelectItem key={t} value={t}>{t.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <label className="text-[10px] font-semibold text-[#6B6B6B] uppercase tracking-wide block mb-1">Timeframe</label>
-                      <select
-                        value={filters.urgency}
-                        onChange={e => setFilters(f => ({ ...f, urgency: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-[#E8E8E3] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      <Select
+                        value={filters.urgency || 'all'}
+                        onValueChange={v => setFilters(f => ({ ...f, urgency: v === 'all' ? '' : v }))}
                       >
-                        <option value="">All</option>
-                        <option value="within_1_week">Within 1 week</option>
-                        <option value="within_2_weeks">Within 2 weeks</option>
-                        <option value="within_1_month">Within 1 month</option>
-                        <option value="within_2_months">Within 2 months</option>
-                        <option value="flexible">3+ months / Flexible</option>
-                      </select>
+                        <SelectTrigger className="w-full bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="within_1_week">Within 1 week</SelectItem>
+                          <SelectItem value="within_2_weeks">Within 2 weeks</SelectItem>
+                          <SelectItem value="within_1_month">Within 1 month</SelectItem>
+                          <SelectItem value="within_2_months">Within 2 months</SelectItem>
+                          <SelectItem value="flexible">3+ months / Flexible</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   {activeFilterCount > 0 && (

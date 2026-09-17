@@ -344,7 +344,7 @@ const Documents = () => {
       <div className="space-y-4">
 
         {/* ── DocsHero ─────────────────────────────────────── */}
-        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex items-center gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Document pack</p>
@@ -352,15 +352,15 @@ const Documents = () => {
               <p className="text-[13px] text-[#6B6B6B] mt-1.5">Stored safely, organised by category, exportable as a moving pack.</p>
             </div>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 sm:overflow-x-auto">
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:w-fit">
               {[
                 { label: 'Total files', value: String(stats.total), Icon: FileText, tint: '#F5F5F0', color: '#1A1A1A' },
                 { label: 'Compliance', value: String(stats.compliance), Icon: ShieldCheck, tint: '#F3E8FF', color: '#A855F7' },
                 { label: 'Expiring', value: String(stats.expiring), Icon: AlertTriangle, tint: '#FFFBEB', color: '#F59E0B' },
                 { label: 'Expired', value: String(stats.expired), Icon: AlertTriangle, tint: '#FEF2F2', color: '#EF4444' },
               ].map(s => (
-                <div key={s.label} className="text-center px-4 py-2.5 bg-[#FAFAF7] border border-[#E8E8E3] rounded-[14px] flex flex-col items-center justify-center">
+                <div key={s.label} className="text-center px-3 py-2 bg-[#FAFAF7] border border-[#E8E8E3] rounded-[14px] flex flex-col items-center justify-center">
                   <div className="flex items-center justify-center gap-1.5 mb-1">
                     <span className="h-5 w-5 rounded-full flex items-center justify-center"
                       style={{ background: s.tint, color: s.color }}>
@@ -368,14 +368,14 @@ const Documents = () => {
                     </span>
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8B8B8B]">{s.label}</span>
                   </div>
-                  <span className="text-[22px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.value}</span>
+                  <span className="text-[18px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.value}</span>
                 </div>
               ))}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => openUploadForm()}
-                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors w-full sm:w-auto"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors w-full sm:w-auto"
               >
                 <Upload className="w-4 h-4" /> Upload document
               </button>
@@ -540,15 +540,16 @@ const Documents = () => {
                       className="h-9 w-full sm:w-52 pl-8 pr-4 rounded-full border border-[#E8E8E3] bg-white text-[12.5px] text-[#1A1A1A] placeholder:text-[#8B8B8B] outline-none focus:border-[#1A1A1A] transition-colors"
                     />
                   </div>
-                  <select
-                    value={sort}
-                    onChange={e => setSort(e.target.value as 'recent' | 'name' | 'expiry')}
-                    className="h-9 px-3 rounded-full border border-[#E8E8E3] bg-white text-[12.5px] text-[#4A4A4A] outline-none cursor-pointer appearance-none"
-                  >
-                    <option value="recent">Recently added</option>
-                    <option value="name">Name A–Z</option>
-                    <option value="expiry">Expiry status</option>
-                  </select>
+                  <Select value={sort} onValueChange={v => setSort(v as 'recent' | 'name' | 'expiry')}>
+                    <SelectTrigger className="h-9 w-auto gap-1.5 px-3 rounded-full border border-[#E8E8E3] bg-white text-[12.5px] text-[#4A4A4A]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="recent">Recently added</SelectItem>
+                      <SelectItem value="name">Name A–Z</SelectItem>
+                      <SelectItem value="expiry">Expiry status</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {selectedForExport.length > 0 && (
                     <span className="text-[12px] font-medium text-[#FBBF24]">{selectedForExport.length} selected</span>
                   )}
@@ -1041,6 +1042,9 @@ const Documents = () => {
       {/* Preview dialog */}
       <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
         <DialogContent className="sm:max-w-[500px] rounded-[20px] border border-[#E8E8E3]">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{previewDoc?.name ?? 'Document preview'}</DialogTitle>
+          </DialogHeader>
           {previewDoc && (
             <>
               <div className="flex items-center gap-3 pb-4 border-b border-[#E8E8E3]">

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { Home, ChevronRight, ArrowRight, Building, Building2, Warehouse, LayoutGrid, HelpCircle, KeyRound, Briefcase, Users, Check, ChevronsUpDown, Camera } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -341,16 +342,16 @@ function StepProperty({
         {/* Heating type */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Heating type</label>
-          <select
-            value={heatingType}
-            onChange={e => setHeatingType(e.target.value)}
-            className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground outline-none transition-colors"
-          >
-            <option value="">Select heating type (optional)</option>
-            {HEATING_TYPES.map(h => (
-              <option key={h.value} value={h.value}>{h.label}</option>
-            ))}
-          </select>
+          <Select value={heatingType} onValueChange={setHeatingType}>
+            <SelectTrigger className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 h-auto text-[15px] font-medium text-foreground">
+              <SelectValue placeholder="Select heating type (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              {HEATING_TYPES.map(h => (
+                <SelectItem key={h.value} value={h.value}>{h.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Year built & Tenure */}
@@ -369,16 +370,16 @@ function StepProperty({
           </div>
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Tenure <span className="font-normal normal-case text-muted-foreground/60">(optional)</span></label>
-            <select
-              value={tenure}
-              onChange={e => setTenure(e.target.value)}
-              className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground outline-none transition-colors"
-            >
-              <option value="">Select</option>
-              {TENURE_TYPES.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+            <Select value={tenure} onValueChange={setTenure}>
+              <SelectTrigger className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 h-auto text-[15px] font-medium text-foreground">
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent>
+                {TENURE_TYPES.map(t => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

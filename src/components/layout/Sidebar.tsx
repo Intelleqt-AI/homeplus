@@ -37,7 +37,7 @@ const Sidebar = () => {
 
   const sidebarItems = [
     { icon: Home, label: 'My Home', path: '/dashboard' },
-    { icon: Search, label: 'Home Improvements & Maintenance', path: '/dashboard/job-leads' },
+    { icon: Search, label: 'Home Improvements', path: '/dashboard/job-leads' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
     { icon: ClipboardList, label: 'Tasks & Reminders', path: '/dashboard/calendar' },
     { icon: MessageSquare, label: 'Messages', path: '/dashboard/messages', badge: messagesUnread },

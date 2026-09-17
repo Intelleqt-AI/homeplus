@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Ban, Loader2, Save, Send, X } from 'lucide-react';
+import { Ban, Info, Loader2, Save, Send, X } from 'lucide-react';
 import useFetch from '@/hooks/useFetch';
 import {
   blockConversation,
@@ -26,9 +26,46 @@ import {
 import { postData } from '@/lib/Api';
 import { toast } from '@/lib/toast';
 import MessageBubble, { type ChatMessage } from './MessageBubble';
+import JobInfoDialog from './JobInfoDialog';
+import TraderDetailsDialog from './TraderDetailsDialog';
+
+interface ChatConversationBid {
+  id: string;
+  conversation_id: string | null;
+  contractor_phone: string;
+  company_name: string;
+  bidder: { first_name: string; last_name: string; email: string };
+  tradepilot_profile: {
+    business_name: string;
+    trade_specialty: string;
+    years_experience: string;
+    postcode: string;
+    has_insurance: boolean;
+    has_license: boolean;
+    is_verified: boolean;
+    completed_jobs: number;
+    avg_rating: number | null;
+    total_ratings: number;
+    profile_photo_url: string | null;
+  } | null;
+}
 
 interface ChatConversation {
   id: string;
+  job: string | null;
+  job_detail: {
+    title: string;
+    description: string;
+    trade: string;
+    category: string;
+    urgency: string;
+    priority: string;
+    status: string;
+    location: string;
+    postcode: string;
+    preferred_date: string | null;
+  } | null;
+  other_party: { id: string; name: string; role: string; business_name?: string } | null;
   is_blocked: boolean;
   blocked_by_me: boolean;
   blocked_by_name: string | null;
@@ -48,6 +85,8 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [jobInfoOpen, setJobInfoOpen] = useState(false);
+  const [traderDetailsOpen, setTraderDetailsOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const messagesUrl =
@@ -56,6 +95,11 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
   const { data, isLoading } = useFetch<any>(messagesUrl, { refetchInterval: 8000 });
   const messages: ChatMessage[] = data?.data?.messages ?? [];
   const conversation: ChatConversation | null = data?.data?.conversation ?? null;
+
+  const jobUrl = open && conversation?.job ? `/api/v1/jobs/${conversation.job}/` : null;
+  const { data: jobData } = useFetch<any>(jobUrl);
+  const bids: ChatConversationBid[] = jobData?.data?.bids ?? [];
+  const traderBid = bids.find(b => b.conversation_id === conversationId) ?? null;
 
   const editingMessage = editingMessageId ? messages.find(m => m.id === editingMessageId) ?? null : null;
 
@@ -163,33 +207,56 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
         <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4 pr-12">
           <div className="min-w-0">
             <SheetTitle className="truncate text-base font-semibold text-gray-900">
-              {title || 'Messages'}
+              {conversation?.other_party ? (
+                <button
+                  type="button"
+                  onClick={() => setTraderDetailsOpen(true)}
+                  className="truncate text-left hover:underline"
+                  title="View trader details"
+                >
+                  {title || 'Messages'}
+                </button>
+              ) : (
+                title || 'Messages'
+              )}
             </SheetTitle>
             {subtitle && <p className="mt-0.5 truncate text-xs text-gray-500">{subtitle}</p>}
           </div>
 
           {conversation && (
-            conversation.blocked_by_me ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => unblockMutation.mutate()}
-                disabled={unblockMutation.isPending}
-              >
-                {unblockMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Unblock'}
-              </Button>
-            ) : !conversation.is_blocked ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 text-gray-400 hover:text-destructive"
-                title={`Block ${title || 'this contact'}`}
-                onClick={() => setBlockConfirmOpen(true)}
-              >
-                <Ban className="h-4 w-4" />
-              </Button>
-            ) : null
+            <div className="flex shrink-0 items-center gap-1">
+              {conversation.job_detail && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-gray-400 hover:text-gray-700"
+                  title="View job details"
+                  onClick={() => setJobInfoOpen(true)}
+                >
+                  <Info className="h-4 w-4" />
+                </Button>
+              )}
+              {conversation.blocked_by_me ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => unblockMutation.mutate()}
+                  disabled={unblockMutation.isPending}
+                >
+                  {unblockMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Unblock'}
+                </Button>
+              ) : !conversation.is_blocked ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-gray-400 hover:text-destructive"
+                  title={`Block ${title || 'this contact'}`}
+                  onClick={() => setBlockConfirmOpen(true)}
+                >
+                  <Ban className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
           )}
         </div>
 
@@ -306,6 +373,21 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <JobInfoDialog
+      open={jobInfoOpen}
+      onOpenChange={setJobInfoOpen}
+      jobDetail={conversation?.job_detail ?? null}
+      bids={bids}
+      conversationId={conversationId}
+    />
+
+    <TraderDetailsDialog
+      open={traderDetailsOpen}
+      onOpenChange={setTraderDetailsOpen}
+      bid={traderBid}
+      fallbackName={conversation?.other_party?.name}
+    />
     </>
   );
 };

@@ -3,6 +3,7 @@ import { MessageSquare } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import useFetch from '@/hooks/useFetch';
 import ChatPanel from '@/components/chat/ChatPanel';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 const CONVERSATIONS_URL = '/api/v1/messaging/conversations/';
@@ -13,7 +14,7 @@ interface Conversation {
   job_title: string;
   job_trade: string;
   job_status: string;
-  other_party: { id: string; name: string; role: string };
+  other_party: { id: string; name: string; role: string; profile_photo_url?: string | null };
   last_message: { body: string; created_at: string; sender: string } | null;
   last_message_at: string;
   unread_count: number;
@@ -69,9 +70,12 @@ const Messages = () => {
                 onClick={() => openChat(c)}
                 className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-600">
-                  {c.other_party.name?.[0]?.toUpperCase() || '?'}
-                </div>
+                <Avatar className="h-10 w-10 shrink-0 bg-gray-100">
+                  <AvatarImage src={c.other_party.profile_photo_url ?? undefined} alt={c.other_party.name} />
+                  <AvatarFallback className="text-sm font-semibold text-gray-600">
+                    {c.other_party.name?.[0]?.toUpperCase() || '?'}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-semibold text-gray-900">{c.other_party.name}</p>

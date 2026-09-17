@@ -29,9 +29,10 @@ import {
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Insights = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState("Last 12 Months");
+  const [selectedPeriod, setSelectedPeriod] = useState("This Month");
   const [selectedProperty, setSelectedProperty] = useState("23 Oakfield Rd, SW12 8JD");
   const [chartType, setChartType] = useState("bar");
   const [filterView, setFilterView] = useState("all");
@@ -147,29 +148,36 @@ const Insights = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold text-black">Insights</h1>
-            <select 
-              value={selectedProperty}
-              onChange={(e) => setSelectedProperty(e.target.value)}
-              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              {properties.map((property, index) => (
-                <option key={index} value={property}>{property}</option>
-              ))}
-            </select>
-            <select 
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option>This Month</option>
-              <option>This Year</option>
-              <option>All Time</option>
-            </select>
-            <select className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-              <option>Compare to: Neighbors</option>
-              <option>Compare to: Last Year</option>
-              <option>Compare to: UK Average</option>
-            </select>
+            <Select value={selectedProperty} onValueChange={setSelectedProperty}>
+              <SelectTrigger className="w-auto gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {properties.map((property, index) => (
+                  <SelectItem key={index} value={property}>{property}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <SelectTrigger className="w-auto gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="This Month">This Month</SelectItem>
+                <SelectItem value="This Year">This Year</SelectItem>
+                <SelectItem value="All Time">All Time</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select defaultValue="neighbors">
+              <SelectTrigger className="w-auto gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="neighbors">Compare to: Neighbors</SelectItem>
+                <SelectItem value="last_year">Compare to: Last Year</SelectItem>
+                <SelectItem value="uk_average">Compare to: UK Average</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center space-x-4">
             <button className="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200">

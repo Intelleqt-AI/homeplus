@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '../ui/button';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/lib/toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -22,7 +23,7 @@ export type QuotePrefill = {
   category?: string;
   /** Pre-select a property by id. Postcode + area auto-fill once it resolves. */
   property?: string;
-  /** One of the Timeframe <select> values below (e.g. 'within_1_week'). */
+  /** One of the Timeframe dropdown values below (e.g. 'within_1_week'). */
   timeframe?: string;
 };
 
@@ -262,40 +263,47 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                   <Label className="text-sm font-medium text-gray-700">
                     Trade <span className="text-red-500">*</span>
                   </Label>
-                  <select
+                  <Select
                     value={service}
-                    onChange={e => {
-                      setService(e.target.value);
+                    onValueChange={v => {
+                      setService(v);
                       setCategory('');
                       setAnswers({});
                     }}
-                    className={selectCls}
                   >
-                    {JOB_TRADE_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.label}>{opt.label}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {JOB_TRADE_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.label}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 {serviceCategories.length > 0 && (
                   <div>
                     <Label className="text-sm font-medium text-gray-700">
                       Category <span className="text-red-500">*</span>
                     </Label>
-                    <select
+                    <Select
                       value={category}
-                      onChange={e => {
-                        setCategory(e.target.value);
+                      onValueChange={v => {
+                        setCategory(v);
                         setAnswers({});
                       }}
-                      className={selectCls}
                     >
-                      <option value="">Select category</option>
-                      {serviceCategories.map(cat => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {serviceCategories.map(cat => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </div>
@@ -346,21 +354,31 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Timeframe</Label>
-                <select value={urgency} onChange={e => setUrgency(e.target.value)} className={selectCls}>
-                  <option value="within_1_week">Within 1 week</option>
-                  <option value="within_2_weeks">Within 2 weeks</option>
-                  <option value="within_1_month">Within 1 month</option>
-                  <option value="within_2_months">Within 2 months</option>
-                  <option value="flexible">3+ months / Flexible</option>
-                </select>
+                <Select value={urgency} onValueChange={setUrgency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="within_1_week">Within 1 week</SelectItem>
+                    <SelectItem value="within_2_weeks">Within 2 weeks</SelectItem>
+                    <SelectItem value="within_1_month">Within 1 month</SelectItem>
+                    <SelectItem value="within_2_months">Within 2 months</SelectItem>
+                    <SelectItem value="flexible">3+ months / Flexible</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="text-sm font-medium text-gray-700">Priority</Label>
-                <select value={priority} onChange={e => setPriority(e.target.value)} className={selectCls}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
+                <Select value={priority} onValueChange={setPriority}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -380,18 +398,21 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                         {question.required && <span className="text-red-500 ml-1">*</span>}
                       </Label>
                       {question.question_type === 'multiple_choice' && (
-                        <select
+                        <Select
                           value={String(answers[question.output_key] ?? '')}
-                          onChange={e => handleAnswerChange(question.output_key, e.target.value)}
-                          className={`${selectCls} mt-1`}
+                          onValueChange={v => handleAnswerChange(question.output_key, v)}
                         >
-                          <option value="">Select an option</option>
-                          {question.options?.map(opt => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select an option" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {question.options?.map(opt => (
+                              <SelectItem key={opt} value={opt}>
+                                {opt}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       )}
                       {question.question_type === 'text' && (
                         <textarea

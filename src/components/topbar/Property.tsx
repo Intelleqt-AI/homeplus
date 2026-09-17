@@ -1,4 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePost } from '@/hooks/usePost';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -89,45 +90,48 @@ const Property = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-600">Property Type</label>
-              <select
-                value={type}
-                onChange={e => setType(e.target.value)}
-                className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option>House</option>
-                <option>Flat</option>
-                <option>Apartment</option>
-                <option>Studio</option>
-                <option>Other</option>
-              </select>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="House">House</SelectItem>
+                  <SelectItem value="Flat">Flat</SelectItem>
+                  <SelectItem value="Apartment">Apartment</SelectItem>
+                  <SelectItem value="Studio">Studio</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-600">Bedrooms</label>
-              <select
-                value={bedrooms}
-                onChange={e => setBedrooms(e.target.value)}
-                className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option>1</option>
-                <option>2</option>
-                <option>3</option>
-                <option>4</option>
-                <option>5+</option>
-              </select>
+              <Select value={bedrooms} onValueChange={setBedrooms}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1</SelectItem>
+                  <SelectItem value="2">2</SelectItem>
+                  <SelectItem value="3">3</SelectItem>
+                  <SelectItem value="4">4</SelectItem>
+                  <SelectItem value="5+">5+</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-600">Your Role</label>
-            <select
-              value={role}
-              onChange={e => setRole(e.target.value)}
-              className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option>Owner-occupier</option>
-              <option>Landlord</option>
-              <option>Tenant</option>
-              <option>Property Manager</option>
-            </select>
+            <Select value={role} onValueChange={setRole}>
+              <SelectTrigger className="w-full mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Owner-occupier">Owner-occupier</SelectItem>
+                <SelectItem value="Landlord">Landlord</SelectItem>
+                <SelectItem value="Tenant">Tenant</SelectItem>
+                <SelectItem value="Property Manager">Property Manager</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <p className="text-xs text-gray-500 bg-yellow-50 border border-yellow-200 rounded-md p-2">
             ⚠ For posting jobs, set the exact location and postcode in <strong>Settings → Properties</strong> after adding.
