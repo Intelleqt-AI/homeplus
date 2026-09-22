@@ -129,9 +129,9 @@ const BlogPost = () => {
     author: {
       name: "Sarah Chen",
       title: "Home Maintenance Expert",
-      image: "/lovable-uploads/efb07637-d7f5-40ed-af83-770cfdb35caa.png"
+      image: "/site-assets/efb07637-d7f5-40ed-af83-770cfdb35caa.png"
     },
-    image: "/lovable-uploads/f3867400-da62-456f-a6fb-5f11d7552fd6.png",
+    image: "/site-assets/f3867400-da62-456f-a6fb-5f11d7552fd6.png",
     tags: ["home maintenance", "property care", "diy", "homeowner tips"]
   };
 
@@ -139,19 +139,19 @@ const BlogPost = () => {
     {
       id: "smart-home-energy-savings",
       title: "10 Smart Home Upgrades That Actually Save Money",
-      image: "/lovable-uploads/8e1ead36-d749-4904-ac6a-69e7230bc9b6.png",
+      image: "/site-assets/8e1ead36-d749-4904-ac6a-69e7230bc9b6.png",
       readTime: "6 min read"
     },
     {
       id: "finding-reliable-tradespeople",
       title: "How to Find Reliable Tradespeople in Your Area",
-      image: "/lovable-uploads/acf44c09-60bb-42e0-92c9-266e66dffe45.png",
+      image: "/site-assets/acf44c09-60bb-42e0-92c9-266e66dffe45.png",
       readTime: "5 min read"
     },
     {
       id: "winter-home-preparation-checklist",
       title: "Winter Home Preparation: Complete Checklist",
-      image: "/lovable-uploads/72453d6f-9ee3-42fa-80ef-8bb70632daeb.png",
+      image: "/site-assets/72453d6f-9ee3-42fa-80ef-8bb70632daeb.png",
       readTime: "4 min read"
     }
   ];

@@ -95,7 +95,7 @@ const Home2 = () => {
                     </div>
                   </div>
                   <img 
-                    src="/lovable-uploads/a5bfbbbe-43fa-4bae-b154-c673324488b1.png" 
+                    src="/site-assets/a5bfbbbe-43fa-4bae-b154-c673324488b1.png" 
                     alt="Home+ Dashboard Interface" 
                     className="w-full h-full object-contain"
                   />

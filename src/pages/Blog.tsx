@@ -25,7 +25,7 @@ const Blog = () => {
     category: "Home Maintenance",
     readTime: "8 min read",
     publishDate: "Jan 10, 2025",
-    image: "/lovable-uploads/f3867400-da62-456f-a6fb-5f11d7552fd6.png",
+    image: "/site-assets/f3867400-da62-456f-a6fb-5f11d7552fd6.png",
     featured: true
   };
 
@@ -37,7 +37,7 @@ const Blog = () => {
       category: "Energy Efficiency",
       readTime: "6 min read",
       publishDate: "Jan 8, 2025",
-      image: "/lovable-uploads/8e1ead36-d749-4904-ac6a-69e7230bc9b6.png"
+      image: "/site-assets/8e1ead36-d749-4904-ac6a-69e7230bc9b6.png"
     },
     {
       id: "finding-reliable-tradespeople",
@@ -46,7 +46,7 @@ const Blog = () => {
       category: "Property Tips",
       readTime: "5 min read",
       publishDate: "Jan 5, 2025",
-      image: "/lovable-uploads/acf44c09-60bb-42e0-92c9-266e66dffe45.png"
+      image: "/site-assets/acf44c09-60bb-42e0-92c9-266e66dffe45.png"
     },
     {
       id: "uk-property-market-trends-2025",
@@ -55,7 +55,7 @@ const Blog = () => {
       category: "Market Insights",
       readTime: "7 min read",
       publishDate: "Jan 3, 2025",
-      image: "/lovable-uploads/84362d05-12d1-4db0-ac61-9e14844bc7b7.png"
+      image: "/site-assets/84362d05-12d1-4db0-ac61-9e14844bc7b7.png"
     },
     {
       id: "winter-home-preparation-checklist",
@@ -64,7 +64,7 @@ const Blog = () => {
       category: "Home Maintenance",
       readTime: "4 min read",
       publishDate: "Dec 28, 2024",
-      image: "/lovable-uploads/72453d6f-9ee3-42fa-80ef-8bb70632daeb.png"
+      image: "/site-assets/72453d6f-9ee3-42fa-80ef-8bb70632daeb.png"
     },
     {
       id: "diy-vs-professional-repairs",
@@ -73,7 +73,7 @@ const Blog = () => {
       category: "Property Tips",
       readTime: "6 min read",
       publishDate: "Dec 25, 2024",
-      image: "/lovable-uploads/a51e965d-7e33-4f70-9513-bd80182c9801.png"
+      image: "/site-assets/a51e965d-7e33-4f70-9513-bd80182c9801.png"
     },
     {
       id: "increase-property-value-2025",
@@ -82,7 +82,7 @@ const Blog = () => {
       category: "Market Insights",
       readTime: "5 min read",
       publishDate: "Dec 22, 2024",
-      image: "/lovable-uploads/93964642-fca7-4857-9526-0604452c8672.png"
+      image: "/site-assets/93964642-fca7-4857-9526-0604452c8672.png"
     }
   ];
 

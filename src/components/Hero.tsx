@@ -70,7 +70,7 @@ const Hero = () => {
                 <div className="w-[280px] h-[570px] bg-black rounded-[3rem] p-1 shadow-2xl">
                   <div className="w-full h-full bg-white rounded-[2.7rem] overflow-hidden relative">
                     <img 
-                      src="/lovable-uploads/f3867400-da62-456f-a6fb-5f11d7552fd6.png" 
+                      src="/site-assets/f3867400-da62-456f-a6fb-5f11d7552fd6.png" 
                       alt="Home+ Dashboard"
                       className="w-full h-full object-contain"
                     />
@@ -81,12 +81,12 @@ const Hero = () => {
               {/* Image Blocks */}
               <div className="space-y-6 mt-12">
                 <img 
-                  src="/lovable-uploads/7e9b46cc-0333-4916-bee4-be61cbf7212e.png" 
+                  src="/site-assets/7e9b46cc-0333-4916-bee4-be61cbf7212e.png" 
                   alt="Property Value"
                   className="w-56 h-auto rounded-xl"
                 />
                 <img 
-                  src="/lovable-uploads/10669364-e854-488a-8807-e7ad2b54837f.png" 
+                  src="/site-assets/10669364-e854-488a-8807-e7ad2b54837f.png" 
                   alt="Compliance & Documents"
                   className="w-56 h-auto rounded-xl"
                 />

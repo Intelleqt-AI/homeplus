@@ -98,7 +98,7 @@ const DetailedFeatures = () => {
                       {/* Main calendar image */}
                       <div className="relative rounded-2xl overflow-hidden shadow-strong">
                         <img 
-                          src="/lovable-uploads/bdc13c15-fd4d-45b9-8f6e-7a4b8ce3caa7.png" 
+                          src="/site-assets/bdc13c15-fd4d-45b9-8f6e-7a4b8ce3caa7.png" 
                           alt="Smart home calendar showing maintenance schedule"
                           className="w-full h-auto object-cover"
                         />
@@ -114,7 +114,7 @@ const DetailedFeatures = () => {
                             
                             {/* Calendar App Image */}
                             <img 
-                              src="/lovable-uploads/2a63de38-deca-4e50-9304-058bafa06c82.png" 
+                              src="/site-assets/2a63de38-deca-4e50-9304-058bafa06c82.png" 
                               alt="Home+ Calendar App Interface"
                               className="w-full h-full object-contain p-1"
                             />
@@ -130,7 +130,7 @@ const DetailedFeatures = () => {
                       {/* Main insights dashboard */}
                       <div className="relative rounded-2xl overflow-hidden shadow-strong">
                         <img 
-                          src="/lovable-uploads/efb07637-d7f5-40ed-af83-770cfdb35caa.png" 
+                          src="/site-assets/efb07637-d7f5-40ed-af83-770cfdb35caa.png" 
                           alt="Home insights dashboard showing property value and maintenance tracking"
                           className="w-full h-auto object-cover"
                         />
@@ -146,7 +146,7 @@ const DetailedFeatures = () => {
                             
                             {/* Home Dashboard App Image */}
                             <img 
-                              src="/lovable-uploads/34cddaf0-285a-45f5-887c-03e40cfe2940.png" 
+                              src="/site-assets/34cddaf0-285a-45f5-887c-03e40cfe2940.png" 
                               alt="Home+ Dashboard Interface"
                               className="w-full h-full object-contain p-1"
                             />
@@ -162,7 +162,7 @@ const DetailedFeatures = () => {
                       {/* Main documents table */}
                       <div className="relative rounded-2xl overflow-hidden shadow-strong">
                         <img 
-                          src="/lovable-uploads/a51e965d-7e33-4f70-9513-bd80182c9801.png" 
+                          src="/site-assets/a51e965d-7e33-4f70-9513-bd80182c9801.png" 
                           alt="Smart document vault with searchable home documents"
                           className="w-full h-auto object-cover"
                         />
@@ -178,7 +178,7 @@ const DetailedFeatures = () => {
                             
                             {/* Documents App Image */}
                             <img 
-                              src="/lovable-uploads/2c8aa9fb-719f-4e1a-af8a-cc734ee9f73a.png" 
+                              src="/site-assets/2c8aa9fb-719f-4e1a-af8a-cc734ee9f73a.png" 
                               alt="Home+ Documents Interface"
                               className="w-full h-full object-contain p-1"
                             />
@@ -194,7 +194,7 @@ const DetailedFeatures = () => {
                       {/* Main job leads interface */}
                       <div className="relative rounded-2xl overflow-hidden shadow-strong">
                         <img 
-                          src="/lovable-uploads/86788b6f-037f-4bdc-a8c4-50a51eb5b572.png" 
+                          src="/site-assets/86788b6f-037f-4bdc-a8c4-50a51eb5b572.png" 
                           alt="Job leads showing trusted trades with quotes and ratings"
                           className="w-full h-auto object-cover"
                         />
@@ -210,7 +210,7 @@ const DetailedFeatures = () => {
                             
                             {/* Get Quotes App Image */}
                             <img 
-                              src="/lovable-uploads/2166f6d3-62a1-4118-95dc-612c7b96e796.png" 
+                              src="/site-assets/2166f6d3-62a1-4118-95dc-612c7b96e796.png" 
                               alt="Home+ Get Quotes Interface"
                               className="w-full h-full object-contain p-1"
                             />

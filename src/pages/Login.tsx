@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Home, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import SocialSignInButtons from '@/components/auth/SocialSignInButtons';
 import Logo from '/homeplus-logo.png';
 
 const Login = () => {
@@ -137,6 +138,14 @@ const Login = () => {
             )}
           </button>
         </form>
+
+        {/* Social sign-in */}
+        <div className="mt-5">
+          <SocialSignInButtons
+            onSuccess={() => navigate('/dashboard')}
+            onError={message => setFormError(message)}
+          />
+        </div>
 
         {/* Footer */}
         <p className="mt-6 text-center text-sm text-muted-foreground">

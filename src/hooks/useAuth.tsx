@@ -64,6 +64,8 @@ interface AuthContextType {
   resendOTP: (pendingToken: string) => Promise<AuthResult>;
   cancelRegistration: (pendingToken: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
+  signInWithGoogle: (credential: string) => Promise<AuthResult>;
+  signInWithApple: (idToken: string, firstName?: string, lastName?: string) => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;
   refreshUser: () => Promise<void>;
 }
@@ -195,6 +197,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const signInWithGoogle = async (credential: string): Promise<AuthResult> => {
+    try {
+      const { data: res } = await apiClient.post('/api/v1/auth/social/google/', { credential }, skipRefresh);
+      const normalized = normalizeUser(extractUser(res));
+      queryClient.setQueryData([ME_URL], normalized);
+      return { error: null };
+    } catch (err: unknown) {
+      return { error: { message: extractError(err) } };
+    }
+  };
+
+  const signInWithApple = async (
+    idToken: string,
+    firstName?: string,
+    lastName?: string,
+  ): Promise<AuthResult> => {
+    try {
+      const { data: res } = await apiClient.post(
+        '/api/v1/auth/social/apple/',
+        { id_token: idToken, first_name: firstName, last_name: lastName },
+        skipRefresh,
+      );
+      const normalized = normalizeUser(extractUser(res));
+      queryClient.setQueryData([ME_URL], normalized);
+      return { error: null };
+    } catch (err: unknown) {
+      return { error: { message: extractError(err) } };
+    }
+  };
+
   const signOut = async (): Promise<AuthResult> => {
     queryClient.setQueryData([ME_URL], null);
     apiClient.post('/api/v1/auth/logout/', {}, skipRefresh).catch(() => {});
@@ -218,6 +250,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         resendOTP,
         cancelRegistration,
         signIn,
+        signInWithGoogle,
+        signInWithApple,
         signOut,
         refreshUser,
       }}

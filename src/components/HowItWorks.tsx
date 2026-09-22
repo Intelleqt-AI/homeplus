@@ -39,7 +39,7 @@ const HowItWorks = () => {
       id="how-it-works" 
       className="relative py-20 min-h-[80vh] bg-cover bg-center bg-no-repeat"
       style={{
-        backgroundImage: `url('/lovable-uploads/acf44c09-60bb-42e0-92c9-266e66dffe45.png')`
+        backgroundImage: `url('/site-assets/acf44c09-60bb-42e0-92c9-266e66dffe45.png')`
       }}
     >
       <div className="absolute inset-0 bg-black/20" />

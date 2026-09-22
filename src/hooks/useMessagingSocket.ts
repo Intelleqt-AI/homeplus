@@ -5,6 +5,11 @@ import { BASE_URL } from '@/lib/apiClient';
 import { CONVERSATIONS_URL, getMessagesUrl } from '@/lib/messaging';
 
 const MAX_BACKOFF_MS = 30000;
+// Consecutive attempts that closed without ever opening — e.g. every handshake
+// getting rejected (403) because the session is invalid. Capped so a stale/
+// invalid auth state can't retry forever; resets to 0 on any successful open,
+// so a real mid-session drop keeps reconnecting exactly as before.
+const MAX_FAILED_ATTEMPTS = 5;
 
 function buildWsUrl(): string {
   const httpBase = BASE_URL || window.location.origin;
@@ -26,6 +31,7 @@ export function useMessagingSocket() {
   const backoffRef = useRef(1000);
   const closedByUsRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failedAttemptsRef = useRef(0);
 
   useEffect(() => {
     if (!user) return undefined;
@@ -37,6 +43,7 @@ export function useMessagingSocket() {
 
       ws.onopen = () => {
         backoffRef.current = 1000;
+        failedAttemptsRef.current = 0;
       };
 
       ws.onmessage = (event) => {
@@ -66,6 +73,8 @@ export function useMessagingSocket() {
 
       ws.onclose = () => {
         if (closedByUsRef.current) return;
+        failedAttemptsRef.current += 1;
+        if (failedAttemptsRef.current > MAX_FAILED_ATTEMPTS) return;
         reconnectTimerRef.current = setTimeout(connect, backoffRef.current);
         backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS);
       };
