@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Home, ArrowRight, Check, Shield, Users, Star, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import SocialSignInButtons from '@/components/auth/SocialSignInButtons';
 import Logo from '/homeplus-logo.png';
 
 // ── validation ────────────────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ const SignUp = () => {
       return;
     }
     setErrors({});
+    setSubmitError('');
     setStep(s => s + 1);
   };
 
@@ -197,6 +199,13 @@ const SignUp = () => {
                 {/* ── Step 1 ── */}
                 {step === 1 && (
                   <div className="space-y-4">
+                    <SocialSignInButtons
+                      variant="signup"
+                      onSuccess={() => navigate('/dashboard')}
+                      onError={setSubmitError}
+                    />
+                    {submitError && <p className="text-sm text-destructive text-center">{submitError}</p>}
+
                     <div className="space-y-1.5">
                       <Label htmlFor="email">Email address</Label>
                       <Input
