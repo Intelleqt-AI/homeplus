@@ -9,7 +9,7 @@ import { toast } from "@/lib/toast";
 import { usePost } from "@/hooks/usePost";
 import useDelete from "@/hooks/useDelete";
 import { useAuth } from "@/hooks/useAuth";
-import { DeleteAccountDialog } from "./DeleteAccountDialog";
+import { DeleteAccountDialog, type DeleteAccountPayload } from "./DeleteAccountDialog";
 
 type Fields = { current: string; newPass: string; confirm: string };
 type Errors = Partial<Record<keyof Fields, string>>;
@@ -40,13 +40,17 @@ const Security = () => {
 
   const changePassword = usePost();
   const deleteAccount = useDelete();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const navigate = useNavigate();
+  // Google/Apple-only accounts have no password (older API responses lack the field → assume one).
+  const hasPassword = user?._raw?.has_password !== false;
+  const providers = (user?._raw?.auth_providers as string[] | undefined) ?? [];
+  const providerName = providers.includes("apple") && !providers.includes("google") ? "Apple" : "Google";
 
-  const handleDeleteAccount = async (password: string) => {
+  const handleDeleteAccount = async (payload: DeleteAccountPayload) => {
     await deleteAccount.mutateAsync({
       url: "/api/v1/auth/delete-account/",
-      data: { password },
+      data: payload,
     });
     await signOut();
     toast.success("Your account has been deleted.");
@@ -106,6 +110,12 @@ const Security = () => {
           <CardTitle>Change Password</CardTitle>
         </CardHeader>
         <CardContent>
+          {!hasPassword ? (
+            <p className="text-sm text-muted-foreground">
+              You sign in with {providerName}, so there's no password to change. To also sign in with
+              email and password, sign out and use <strong>Forgot password?</strong> on the login page.
+            </p>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {inputFields.map(({ key, label }) => (
               <div key={key} className="space-y-1.5">
@@ -160,6 +170,7 @@ const Security = () => {
               </Button>
             </div>
           </form>
+          )}
         </CardContent>
       </Card>
 
@@ -183,6 +194,7 @@ const Security = () => {
         isOpen={deleteOpen}
         onClose={() => setDeleteOpen(false)}
         onConfirm={handleDeleteAccount}
+        hasPassword={hasPassword}
       />
     </div>
   );

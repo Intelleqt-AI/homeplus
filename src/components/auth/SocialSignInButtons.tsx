@@ -21,10 +21,14 @@ declare global {
   }
 }
 
+export type ProviderCredential = { provider: 'google' | 'apple'; token: string };
+
 interface SocialSignInButtonsProps {
-  onSuccess: () => void;
+  onSuccess?: () => void;
   onError: (message: string) => void;
-  variant?: 'signin' | 'signup';
+  variant?: 'signin' | 'signup' | 'reauth';
+  /** When set, hand the provider token back (e.g. to re-confirm identity) instead of signing in. */
+  onCredential?: (credential: ProviderCredential) => void;
 }
 
 const APPLE_SDK_SRC = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
@@ -37,8 +41,9 @@ const Divider = ({ label }: { label: string }) => (
   </div>
 );
 
-const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin' }: SocialSignInButtonsProps) => {
+const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin', onCredential }: SocialSignInButtonsProps) => {
   const isSignup = variant === 'signup';
+  const isReauth = variant === 'reauth';
   const { signInWithGoogle, signInWithApple } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(320);
@@ -80,9 +85,13 @@ const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin' }: SocialS
       onError('Google sign-in failed. Please try again.');
       return;
     }
+    if (onCredential) {
+      onCredential({ provider: 'google', token: credentialResponse.credential });
+      return;
+    }
     const { error } = await signInWithGoogle(credentialResponse.credential);
     if (error) onError(error.message);
-    else onSuccess();
+    else onSuccess?.();
   };
 
   const handleAppleClick = async () => {
@@ -90,13 +99,17 @@ const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin' }: SocialS
     setAppleLoading(true);
     try {
       const res = await window.AppleID.auth.signIn();
+      if (onCredential) {
+        onCredential({ provider: 'apple', token: res.authorization.id_token });
+        return;
+      }
       const { error } = await signInWithApple(
         res.authorization.id_token,
         res.user?.name?.firstName,
         res.user?.name?.lastName,
       );
       if (error) onError(error.message);
-      else onSuccess();
+      else onSuccess?.();
     } catch {
       // User closed the popup or Apple returned an error — not worth surfacing as a form error.
     } finally {
@@ -108,7 +121,7 @@ const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin' }: SocialS
 
   return (
     <div className="space-y-3">
-      {!isSignup && <Divider label="Or continue with" />}
+      {!isSignup && !isReauth && <Divider label="Or continue with" />}
 
       <div ref={containerRef} className="flex flex-col items-center gap-2.5 w-full">
         {googleClientId && (

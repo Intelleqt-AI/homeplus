@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Trash2, AlertTriangle } from "lucide-react";
+import { Trash2, AlertTriangle, CheckCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,27 +13,39 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import SocialSignInButtons, { type ProviderCredential } from "@/components/auth/SocialSignInButtons";
 
 const CONFIRMATION_TEXT = "DELETE";
+
+export type DeleteAccountPayload = { password: string } | { provider: ProviderCredential["provider"]; credential: string };
+
+const hasSocialButtons = !!(import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_APPLE_CLIENT_ID);
 
 export const DeleteAccountDialog = ({
   isOpen,
   onClose,
   onConfirm,
+  hasPassword,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (password: string) => Promise<void>;
+  onConfirm: (payload: DeleteAccountPayload) => Promise<void>;
+  /** False for users who only sign in with Google/Apple — they re-confirm with the provider instead. */
+  hasPassword: boolean;
 }) => {
   const [password, setPassword] = useState("");
+  const [providerCredential, setProviderCredential] = useState<ProviderCredential | null>(null);
   const [confirmationInput, setConfirmationInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isValid = password.length > 0 && confirmationInput.trim() === CONFIRMATION_TEXT;
+  const identityConfirmed = hasPassword ? password.length > 0 : !!providerCredential;
+  const isValid = identityConfirmed && confirmationInput.trim() === CONFIRMATION_TEXT;
+  const providerName = providerCredential?.provider === "apple" ? "Apple" : "Google";
 
   const reset = () => {
     setPassword("");
+    setProviderCredential(null);
     setConfirmationInput("");
     setError(null);
   };
@@ -49,16 +61,20 @@ export const DeleteAccountDialog = ({
     setIsDeleting(true);
     setError(null);
     try {
-      await onConfirm(password);
+      await onConfirm(
+        hasPassword
+          ? { password }
+          : { provider: providerCredential!.provider, credential: providerCredential!.token },
+      );
       reset();
       onClose();
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { errors?: { password?: string[] }; message?: string } } })
-          ?.response?.data?.errors?.password?.[0] ??
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Failed to delete account.";
-      setError(message);
+      const data = (err as { response?: { data?: { errors?: Record<string, string | string[]>; message?: string } } })
+        ?.response?.data;
+      const pick = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
+      const credentialError = pick(data?.errors?.credential);
+      if (credentialError) setProviderCredential(null);
+      setError(pick(data?.errors?.password) ?? credentialError ?? data?.message ?? "Failed to delete account.");
     } finally {
       setIsDeleting(false);
     }
@@ -80,17 +96,51 @@ export const DeleteAccountDialog = ({
         </DialogDescription>
 
         <div className="mt-2 space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="delete-account-password">Confirm your password</Label>
-            <Input
-              id="delete-account-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              disabled={isDeleting}
-            />
-          </div>
+          {hasPassword ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="delete-account-password">Confirm your password</Label>
+              <Input
+                id="delete-account-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                disabled={isDeleting}
+              />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>Confirm it's you</Label>
+              {providerCredential ? (
+                <div className="flex items-center justify-between gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 text-green-700">
+                    <CheckCircle className="w-4 h-4" /> Confirmed with {providerName}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:underline"
+                    onClick={() => setProviderCredential(null)}
+                    disabled={isDeleting}
+                  >
+                    Use a different account
+                  </button>
+                </div>
+              ) : hasSocialButtons ? (
+                <SocialSignInButtons
+                  variant="reauth"
+                  onCredential={(c) => {
+                    setError(null);
+                    setProviderCredential(c);
+                  }}
+                  onError={setError}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Set a password first: sign out and use <strong>Forgot password?</strong> on the login page.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <p className="text-sm text-gray-700">
