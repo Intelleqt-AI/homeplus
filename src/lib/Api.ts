@@ -394,6 +394,11 @@ const normLead = (job: any) => ({
       email: b.contractor_email || '',
     },
     tradepilot_profile: b.tradepilot_profile || null,
+    match_score: b.match_score ?? null,
+    distance_km: b.distance_km ?? null,
+    tag: b.tag ?? null,
+    tag_kind: b.tag_kind ?? null,
+    rank: b.rank ?? null,
   })),
 });
 

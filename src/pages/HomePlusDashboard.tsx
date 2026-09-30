@@ -387,9 +387,10 @@ const HomePlusDashboard = () => {
   // TradePilot — quotes in: live from /api/v1/jobs/quotes-summary/ (real bids).
   const quotes = quotesResp?.data ?? null;
   const TAG_CLS: Record<string, string> = {
+    best_deal: 'bg-amber-100 text-amber-700',
     best_price: 'bg-green-100 text-green-700',
-    fastest: 'bg-blue-100 text-blue-700',
-    top_rated: 'bg-muted text-muted-foreground',
+    top_rated: 'bg-amber-50 text-amber-700',
+    closest: 'bg-blue-100 text-blue-700',
   };
   const recommendedName = quotes?.quotes.find(q => q.bid_id === quotes.recommended_bid_id)?.name ?? 'this trade';
   const refreshQuotes = () => {

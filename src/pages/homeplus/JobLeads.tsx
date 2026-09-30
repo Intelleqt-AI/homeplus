@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   MessageSquare,
   Filter,
@@ -95,6 +95,11 @@ interface Bid {
   conversation_id: string | null;
   bidder: { first_name: string; last_name: string; email: string };
   tradepilot_profile: TradePilotProfile | null;
+  match_score: number | null;
+  distance_km: number | null;
+  tag: string | null;
+  tag_kind: 'best_deal' | 'best_price' | 'top_rated' | 'closest' | null;
+  rank: number | null;
 }
 
 interface PropertyData {
@@ -800,6 +805,34 @@ const statusColors: Record<string, string> = {
 // hasn't submitted a price yet. Rendered as "Interested — awaiting quote".
 const isInterestedOnly = (b: { status: string }) => b.status === 'purchased';
 
+const KM_TO_MILES = 0.621371;
+const fmtDist = (km: number) =>
+  km * KM_TO_MILES < 1 ? '<1 mile' : `${Math.round(km * KM_TO_MILES)} miles away`;
+
+type SortBy = 'match' | 'price_asc' | 'price_desc' | 'rating' | 'distance';
+const sortBids = (bids: Bid[], sort: SortBy): Bid[] => {
+  const quoted = bids.filter(b => !isInterestedOnly(b));
+  const unquoted = bids.filter(isInterestedOnly);
+  const sorted = [...quoted].sort((a, b) => {
+    switch (sort) {
+      case 'match': return (a.rank ?? 999) - (b.rank ?? 999);
+      case 'price_asc': return a.proposedValue - b.proposedValue;
+      case 'price_desc': return b.proposedValue - a.proposedValue;
+      case 'rating': return ((b.tradepilot_profile?.avg_rating ?? 0) - (a.tradepilot_profile?.avg_rating ?? 0));
+      case 'distance': return (a.distance_km ?? 999) - (b.distance_km ?? 999);
+      default: return 0;
+    }
+  });
+  return [...sorted, ...unquoted];
+};
+
+const BID_TAG_CLS: Record<string, string> = {
+  best_deal: 'bg-amber-50 text-amber-700',
+  best_price: 'bg-green-50 text-green-700',
+  top_rated: 'bg-amber-50 text-amber-700',
+  closest: 'bg-blue-50 text-blue-700',
+};
+
 const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailModalProps) => {
   const [showUnverifiedWarning, setShowUnverifiedWarning] = useState(false);
   if (!bid || !job) return null;
@@ -1239,6 +1272,7 @@ interface JobFilters {
 
 const JobLeads = () => {
   const [compareMode, setCompareMode] = useState<Record<string, boolean>>({});
+  const [bidSort, setBidSort] = useState<SortBy>('match');
   const [selectedBidDetail, setSelectedBidDetail] = useState<Bid | null>(null);
   const [selectedBidJob, setSelectedBidJob] = useState<Job | null>(null);
   const [rateBidTarget, setRateBidTarget] = useState<{ job: Job; bid: Bid } | null>(null);
@@ -1676,11 +1710,27 @@ const JobLeads = () => {
                     {/* Quotes section */}
                     {job.bids.length > 0 && compareMode[job.id] && (
                       <div className="mt-4 pt-4 border-t border-[#E8E8E8]">
+                        {job.bids.filter(b => !isInterestedOnly(b)).length >= 2 && (
+                          <div className="flex justify-end mb-3">
+                            <Select value={bidSort} onValueChange={v => setBidSort(v as SortBy)}>
+                              <SelectTrigger className="w-[180px] h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="match">Best match</SelectItem>
+                                <SelectItem value="price_asc">Price: low → high</SelectItem>
+                                <SelectItem value="price_desc">Price: high → low</SelectItem>
+                                <SelectItem value="rating">Highest rated</SelectItem>
+                                <SelectItem value="distance">Closest</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          {job.bids.map(bid => {
+                          {sortBids(job.bids, bidSort).map(bid => {
                             const profile = bid.tradepilot_profile;
                             return (
-                              <div key={bid.id} className="bg-white rounded-[10px] p-4 border border-[#E8E8E3]">
+                              <div key={bid.id} className={`bg-white rounded-[10px] p-4 border ${bid.rank === 1 ? 'ring-2 ring-amber-200/60 border-amber-200 bg-amber-50/30' : 'border-[#E8E8E3]'}`}>
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center gap-1 min-w-0">
                                     <h4 className="text-sm font-medium text-[#1A1A1A] truncate">
@@ -1692,16 +1742,27 @@ const JobLeads = () => {
                                       <VerifiedBadge size="sm" has_insurance={profile.has_insurance} has_license={profile.has_license} />
                                     )}
                                   </div>
-                                  {profile?.avg_rating !== null && profile?.avg_rating !== undefined ? (
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                                      <span className="text-xs text-[#6B6B6B]">{profile.avg_rating}</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-xs text-gray-400 shrink-0">New</span>
-                                  )}
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {bid.tag && bid.tag_kind && (
+                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${BID_TAG_CLS[bid.tag_kind] ?? ''}`}>{bid.tag}</span>
+                                    )}
+                                    {profile?.avg_rating !== null && profile?.avg_rating !== undefined ? (
+                                      <div className="flex items-center gap-1">
+                                        <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                                        <span className="text-xs text-[#6B6B6B]">{profile.avg_rating}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">New</span>
+                                    )}
+                                  </div>
                                 </div>
-                                {bid.company_name && <p className="text-xs text-gray-500 mb-1.5">{bid.company_name}</p>}
+                                {bid.company_name && <p className="text-xs text-gray-500 mb-0.5">{bid.company_name}</p>}
+                                {bid.distance_km != null && !isInterestedOnly(bid) && (
+                                  <p className="flex items-center gap-1 text-[11px] text-gray-400 mb-1.5">
+                                    <MapPin className="h-3 w-3 shrink-0" />
+                                    {fmtDist(bid.distance_km)}
+                                  </p>
+                                )}
                                 <div className="space-y-1 text-xs text-[#6B6B6B]">
                                   {isInterestedOnly(bid) ? (
                                     <div className="flex items-center gap-1.5 rounded-md bg-indigo-50 px-2 py-1.5 text-[11px] font-medium text-indigo-700">

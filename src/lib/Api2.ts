@@ -417,9 +417,11 @@ export type QuoteRow = {
   amount: number;
   price: string;
   tag: string | null;
-  tag_kind: 'best_price' | 'fastest' | 'top_rated' | null;
+  tag_kind: 'best_deal' | 'best_price' | 'top_rated' | 'closest' | null;
   highlight: boolean;
   profile_photo_url: string | null;
+  score: number | null;
+  distance_km: number | null;
 };
 
 export type QuotesSummary = {
