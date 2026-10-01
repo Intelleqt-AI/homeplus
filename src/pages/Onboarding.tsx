@@ -389,11 +389,11 @@ function StepProperty({
 }
 
 function StepNotifications({
-  prefs, setPrefs, hasPhone,
-}: { prefs: NotifPrefs; setPrefs: (p: NotifPrefs) => void; hasPhone: boolean }) {
+  prefs, setPrefs,
+}: { prefs: NotifPrefs; setPrefs: (p: NotifPrefs) => void }) {
   const items: { key: keyof NotifPrefs; label: string; desc: string }[] = [
     { key: 'email_notifications', label: 'Email updates',      desc: 'Reminders, certificates, service alerts' },
-    { key: 'sms_notifications',   label: 'SMS alerts',         desc: hasPhone ? 'Urgent alerts to your phone' : 'Add a phone number to enable this' },
+    { key: 'sms_notifications',   label: 'SMS alerts',         desc: 'Urgent alerts to your phone. Coming soon.' },
     { key: 'calendar_reminders',  label: 'Calendar events',    desc: 'Add jobs and services to your calendar' },
     { key: 'marketing_emails',    label: 'Tips & offers',      desc: 'Home advice, deals, product news' },
   ];
@@ -412,7 +412,7 @@ function StepNotifications({
 
       <div className="space-y-3">
         {items.map(item => {
-          const disabled = item.key === 'sms_notifications' && !hasPhone;
+          const disabled = item.key === 'sms_notifications';
           const checked = !disabled && prefs[item.key];
           return (
             <button
@@ -689,7 +689,7 @@ const Onboarding = () => {
 
   const handleNotifContinue = async () => {
     setSubmitting(true);
-    const payload = phone.trim() ? notifPrefs : { ...notifPrefs, sms_notifications: false };
+    const payload = { ...notifPrefs, sms_notifications: false };
     try {
       await apiClient.patch('/api/v1/auth/notification-preferences/', payload);
     } catch {
@@ -798,7 +798,7 @@ const Onboarding = () => {
                 animate="center"
                 exit="exit"
               >
-                <StepNotifications prefs={notifPrefs} setPrefs={setNotifPrefs} hasPhone={!!phone.trim()} />
+                <StepNotifications prefs={notifPrefs} setPrefs={setNotifPrefs} />
               </motion.div>
             )}
 

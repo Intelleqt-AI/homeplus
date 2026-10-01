@@ -22,7 +22,7 @@ const ITEMS: { key: keyof Omit<NotificationPrefs, 'updated_at'>; label: string; 
   {
     key: 'sms_notifications',
     label: 'SMS Notifications',
-    description: 'Receive urgent alerts via SMS (coming soon).',
+    description: 'Receive urgent alerts via SMS. Coming soon.',
   },
   {
     key: 'calendar_reminders',
@@ -98,28 +98,31 @@ const Notifications = () => {
           </div>
         )}
 
-        {ITEMS.map((item, index) => (
-          <div
-            key={item.key}
-            className={`flex items-center justify-between py-4 ${index < ITEMS.length - 1 ? 'border-b' : ''}`}
-          >
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <p className="font-medium text-sm">{item.label}</p>
-                {savedKey === item.key && (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                )}
+        {ITEMS.map((item, index) => {
+          const isSms = item.key === 'sms_notifications';
+          return (
+            <div
+              key={item.key}
+              className={`flex items-center justify-between py-4 ${index < ITEMS.length - 1 ? 'border-b' : ''} ${isSms ? 'opacity-50' : ''}`}
+            >
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-sm">{item.label}</p>
+                  {savedKey === item.key && (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">{item.description}</p>
               </div>
-              <p className="text-sm text-muted-foreground">{item.description}</p>
+              <Switch
+                checked={isSms ? false : prefs ? prefs[item.key] : false}
+                onCheckedChange={() => !isSms && handleToggle(item.key)}
+                disabled={isSms || saving === item.key}
+                aria-label={item.label}
+              />
             </div>
-            <Switch
-              checked={prefs ? prefs[item.key] : false}
-              onCheckedChange={() => handleToggle(item.key)}
-              disabled={saving === item.key}
-              aria-label={item.label}
-            />
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );
