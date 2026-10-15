@@ -125,7 +125,7 @@ const VerifyEmail = () => {
         </div>
 
         {/* Card */}
-        <div className="bg-card border rounded-xl shadow-sm p-6 space-y-6">
+        <div className="bg-card border rounded-xl shadow-sm p-4 sm:p-6 space-y-6">
           {/* Header */}
           <div className="text-center space-y-2">
             <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -135,7 +135,7 @@ const VerifyEmail = () => {
             <p className="text-sm text-muted-foreground">
               We sent a 6-digit code to{' '}
               {pendingEmail ? (
-                <span className="font-medium text-foreground">{pendingEmail}</span>
+                <span className="font-medium text-foreground break-all">{pendingEmail}</span>
               ) : (
                 'your email address'
               )}
@@ -144,7 +144,7 @@ const VerifyEmail = () => {
 
           {/* OTP inputs */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex gap-2 justify-center" onPaste={handlePaste}>
+            <div className="flex gap-1.5 xs:gap-2 justify-center" onPaste={handlePaste}>
               {otp.map((digit, i) => (
                 <input
                   key={i}
@@ -156,7 +156,7 @@ const VerifyEmail = () => {
                   onChange={e => handleChange(i, e.target.value)}
                   onKeyDown={e => handleKeyDown(i, e)}
                   disabled={loading}
-                  className={`w-11 h-13 text-center text-xl font-semibold rounded-md border bg-background
+                  className={`w-10 xs:w-11 h-13 text-center text-xl font-semibold rounded-md border bg-background
                     focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
                     disabled:opacity-50 transition-colors
                     ${error ? 'border-destructive' : 'border-input'}

@@ -61,10 +61,19 @@ const NotificationBell = () => {
   });
 
   useLayoutEffect(() => {
-    if (open && buttonRef.current) {
+    if (!open) return;
+    const updatePos = () => {
+      if (!buttonRef.current) return;
       const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + window.scrollY + 8, right: window.innerWidth - rect.right });
-    }
+      const panelWidth = Math.min(384, window.innerWidth - 16);
+      setPanelPos({
+        top: rect.bottom + 8,
+        right: Math.max(8, Math.min(window.innerWidth - rect.right, window.innerWidth - panelWidth - 8)),
+      });
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    return () => window.removeEventListener('resize', updatePos);
   }, [open]);
 
   useEffect(() => {
@@ -83,7 +92,7 @@ const NotificationBell = () => {
     <div
       ref={panelRef}
       style={{ position: 'fixed', top: panelPos.top, right: panelPos.right, zIndex: 9999 }}
-      className="w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+      className="w-[calc(100vw-1rem)] max-w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
@@ -106,7 +115,7 @@ const NotificationBell = () => {
         )}
       </div>
 
-      <div className="max-h-[420px] overflow-y-auto divide-y divide-slate-50">
+      <div className="max-h-[min(420px,60dvh)] overflow-y-auto divide-y divide-slate-50">
         {notifications.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center text-center">
             <div className="bg-slate-100 p-4 rounded-full mb-3">
@@ -142,7 +151,7 @@ const NotificationBell = () => {
                 </div>
                 <button
                   onClick={e => { e.stopPropagation(); deleteNotif.mutate(n.id); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-50 shrink-0"
+                  className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded hover:bg-red-50 shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500 transition-colors" />
                 </button>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import {
   MessageSquare,
   Filter,
@@ -26,7 +26,19 @@ import {
   File as FileIcon,
   X,
   Loader2,
+  Info,
+  MoveRight,
+  UserRound,
+  FileCheck,
+  CheckCheck,
 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import DocsUploadDialog from '@/components/docsUploadDialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { documentLink } from '@/components/insights/systemHealthActions';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ChatPanel from '@/components/chat/ChatPanel';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -36,8 +48,28 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { createJob, fetchLeads, modifyBid, updateJob, deleteJob, rateBid, postData, deleteData } from '@/lib/Api';
+import {
+  createJob,
+  fetchLeads,
+  fetchUnassignedLeads,
+  assignJobProperty,
+  modifyBid,
+  updateJob,
+  deleteJob,
+  rateBid,
+  postData,
+  deleteData,
+  fetchData,
+  normLead,
+} from '@/lib/Api';
+import { CONVERSATIONS_URL } from '@/lib/messaging';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useQueryClient } from '@tanstack/react-query';
 import useFetch from '@/hooks/useFetch';
 import { usePost } from '@/hooks/usePost';
@@ -47,6 +79,10 @@ import { toast } from '@/lib/toast';
 import { categoryConfig } from '@/lib/jobCategories';
 import { TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { cn } from '@/lib/utils';
+import { useActiveProperty } from '@/hooks/useActiveProperty';
+import { useAuth } from '@/hooks/useAuth';
+import { attributionLabel, type UserBrief } from '@/lib/household';
+import TraderName from '@/components/trader/TraderName';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -82,6 +118,8 @@ interface TradePilotProfile {
 interface Bid {
   id: string;
   proposedValue: number;
+  /** Last different price before the current one — set once a trader revises their quote. */
+  previousAmount?: number | null;
   status: string;
   Available: string;
   bid_by: string;
@@ -132,6 +170,14 @@ interface Job {
   started_at: string | null;
   completed_at: string | null;
   bids: Bid[];
+  /** Family members: who posted it. null = former member; undefined = older API. */
+  created_by?: UserBrief | null;
+  /** The certificate this job should leave behind (gas safety check → CP12…), and the one uploaded. */
+  expected_certificate?: {
+    type: string; label: string;
+    upload: { name?: string; discipline?: string; doc_type?: string; category?: string };
+  } | null;
+  certificate_document?: { id: string; name: string; expires_at: string | null } | null;
 }
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
@@ -150,46 +196,59 @@ function VerifiedBadge({
   has_insurance?: boolean;
   has_license?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  // Hover opens it for mouse users; touch/pen fall through to the trigger's tap-to-toggle.
+  const hover = (next: boolean) => (e: PointerEvent) => {
+    if (e.pointerType === 'mouse') setOpen(next);
+  };
   return (
-    <TooltipProvider delayDuration={150}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <BadgeCheck
-            className={`${size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'} text-blue-500 shrink-0 cursor-help`}
-            aria-label="Verified trader"
-          />
-        </TooltipTrigger>
-        <TooltipContent side="top" className="p-0 bg-transparent border-0 shadow-none">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden w-56">
-            <div className="bg-primary px-3 py-2.5 flex items-center gap-2">
-              <BadgeCheck className="h-4 w-4 text-white shrink-0" />
-              <span className="text-sm font-semibold text-white">Verified Trader</span>
-            </div>
-            <div className="px-3 py-2.5 space-y-2">
-              <p className="text-xs text-slate-500 leading-relaxed">Manually reviewed and verified by the HomePlus team.</p>
-              <div className="space-y-1.5">
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Verified trader"
+          onPointerEnter={hover(true)}
+          onPointerLeave={hover(false)}
+          className="inline-flex shrink-0 cursor-help rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <BadgeCheck className={`${size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'} text-blue-500`} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        className="w-auto p-0 bg-transparent border-0 shadow-none"
+        onOpenAutoFocus={e => e.preventDefault()}
+        onCloseAutoFocus={e => e.preventDefault()}
+      >
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden w-56">
+          <div className="bg-primary px-3 py-2.5 flex items-center gap-2">
+            <BadgeCheck className="h-4 w-4 text-white shrink-0" />
+            <span className="text-sm font-semibold text-white">Verified Trader</span>
+          </div>
+          <div className="px-3 py-2.5 space-y-2">
+            <p className="text-xs text-slate-500 leading-relaxed">Manually reviewed and verified by the HomePlus team.</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs text-slate-700">
+                <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                <span>Identity confirmed</span>
+              </div>
+              {has_insurance && (
                 <div className="flex items-center gap-2 text-xs text-slate-700">
                   <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
-                  <span>Identity confirmed</span>
+                  <span>Public liability insurance on file</span>
                 </div>
-                {has_insurance && (
-                  <div className="flex items-center gap-2 text-xs text-slate-700">
-                    <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
-                    <span>Public liability insurance on file</span>
-                  </div>
-                )}
-                {has_license && (
-                  <div className="flex items-center gap-2 text-xs text-slate-700">
-                    <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
-                    <span>Trade license verified</span>
-                  </div>
-                )}
-              </div>
+              )}
+              {has_license && (
+                <div className="flex items-center gap-2 text-xs text-slate-700">
+                  <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                  <span>Trade license verified</span>
+                </div>
+              )}
             </div>
           </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -351,7 +410,8 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
       return;
     }
     saveJob({
-      ...(propertyId ? { property: propertyId } : { property: null }),
+      // A job always stays linked to a home (it can move to another of the owner's homes).
+      ...(propertyId ? { property: propertyId } : {}),
       title: title.trim(),
       service,
       category: category || '',
@@ -371,11 +431,11 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-[680px] max-h-[90dvh] overflow-y-auto p-0">
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+        <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-gray-100">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <DialogTitle className="text-lg font-semibold text-gray-900 flex items-center justify-center sm:justify-start gap-2">
               {locked && <Lock className="h-4 w-4 text-amber-500 shrink-0" />}
               Edit Job
             </DialogTitle>
@@ -387,7 +447,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
           </DialogHeader>
         </div>
 
-        <div className="px-6 py-5 space-y-6">
+        <div className="px-4 sm:px-6 py-5 space-y-6">
           {/* Lock banner */}
           {locked && (
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
@@ -425,28 +485,18 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                         )}
                       </span>
                     ) : (
-                      <span>Select a property (optional)</span>
+                      <span>Select a property</span>
                     )}
                   </span>
                   <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-[500px] p-0" align="start">
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0" align="start">
                 <Command>
                   <CommandInput placeholder="Search properties…" />
                   <CommandList>
                     <CommandEmpty>No properties found.</CommandEmpty>
                     <CommandGroup>
-                      <CommandItem
-                        value=""
-                        onSelect={() => {
-                          setPropertyId('');
-                          setPropertyOpen(false);
-                        }}
-                      >
-                        <Check className={cn('mr-2 h-3.5 w-3.5', !propertyId ? 'opacity-100' : 'opacity-0')} />
-                        None (no property)
-                      </CommandItem>
                       {properties.map(p => (
                         <CommandItem
                           key={p.id}
@@ -745,7 +795,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-100">
           {deleteConfirm ? (
             <div className="space-y-3">
               <p className="text-sm text-red-600 font-medium text-center">Delete &ldquo;{job.name}&rdquo;? This cannot be undone.</p>
@@ -759,7 +809,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
               </div>
             </div>
           ) : (
-            <div className="flex gap-3">
+            <div className="flex flex-col-reverse xs:flex-row gap-2 xs:gap-3">
               {!locked && (
                 <Button className="flex-1" disabled={saving} onClick={handleSave}>
                   {saving ? 'Saving…' : 'Save Changes'}
@@ -859,11 +909,11 @@ const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailMod
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-[580px] max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-[580px] max-h-[90dvh] overflow-y-auto p-0">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               {bid.tradepilot_profile?.profile_photo_url ? (
                 <img
                   src={bid.tradepilot_profile.profile_photo_url}
@@ -875,13 +925,15 @@ const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailMod
                   {bid.bidder.first_name?.[0]?.toUpperCase() || '?'}
                 </div>
               )}
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">{contractorName}</h2>
-                {bid.company_name && <p className="text-sm text-gray-500">{bid.company_name}</p>}
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-gray-900 truncate">
+                  <TraderName name={contractorName} traderId={profile?.user_id} />
+                </h2>
+                {bid.company_name && <p className="text-sm text-gray-500 truncate">{bid.company_name}</p>}
               </div>
             </div>
             <span
-              className={`px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColors[bid.status] ?? statusColors.pending}`}
+              className={`mr-6 shrink-0 px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColors[bid.status] ?? statusColors.pending}`}
             >
               {interestedOnly ? 'Interested' : bid.status}
             </span>
@@ -913,6 +965,11 @@ const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailMod
                     `£${bid.proposedValue.toLocaleString()}`
                   )}
                 </p>
+                {!interestedOnly && bid.previousAmount != null && (
+                  <p className="text-xs text-gray-400">
+                    was <span className="line-through">£{bid.previousAmount.toLocaleString()}</span>
+                  </p>
+                )}
               </div>
               <div className="bg-gray-50 rounded-xl px-4 py-3">
                 <p className="text-xs text-gray-500 mb-0.5">Available</p>
@@ -941,7 +998,7 @@ const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailMod
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <Mail className="h-4 w-4 text-gray-400 shrink-0" />
-                <span>{bid.bidder.email || '—'}</span>
+                <span className="min-w-0 break-all">{bid.bidder.email || '—'}</span>
               </div>
               {bid.contractor_phone && (
                 <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -958,10 +1015,10 @@ const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailMod
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">TradePilot Profile</p>
               <div className="border border-gray-200 rounded-xl overflow-hidden">
                 {/* Profile header */}
-                <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div>
+                <div className="bg-gray-50 px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <div className="flex mb-1 items-center gap-1.5">
-                      <p className="text-sm font-semibold text-gray-900">{profile.business_name}</p>
+                      <p className="min-w-0 text-sm font-semibold text-gray-900 [overflow-wrap:anywhere]">{profile.business_name}</p>
                       {profile.is_verified ? (
                         <VerifiedBadge size="md" has_insurance={profile.has_insurance} has_license={profile.has_license} />
                       ) : (
@@ -975,34 +1032,34 @@ const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailMod
                     </p>
                   </div>
                   {profile.avg_rating !== null ? (
-                    <div className="flex items-center gap-1 bg-yellow-50 px-2.5 py-1 rounded-full">
+                    <div className="flex items-center gap-1 bg-yellow-50 px-2.5 py-1 rounded-full shrink-0">
                       <Star className="h-3.5 w-3.5 text-yellow-400 fill-current" />
                       <span className="text-xs font-semibold text-yellow-700">{profile.avg_rating}</span>
                       <span className="text-xs text-yellow-600">({profile.total_ratings})</span>
                     </div>
                   ) : (
-                    <span className="text-xs text-gray-400">No ratings yet</span>
+                    <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">No ratings yet</span>
                   )}
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-3 divide-x divide-gray-100">
-                  <div className="px-4 py-3 text-center">
+                  <div className="px-2 sm:px-4 py-3 text-center">
                     <p className="text-lg font-bold text-gray-900">{profile.completed_jobs}</p>
                     <p className="text-xs text-gray-500">Jobs done</p>
                   </div>
-                  <div className="px-4 py-3 text-center">
+                  <div className="px-2 sm:px-4 py-3 text-center">
                     <p className="text-lg font-bold text-gray-900">{profile.total_ratings}</p>
                     <p className="text-xs text-gray-500">Reviews</p>
                   </div>
-                  <div className="px-4 py-3 text-center">
+                  <div className="px-2 sm:px-4 py-3 text-center">
                     <p className="text-lg font-bold text-gray-900">{profile.avg_rating ?? '—'}</p>
                     <p className="text-xs text-gray-500">Avg rating</p>
                   </div>
                 </div>
 
                 {/* Credentials */}
-                <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-3">
+                <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap items-center gap-2 sm:gap-3">
                   <span
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${profile.has_insurance ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'}`}
                   >
@@ -1040,7 +1097,7 @@ const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailMod
                   This trader has not been verified by HomePlus. Their identity and credentials have not been reviewed. Proceeding is at
                   your own risk.
                 </p>
-                <div className="flex gap-2 mt-3">
+                <div className="flex flex-wrap gap-2 mt-3">
                   <Button
                     size="sm"
                     variant="outline"
@@ -1066,7 +1123,7 @@ const BidDetailModal = ({ bid, job, onClose, onAccept, onMessage }: BidDetailMod
         )}
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+        <div className="px-6 py-4 border-t border-gray-100 flex flex-col-reverse xs:flex-row gap-2 xs:gap-3">
           {canAccept && !showUnverifiedWarning && (
             <Button className="flex-1" onClick={handleAcceptClick}>
               Accept Bid
@@ -1170,7 +1227,7 @@ const RateTradesmanModal = ({ job, bid, onClose, onRated }: RateModalProps) => {
               {alreadyRated ? 'Your Feedback' : 'Rate the Tradesman'}
             </DialogTitle>
             <p className="text-sm text-gray-500 mt-0.5">
-              {contractorName} · {job.name}
+              <TraderName name={contractorName} traderId={bid?.tradepilot_profile?.user_id} /> · {job.name}
             </p>
           </DialogHeader>
         </div>
@@ -1293,7 +1350,12 @@ const JobLeads = () => {
     setChatSubtitle(job.name);
     setChatOpen(true);
   };
-  const [leads, setLeads] = useState<Job[]>([]);
+  const { activePropertyId, activeProperty, properties } = useActiveProperty();
+  const { user: authUser } = useAuth();
+  const [propertyLeads, setPropertyLeads] = useState<Job[]>([]);
+  // Jobs with no property show in their own tab under every property.
+  const [jobsTab, setJobsTab] = useState<'property' | 'unassigned'>('property');
+  const [movingJobId, setMovingJobId] = useState<string | null>(null);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [editJob, setEditJob] = useState<Job | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -1301,6 +1363,37 @@ const JobLeads = () => {
   const queryClient = useQueryClient();
   const [currentItem, setCurrentItem] = useState<Job | null>(null);
   const [currentBid, setCurrentBid] = useState<Bid | null>(null);
+  // Certificates from finished jobs, and marking a booked job as done.
+  const [certPrefill, setCertPrefill] = useState<{
+    name?: string; discipline?: string; docType?: string; category?: string; propertyId?: string; jobId?: string;
+  }>();
+  const [certUploadOpen, setCertUploadOpen] = useState(false);
+  const [doneJob, setDoneJob] = useState<Job | null>(null);
+  const [markingDone, setMarkingDone] = useState(false);
+  const openCertificateUpload = (job: Job) => {
+    const up = job.expected_certificate?.upload ?? {};
+    setCertPrefill({
+      name: up.name, discipline: up.discipline ?? 'compliance', docType: up.doc_type, category: up.category,
+      propertyId: job.property ?? undefined, jobId: job.id,
+    });
+    setCertUploadOpen(true);
+  };
+  const markDone = async () => {
+    if (!doneJob) return;
+    setMarkingDone(true);
+    try {
+      await updateJob(doneJob.id, { status: 'completed' });
+      toast.success(doneJob.expected_certificate
+        ? `Job marked as done. Upload the ${doneJob.expected_certificate.label.replace(/^[A-Z](?=[a-z])/, c => c.toLowerCase())} when you have it.`
+        : 'Job marked as done');
+      ['leads', 'quotes', 'attention', 'ho-notifications', 'annual-spend'].forEach(k => queryClient.invalidateQueries({ queryKey: [k] }));
+      setDoneJob(null);
+    } catch {
+      toast.error('Could not mark the job as done.');
+    } finally {
+      setMarkingDone(false);
+    }
+  };
 
   const addJob = usePost({
     mutationFn: createJob,
@@ -1324,13 +1417,47 @@ const JobLeads = () => {
   });
 
   const { data, isLoading } = useFetch('/api/v1/jobs/', {
-    queryKey: ['leads'],
-    queryFn: fetchLeads,
+    queryKey: ['leads', activePropertyId],
+    queryFn: () => fetchLeads(activePropertyId),
   });
 
   useEffect(() => {
-    if (!isLoading && data) setLeads((data as Job[]) || []);
+    if (!isLoading && data) setPropertyLeads((data as Job[]) || []);
   }, [data, isLoading]);
+
+  const { data: unassignedData } = useFetch('/api/v1/jobs/?unassigned=1', {
+    queryKey: ['leads', 'unassigned'],
+    queryFn: () => fetchUnassignedLeads(),
+  });
+  const unassignedLeads = useMemo(
+    () => (Array.isArray(unassignedData) ? (unassignedData as unknown as Job[]) : []),
+    [unassignedData],
+  );
+  const showingUnassigned = jobsTab === 'unassigned' && unassignedLeads.length > 0;
+  const leads = showingUnassigned ? unassignedLeads : propertyLeads;
+  const allLeads = useMemo(() => [...propertyLeads, ...unassignedLeads], [propertyLeads, unassignedLeads]);
+
+  useEffect(() => {
+    setJobsTab('property');
+  }, [activePropertyId]);
+  useEffect(() => {
+    if (unassignedLeads.length === 0) setJobsTab('property');
+  }, [unassignedLeads.length]);
+
+  const moveToProperty = async (job: Job, prop: { id: string; name?: string; address: string }) => {
+    setMovingJobId(job.id);
+    try {
+      await assignJobProperty({ jobId: job.id, propertyId: prop.id });
+      toast.success(`Moved "${job.name}" to ${prop.name || prop.address}`);
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      queryClient.invalidateQueries({ queryKey: [CONVERSATIONS_URL] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? e?.message ?? 'Failed to move job');
+    } finally {
+      setMovingJobId(null);
+    }
+  };
 
   const toggleCompareMode = (jobId: string) => {
     setCompareMode(prev => ({ ...prev, [jobId]: !prev[jobId] }));
@@ -1366,11 +1493,31 @@ const JobLeads = () => {
     setRateBidTarget(null);
   };
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkJob = searchParams.get('job');
+  useEffect(() => {
+    if (!deepLinkJob || isLoading) return;
+    const wantsUpload = searchParams.get('upload') === '1';
+    setSearchParams({}, { replace: true });
+    if (!wantsUpload) return;
+    // Mark it as handled so the rating prompt does not cover the upload.
+    autoRatedRef.current.add(deepLinkJob);
+    const hit = allLeads.find(j => j.id === deepLinkJob);
+    if (hit) {
+      openCertificateUpload(hit);
+    } else {
+      // A job on another home: load it directly.
+      fetchData<{ data: unknown }>(`/api/v1/jobs/${deepLinkJob}/`)
+        .then(res => res?.data && openCertificateUpload(normLead(res.data) as unknown as Job))
+        .catch(() => toast.error('Could not open that job.'));
+    }
+  }, [deepLinkJob, isLoading, allLeads.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-open rating modal when a job transitions to completed and has an unrated accepted bid
   const autoRatedRef = useRef(new Set<string>());
   useEffect(() => {
-    if (!leads.length) return;
-    const candidate = leads.find(job =>
+    if (!allLeads.length) return;
+    const candidate = allLeads.find(job =>
       job.status === 'completed' &&
       job.approved_bid &&
       !job.approved_bid.rating &&
@@ -1380,24 +1527,50 @@ const JobLeads = () => {
       autoRatedRef.current.add(candidate.id);
       setRateBidTarget({ job: candidate, bid: candidate.approved_bid });
     }
-  }, [leads]);
+  }, [allLeads]);
 
   return (
     <DashboardLayout>
+      <DocsUploadDialog
+        openForm={certUploadOpen}
+        setOpenForm={setCertUploadOpen}
+        refetch={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
+        prefillDiscipline="compliance"
+        prefill={certPrefill}
+      />
+      <AlertDialog open={doneJob !== null} onOpenChange={o => { if (!o) setDoneJob(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark “{doneJob?.name}” as done?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Use this when the work is finished.
+              {doneJob?.expected_certificate
+                ? ` We'll then ask you to upload the ${doneJob.expected_certificate.label.replace(/^[A-Z](?=[a-z])/, c => c.toLowerCase())} the trade gives you.`
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={markingDone}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={markingDone} onClick={e => { e.preventDefault(); markDone(); }}>
+              {markingDone ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Mark as done'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
-          <div className="flex items-center justify-between mb-4 sm:mb-6">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="hidden sm:flex h-12 w-12 bg-[#F5F5F0] rounded-full items-center justify-center">
+          <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="hidden sm:flex h-12 w-12 bg-[#F5F5F0] rounded-full items-center justify-center shrink-0">
                 <Search className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[#6B6B6B] text-sm mb-0.5">Find tradespeople</p>
                 <h1 className="text-[#1A1A1A] text-lg sm:text-2xl font-semibold leading-tight">Home Improvements & Maintenance</h1>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               <Button
                 onClick={() => setQuoteOpen(true)}
                 className="bg-[#1A1A1A] text-white hover:bg-[#333333] transition-all text-sm font-medium h-10 px-4 rounded-full"
@@ -1410,11 +1583,11 @@ const JobLeads = () => {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Total Jobs</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[#6B6B6B] text-xs sm:text-sm leading-tight">Total Jobs</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center shrink-0">
                   <Briefcase className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -1422,9 +1595,9 @@ const JobLeads = () => {
               <p className="text-[#8B8B8B] text-xs mt-1">All posted jobs</p>
             </div>
             <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Active</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[#6B6B6B] text-xs sm:text-sm leading-tight">Active</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center shrink-0">
                   <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -1432,9 +1605,9 @@ const JobLeads = () => {
               <p className="text-[#8B8B8B] text-xs mt-1">Awaiting quotes</p>
             </div>
             <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Quotes Received</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[#6B6B6B] text-xs sm:text-sm leading-tight">Quotes Received</span>
+                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center shrink-0">
                   <MessageSquare className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -1444,22 +1617,22 @@ const JobLeads = () => {
               <p className="text-[#8B8B8B] text-xs mt-1">From tradespeople</p>
             </div>
             <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Completed</span>
-                <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[#6B6B6B] text-xs sm:text-sm leading-tight">Completed</span>
+                <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center shrink-0">
                   <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[#10B981] text-xl sm:text-2xl font-semibold">{leads.filter(l => l.isApproved).length}</p>
+              <p className="text-[#10B981] text-xl sm:text-2xl font-semibold">{leads.filter(l => l.status === 'completed').length}</p>
               <p className="text-[#8B8B8B] text-xs mt-1">Jobs completed</p>
             </div>
           </div>
         </div>
 
         {/* Main content */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6">
           {/* Jobs list */}
-          <div className="lg:col-span-3">
+          <div className="min-w-0">
             <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
               <div className="flex items-center justify-between mb-1">
                 <h2 className="text-[#1A1A1A] text-lg font-semibold">Your Jobs</h2>
@@ -1480,9 +1653,51 @@ const JobLeads = () => {
                   )}
                 </button>
               </div>
-              <p className="text-xs text-[#8B8B8B] mb-4">
-                Trades searching within ~25 miles of your property postcode
-              </p>
+              {unassignedLeads.length > 0 && (
+                <div className="mt-3 mb-3 inline-flex max-w-full flex-wrap gap-1 rounded-full bg-[#F5F5F0] p-1">
+                  <button
+                    onClick={() => setJobsTab('property')}
+                    className={cn(
+                      'flex min-w-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors',
+                      !showingUnassigned ? 'bg-[#1A1A1A] text-white' : 'text-[#4A4A4A] hover:bg-white',
+                    )}
+                  >
+                    <Building2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
+                    <span className="max-w-[160px] truncate">
+                      {activeProperty?.name || activeProperty?.address || 'This property'}
+                    </span>
+                    <span className={cn('rounded-full px-1.5 text-[10px]', !showingUnassigned ? 'bg-white/20' : 'bg-white')}>
+                      {propertyLeads.length}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setJobsTab('unassigned')}
+                    className={cn(
+                      'flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors',
+                      showingUnassigned ? 'bg-[#1A1A1A] text-white' : 'text-[#4A4A4A] hover:bg-white',
+                    )}
+                  >
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FBBF24]" />
+                    Without property
+                    <span className={cn('rounded-full px-1.5 text-[10px]', showingUnassigned ? 'bg-white/20' : 'bg-white')}>
+                      {unassignedLeads.length}
+                    </span>
+                  </button>
+                </div>
+              )}
+              {showingUnassigned ? (
+                <div className="mb-4 flex items-start gap-2.5 rounded-[12px] border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#B45309]" strokeWidth={1.75} />
+                  <p className="text-xs leading-relaxed text-[#92400E]">
+                    These jobs aren't linked to a property, so they show under every property. Use{' '}
+                    <span className="font-medium">Move to property</span> to file one under the right home.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-[#8B8B8B] mb-4">
+                  Trades searching within ~25 miles of your property postcode
+                </p>
+              )}
 
               {filterOpen && (
                 <div className="mb-4 p-4 bg-[#F5F5F0] rounded-[12px] border border-[#E8E8E3]">
@@ -1556,16 +1771,22 @@ const JobLeads = () => {
 
               <div className="space-y-3">
                 {filteredLeads.map(job => (
-                  <div key={job.id} className="bg-[#F5F5F0] rounded-[12px] px-5 py-4 hover:shadow-sm transition-all">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
-                      <div className="flex items-start gap-3 sm:flex-1 cursor-pointer" onClick={() => setEditJob(job)}>
+                  <div key={job.id} className="bg-[#F5F5F0] rounded-[12px] px-4 sm:px-5 py-4 hover:shadow-sm transition-all">
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-2 mb-3">
+                      <div className="flex items-start gap-3 sm:flex-1 min-w-0 sm:min-w-[260px] cursor-pointer" onClick={() => setEditJob(job)}>
                         <div className="h-10 w-10 rounded-[10px] bg-white border border-[#E5E7EB] flex items-center justify-center flex-shrink-0">
                           <Briefcase className="w-5 h-5 text-[#4A4A4A]" strokeWidth={1.5} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <h3 className="text-[#1A1A1A] text-sm font-medium">{job.name}</h3>
+                            <h3 className="text-[#1A1A1A] text-sm font-medium truncate">{job.name}</h3>
                             {job.bids.length > 0 && <Lock className="h-3 w-3 text-amber-500 shrink-0" />}
+                            {showingUnassigned && (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FDE68A] bg-[#FFFBEB] px-2 py-0.5 text-[10px] font-medium text-[#B45309]">
+                                <Building2 className="h-3 w-3" strokeWidth={1.75} />
+                                No property
+                              </span>
+                            )}
                           </div>
                           <p className="text-[#6B6B6B] text-xs mt-0.5">{job.service}</p>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-[#6B6B6B]">
@@ -1582,11 +1803,18 @@ const JobLeads = () => {
                               <Clock className="w-3 h-3" />
                               <span>{new Date(job.updated_at).toLocaleDateString()}</span>
                             </div>
+                            {activeProperty?.is_shared && attributionLabel(job.created_by, authUser?.id) && (
+                              <div className="flex items-center gap-1 min-w-0">
+                                <UserRound className="w-3 h-3 shrink-0" />
+                                <span className="truncate">Posted by {attributionLabel(job.created_by, authUser?.id)}</span>
+                              </div>
+                            )}
                           </div>
+
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {(() => {
                           const s = job.status;
                           const quotes = job.bids.filter(b => !isInterestedOnly(b)).length;
@@ -1621,6 +1849,38 @@ const JobLeads = () => {
                           </span>
                         )}
 
+                        {(job.status === 'todo' || job.status === 'in_progress') && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setDoneJob(job); }}
+                            className="flex items-center gap-1 px-2.5 h-8 rounded-full text-xs font-medium border bg-white text-gray-700 border-[#E8E8E3] hover:bg-[#F5F5F0] transition-colors"
+                            data-action="mark-done"
+                          >
+                            <CheckCheck className="w-3.5 h-3.5" /> Mark as done
+                          </button>
+                        )}
+
+                        {job.status === 'completed' && job.expected_certificate && (
+                          job.certificate_document ? (
+                            <Link
+                              to={documentLink(job.certificate_document.id)}
+                              onClick={e => e.stopPropagation()}
+                              className="flex items-center gap-1 px-2.5 h-8 rounded-full text-xs font-medium border bg-green-50 text-green-700 border-green-200 hover:bg-green-100 transition-colors"
+                              title={job.certificate_document.name}
+                              data-action="certificate-on-file"
+                            >
+                              <FileCheck className="w-3.5 h-3.5" /> Certificate on file
+                            </Link>
+                          ) : (
+                            <button
+                              onClick={e => { e.stopPropagation(); openCertificateUpload(job); }}
+                              className="flex items-center gap-1 px-2.5 h-8 rounded-full text-xs font-medium border bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 transition-colors"
+                              data-action="upload-certificate"
+                            >
+                              <Upload className="w-3.5 h-3.5" /> Upload {job.expected_certificate.type === 'epc' ? 'EPC' : 'certificate'}
+                            </button>
+                          )
+                        )}
+
                         {job.status === 'completed' &&
                           job.bids.some(b => b.status === 'accepted') &&
                           (() => {
@@ -1644,6 +1904,52 @@ const JobLeads = () => {
                               </button>
                             );
                           })()}
+                        {showingUnassigned && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                onClick={e => e.stopPropagation()}
+                                disabled={movingJobId === job.id}
+                                className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium text-[#1A1A1A] bg-[#FEF9E7] border border-[#FDE68A] rounded-full hover:bg-[#FDE68A]/60 transition-colors disabled:opacity-60"
+                              >
+                                {movingJobId === job.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <MoveRight className="w-3 h-3" />
+                                )}
+                                Move to property
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-wide text-[#6B6B6B]">
+                                Move to
+                              </DropdownMenuLabel>
+                              {properties.length === 0 && (
+                                <DropdownMenuItem disabled className="text-xs">
+                                  Add a property in Settings first
+                                </DropdownMenuItem>
+                              )}
+                              {properties.map(p => {
+                                const noPin = p.latitude == null || p.longitude == null;
+                                return (
+                                  <DropdownMenuItem
+                                    key={p.id}
+                                    disabled={noPin}
+                                    onSelect={() => moveToProperty(job, p)}
+                                    className="flex flex-col items-start gap-0.5"
+                                  >
+                                    <span className="text-sm text-[#1A1A1A]">{p.name || p.address}</span>
+                                    <span className="text-[11px] text-[#8B8B8B]">
+                                      {noPin
+                                        ? 'Set a map pin on this property first'
+                                        : [p.address, p.postcode].filter(Boolean).join(' · ')}
+                                    </span>
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                         <button
                           onClick={e => {
                             e.stopPropagation();
@@ -1726,17 +2032,20 @@ const JobLeads = () => {
                             </Select>
                           </div>
                         )}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
                           {sortBids(job.bids, bidSort).map(bid => {
                             const profile = bid.tradepilot_profile;
                             return (
                               <div key={bid.id} className={`bg-white rounded-[10px] p-4 border ${bid.rank === 1 ? 'ring-2 ring-amber-200/60 border-amber-200 bg-amber-50/30' : 'border-[#E8E8E3]'}`}>
-                                <div className="flex items-center justify-between mb-2">
+                                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-2">
                                   <div className="flex items-center gap-1 min-w-0">
                                     <h4 className="text-sm font-medium text-[#1A1A1A] truncate">
-                                      {bid.bidder?.first_name
-                                        ? `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim()
-                                        : bid.bidder?.email}
+                                      <TraderName
+                                        traderId={profile?.user_id}
+                                        name={bid.bidder?.first_name
+                                          ? `${bid.bidder.first_name} ${bid.bidder.last_name}`.trim()
+                                          : bid.bidder?.email}
+                                      />
                                     </h4>
                                     {profile?.is_verified && (
                                       <VerifiedBadge size="sm" has_insurance={profile.has_insurance} has_license={profile.has_license} />
@@ -1744,7 +2053,7 @@ const JobLeads = () => {
                                   </div>
                                   <div className="flex items-center gap-1.5 shrink-0">
                                     {bid.tag && bid.tag_kind && (
-                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${BID_TAG_CLS[bid.tag_kind] ?? ''}`}>{bid.tag}</span>
+                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${BID_TAG_CLS[bid.tag_kind] ?? ''}`}>{bid.tag}</span>
                                     )}
                                     {profile?.avg_rating !== null && profile?.avg_rating !== undefined ? (
                                       <div className="flex items-center gap-1">
@@ -1756,7 +2065,7 @@ const JobLeads = () => {
                                     )}
                                   </div>
                                 </div>
-                                {bid.company_name && <p className="text-xs text-gray-500 mb-0.5">{bid.company_name}</p>}
+                                {bid.company_name && <p className="text-xs text-gray-500 mb-0.5 truncate">{bid.company_name}</p>}
                                 {bid.distance_km != null && !isInterestedOnly(bid) && (
                                   <p className="flex items-center gap-1 text-[11px] text-gray-400 mb-1.5">
                                     <MapPin className="h-3 w-3 shrink-0" />
@@ -1773,7 +2082,15 @@ const JobLeads = () => {
                                     <>
                                       <div className="flex justify-between">
                                         <span>Price:</span>
-                                        <span className="font-semibold text-[#1A1A1A]">£{bid.proposedValue.toLocaleString()}</span>
+                                        <span className="flex items-center gap-1.5">
+                                          {bid.previousAmount != null && (
+                                            <span className="text-[11px] text-gray-400 line-through">£{bid.previousAmount.toLocaleString()}</span>
+                                          )}
+                                          <span className="font-semibold text-[#1A1A1A]">£{bid.proposedValue.toLocaleString()}</span>
+                                          {bid.previousAmount != null && (
+                                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">Updated</span>
+                                          )}
+                                        </span>
                                       </div>
                                       <div className="flex justify-between">
                                         <span>Available:</span>
@@ -1786,7 +2103,7 @@ const JobLeads = () => {
                                     </>
                                   )}
                                   {profile && (
-                                    <div className="flex gap-1.5 mt-2 pt-2 border-t border-gray-100">
+                                    <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-100">
                                       {profile.has_insurance && (
                                         <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-700 rounded text-[10px] font-medium">
                                           <Shield className="h-2.5 w-2.5" />
@@ -1802,9 +2119,9 @@ const JobLeads = () => {
                                     </div>
                                   )}
                                 </div>
-                                <div className="mt-3 flex gap-2">
+                                <div className="mt-3 flex flex-wrap gap-2">
                                   <button
-                                    className={`flex-1 px-3 py-2 text-xs font-medium rounded-full transition-colors ${
+                                    className={`flex-1 px-3 py-2 text-xs font-medium rounded-full whitespace-nowrap transition-colors ${
                                       bid.status === 'accepted'
                                         ? 'bg-green-50 text-green-700 border border-green-200'
                                         : 'text-[#4A4A4A] bg-[#F5F5F0] hover:bg-[#E8E8E3]'
@@ -1818,7 +2135,7 @@ const JobLeads = () => {
                                   </button>
                                   {bid.conversation_id && (
                                     <button
-                                      className="flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-full border border-[#E8E8E3] text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors"
+                                      className="flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-full whitespace-nowrap border border-[#E8E8E3] text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors"
                                       onClick={() => openChat(bid, job)}
                                     >
                                       <MessageCircle className="h-3.5 w-3.5" />

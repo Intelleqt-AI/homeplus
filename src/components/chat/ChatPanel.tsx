@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Ban, FileText, Info, Loader2, Paperclip, Save, Send, X } from 'lucide-react';
+import { Ban, FileText, Info, Loader2, MessageSquare, Paperclip, Save, Send, X } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import useFetch from '@/hooks/useFetch';
 import {
   blockConversation,
@@ -30,7 +31,7 @@ import { postData } from '@/lib/Api';
 import { toast } from '@/lib/toast';
 import MessageBubble, { type ChatMessage } from './MessageBubble';
 import JobInfoDialog from './JobInfoDialog';
-import TraderDetailsDialog from './TraderDetailsDialog';
+import { useTraderProfile } from '@/hooks/useTraderProfile';
 
 const ATTACHMENT_ACCEPT = 'image/*,video/*,application/pdf,.doc,.docx';
 
@@ -89,15 +90,16 @@ interface ChatPanelProps {
   conversationId: string | null;
   title?: string;
   subtitle?: string;
+  avatarUrl?: string | null;
 }
 
-const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: ChatPanelProps) => {
+const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle, avatarUrl }: ChatPanelProps) => {
   const queryClient = useQueryClient();
+  const { openTraderProfile } = useTraderProfile();
   const [draft, setDraft] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [jobInfoOpen, setJobInfoOpen] = useState(false);
-  const [traderDetailsOpen, setTraderDetailsOpen] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [attachmentProgress, setAttachmentProgress] = useState<number | null>(null);
   const [isAttaching, setIsAttaching] = useState(false);
@@ -114,7 +116,6 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
   const jobUrl = open && conversation?.job ? `/api/v1/jobs/${conversation.job}/` : null;
   const { data: jobData } = useFetch<any>(jobUrl);
   const bids: ChatConversationBid[] = jobData?.data?.bids ?? [];
-  const traderBid = bids.find(b => b.conversation_id === conversationId) ?? null;
 
   const editingMessage = editingMessageId ? messages.find(m => m.id === editingMessageId) ?? null : null;
 
@@ -263,13 +264,20 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
     <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-        <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4 pr-12">
+        <div className="flex items-center justify-between gap-3 border-b border-[#E8E8E3] bg-white px-5 py-4 pr-12">
+          <div className="flex min-w-0 items-center gap-3">
+          <Avatar className="h-10 w-10 shrink-0 bg-[#F5F5F0]">
+            <AvatarImage src={avatarUrl ?? undefined} alt={title} />
+            <AvatarFallback className="bg-[#FEF9E7] text-sm font-semibold text-[#B45309]">
+              {title?.[0]?.toUpperCase() || '?'}
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0">
-            <SheetTitle className="truncate text-base font-semibold text-gray-900">
-              {conversation?.other_party ? (
+            <SheetTitle className="truncate text-base font-semibold text-[#1A1A1A]">
+              {conversation?.other_party?.role === 'trader' ? (
                 <button
                   type="button"
-                  onClick={() => setTraderDetailsOpen(true)}
+                  onClick={() => openTraderProfile(conversation.other_party!.id)}
                   className="truncate text-left hover:underline"
                   title="View trader details"
                 >
@@ -279,7 +287,8 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
                 title || 'Messages'
               )}
             </SheetTitle>
-            {subtitle && <p className="mt-0.5 truncate text-xs text-gray-500">{subtitle}</p>}
+            {subtitle && <p className="mt-0.5 truncate text-xs text-[#6B6B6B]">{subtitle}</p>}
+          </div>
           </div>
 
           {conversation && (
@@ -319,15 +328,19 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
           )}
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto bg-gray-50/60 px-4 py-4">
+        <div className="flex-1 space-y-3 overflow-y-auto bg-[#F5F5F0] px-4 py-4">
           {isLoading ? (
             <div className="flex justify-center py-8 text-gray-400">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
           ) : messages.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-500">
-              No messages yet — start the conversation.
-            </p>
+            <div className="flex flex-col items-center py-12 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF3C7]">
+                <MessageSquare className="h-5 w-5 text-[#D97706]" strokeWidth={1.5} />
+              </div>
+              <p className="text-sm font-medium text-[#1A1A1A]">No messages yet</p>
+              <p className="mt-0.5 text-xs text-[#6B6B6B]">Say hello to start the conversation.</p>
+            </div>
           ) : (
             messages.map(m => (
               <MessageBubble
@@ -342,7 +355,7 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
         </div>
 
         {canSend ? (
-          <div className="flex items-end gap-2 border-t border-gray-100 px-4 py-3">
+          <div className="flex items-end gap-2 border-t border-[#E8E8E3] bg-white px-4 py-3">
             <input
               ref={fileInputRef}
               type="file"
@@ -350,7 +363,7 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
               className="hidden"
               onChange={handleFileSelected}
             />
-            <div className="flex flex-1 flex-col gap-1.5">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               {editingMessageId && (
                 <div className="flex items-center justify-between text-[11px] text-gray-400">
                   <span>Editing message</span>
@@ -388,7 +401,7 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
                 onChange={e => setDraft(e.target.value)}
                 placeholder="Type a message…"
                 rows={1}
-                className="max-h-32 min-h-[40px] resize-none"
+                className="max-h-32 min-h-[40px] resize-none rounded-[20px] border-0 bg-[#F5F5F0] px-4 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -407,6 +420,7 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
                 onClick={handleAttachClick}
                 disabled={isAttaching}
                 title="Attach a file"
+                className="h-10 w-10 shrink-0 rounded-full border-[#E8E8E3] text-[#6B6B6B]"
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -421,6 +435,7 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
                 (editingMessageId ? !draft.trim() || isSameAsOriginal : !draft.trim() && !pendingAttachment)
               }
               title={editingMessageId ? 'Save' : 'Send'}
+              className="h-10 w-10 shrink-0 rounded-full bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B]"
             >
               {isSending || isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -435,7 +450,7 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
           <div className="border-t border-gray-100 px-4 py-3">
             {conversation?.blocked_by_me ? (
               <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
-                <span>You blocked {title || 'this contact'}.</span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">You blocked {title || 'this contact'}.</span>
                 <Button
                   size="sm"
                   variant="outline"
@@ -458,7 +473,7 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
     <AlertDialog open={blockConfirmOpen} onOpenChange={setBlockConfirmOpen}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Block {title || 'this contact'}?</AlertDialogTitle>
+          <AlertDialogTitle className="[overflow-wrap:anywhere]">Block {title || 'this contact'}?</AlertDialogTitle>
           <AlertDialogDescription>
             They won't be able to send you messages until you unblock them.
           </AlertDialogDescription>
@@ -480,15 +495,9 @@ const ChatPanel = ({ open, onOpenChange, conversationId, title, subtitle }: Chat
       open={jobInfoOpen}
       onOpenChange={setJobInfoOpen}
       jobDetail={conversation?.job_detail ?? null}
+      job={jobData?.data ?? null}
       bids={bids}
       conversationId={conversationId}
-    />
-
-    <TraderDetailsDialog
-      open={traderDetailsOpen}
-      onOpenChange={setTraderDetailsOpen}
-      bid={traderBid}
-      fallbackName={conversation?.other_party?.name}
     />
     </>
   );

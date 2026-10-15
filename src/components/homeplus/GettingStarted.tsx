@@ -81,24 +81,24 @@ export default function GettingStarted({ firstName, steps, onDismiss }: GettingS
           const Icon = s.done ? CheckCircle : s.icon;
           return (
             <div key={s.id}
-              className={`flex items-center gap-3 p-3 rounded-[12px] border transition-colors ${s.done ? 'bg-[#ECFDF5] border-[#A7F3D0]/70' : 'bg-white border-[#E8E8E3]'}`}>
+              className={`flex flex-wrap items-center gap-3 p-3 rounded-[12px] border transition-colors ${s.done ? 'bg-[#ECFDF5] border-[#A7F3D0]/70' : 'bg-white border-[#E8E8E3]'}`}>
               <span className={`h-8 w-8 rounded-[10px] flex items-center justify-center shrink-0 ${s.done ? 'bg-white text-[#10B981]' : 'bg-[#F5F5F0] text-[#1A1A1A]'}`}>
                 <Icon className="w-4 h-4" />
               </span>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-[160px]">
                 <p className={`text-[13px] font-semibold ${s.done ? 'text-[#6B6B6B]' : 'text-[#1A1A1A]'}`}>{s.title}</p>
                 <p className="text-[11px] text-[#8B8B8B] mt-0.5 leading-snug">{s.helper}</p>
               </div>
               {s.done ? (
-                <span className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white text-[#10B981] border border-[#A7F3D0]/70">Done</span>
+                <span className="shrink-0 ml-auto text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white text-[#10B981] border border-[#A7F3D0]/70">Done</span>
               ) : s.href ? (
                 <Link to={s.href}
-                  className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors whitespace-nowrap">
+                  className="shrink-0 ml-auto text-xs font-semibold px-3 py-1.5 rounded-full bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors whitespace-nowrap">
                   {s.ctaLabel}
                 </Link>
               ) : (
                 <button type="button" onClick={s.onCta}
-                  className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors whitespace-nowrap">
+                  className="shrink-0 ml-auto text-xs font-semibold px-3 py-1.5 rounded-full bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors whitespace-nowrap">
                   {s.ctaLabel}
                 </button>
               )}

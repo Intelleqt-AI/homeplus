@@ -7,13 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/lib/toast';
 import { Camera, Upload } from 'lucide-react';
 import { useRef, useState, useEffect } from 'react';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uploadFileWithMetadata } from '@/lib/Api';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
 import ExpiryConfirmDialog from '@/components/docsUploadDialog/ExpiryConfirmDialog';
+import PropertySelect from '@/components/property/PropertySelect';
+import { useActiveProperty } from '@/hooks/useActiveProperty';
 
 interface Props {
   openForm: boolean;
@@ -21,6 +22,12 @@ interface Props {
   refetch?: () => void;
   /** Pre-fill the Discipline field (e.g. pass activeTab or a suggested doc's discipline). */
   prefillDiscipline?: string;
+  /** Pre-fill the whole form (wins over prefillDiscipline). Type and category are slugs. */
+  prefill?: {
+    name?: string; discipline?: string; docType?: string; category?: string; notes?: string;
+    /** The home to file it under (default: the active one) and the job it came from. */
+    propertyId?: string; jobId?: string;
+  };
 }
 
 type UploadedDoc = {
@@ -32,9 +39,10 @@ type UploadedDoc = {
   created_event?: string | null;
   /** OCR-suggested expiry date returned by the backend. */
   suggested_expiry?: string | null;
+  compliance_type?: string | null;
 };
 
-const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }: Props) => {
+const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline, prefill }: Props) => {
   const [documentType, setDocumentType] = useState('');
   const [documentTradeCategory, setDocumentTradeCategory] = useState('');
   const [documentDiscipline, setDocumentDiscipline] = useState('other');
@@ -46,25 +54,43 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
   const [applianceModel, setApplianceModel] = useState('');
   const [applianceSerial, setApplianceSerial] = useState('');
   const [lastServiced, setLastServiced] = useState('');
+  const [propertyId, setPropertyId] = useState('');
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const isMobile = useIsMobile();
+  // Touch devices get the camera shortcut regardless of viewport width (tablets included).
+  const [isTouchDevice] = useState(() => window.matchMedia('(pointer: coarse)').matches);
 
   const [reminderDoc, setReminderDoc] = useState<UploadedDoc | null>(null);
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { activePropertyId } = useActiveProperty();
 
   const tradeCategories = documentType ? tradeCategoriesByType[documentType] ?? [] : [];
 
-  // When the dialog opens, apply prefillDiscipline if provided
+  // When the dialog opens, apply prefillDiscipline and default to whichever
+  // property is currently active (switching away just re-opens to the new one).
   useEffect(() => {
-    if (openForm && prefillDiscipline) {
-      const valid = DISCIPLINE_OPTIONS.some(d => d.value === prefillDiscipline);
-      setDocumentDiscipline(valid ? prefillDiscipline : 'other');
+    if (!openForm) return;
+    const discipline = prefill?.discipline ?? prefillDiscipline;
+    if (discipline) {
+      const valid = DISCIPLINE_OPTIONS.some(d => d.value === discipline);
+      setDocumentDiscipline(valid ? discipline : 'other');
     }
-  }, [openForm, prefillDiscipline]);
+    if (prefill) {
+      // Type and category together (a manual type change would clear the category).
+      const type = TRADE_OPTIONS.some(t => t.value === prefill.docType) ? prefill.docType! : '';
+      const categories = type ? tradeCategoriesByType[type] ?? [] : [];
+      const category = type === 'other' ? 'other'
+        : categories.some(c => c.value === prefill.category) ? prefill.category! : '';
+      setDocumentType(type);
+      setDocumentTradeCategory(category);
+      setDocumentName(prefill.name ?? '');
+      setDocumentNotes(prefill.notes ?? '');
+    }
+    setPropertyId(prefill?.propertyId ?? activePropertyId ?? '');
+  }, [openForm, prefillDiscipline, prefill, activePropertyId]);
 
   const reset = () => {
     setDocumentType('');
@@ -76,6 +102,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
     setApplianceModel('');
     setApplianceSerial('');
     setLastServiced('');
+    setPropertyId('');
   };
 
   const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +126,8 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
     mutationFn: uploadFileWithMetadata,
     onSuccess: doc => {
       // Refresh everything an upload affects, independent of any parent refetch prop.
-      ['documents', 'documents-expiring', 'documents-summary', 'event', 'recent-activity'].forEach(k =>
+      ['documents', 'documents-expiring', 'documents-summary', 'event', 'recent-activity', 'leads', 'attention',
+        'systems-health', 'prs-checklist', 'prs-summary', 'ho-notifications'].forEach(k =>
         queryClient.invalidateQueries({ queryKey: [k] }),
       );
       refetch?.();
@@ -113,6 +141,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
         expires_at: doc.expires_at ?? null,
         created_event: doc.created_event ?? null,
         suggested_expiry: doc.suggested_expiry ?? null,
+        compliance_type: doc.compliance_type ?? null,
       });
       setReminderDialogOpen(true);
       reset();
@@ -146,6 +175,8 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
           appliance_model: applianceModel,
           appliance_serial: applianceSerial,
           last_serviced: lastServiced,
+          property: propertyId || undefined,
+          job: prefill?.jobId,
         },
       }),
       {
@@ -167,7 +198,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
       }}
     />
     <Dialog open={openForm} onOpenChange={setOpenForm}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Upload Document</DialogTitle>
         </DialogHeader>
@@ -176,9 +207,9 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
           {/* Drop zone */}
           <div className="space-y-2">
             <Label htmlFor="file-upload">Document File</Label>
-            <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+            <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.doc,.docx" />
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCameraCapture} />
-            {isMobile && (
+            {isTouchDevice && (
               <Button type="button" variant="outline" className="w-full mb-2" onClick={() => cameraInputRef.current?.click()}>
                 <Camera className="w-4 h-4 mr-2" />
                 Take Photo
@@ -194,19 +225,26 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
               >
-                <div className="text-center">
+                <div className="text-center min-w-0 max-w-full">
                   <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm font-medium">{selectedFile ? selectedFile.name : 'Click or drag & drop to upload'}</p>
-                  <p className="text-xs text-muted-foreground mt-1">PDF, JPG, PNG, DOC up to 10MB</p>
+                  <p className="text-sm font-medium [overflow-wrap:anywhere] line-clamp-2">{selectedFile ? selectedFile.name : 'Click or drag & drop to upload'}</p>
+                  <p className="text-xs text-muted-foreground mt-1">PDF, JPG, PNG, HEIC, DOC up to 25MB</p>
+                  <p className="text-xs text-muted-foreground">Files from iCloud Drive, Google Drive and Dropbox work too</p>
                 </div>
               </div>
             </label>
-            {!isMobile && (
+            {!isTouchDevice && (
               <p className="text-xs text-[#6B6B6B] flex items-center gap-1.5 mt-1">
                 <span role="img" aria-label="mobile phone">📱</span>
                 On your phone? Open Home+ in your mobile browser to scan directly with your camera.
               </p>
             )}
+          </div>
+
+          {/* Property */}
+          <div className="space-y-2">
+            <Label>Property</Label>
+            <PropertySelect value={propertyId} onChange={setPropertyId} />
           </div>
 
           {/* Name */}
@@ -297,7 +335,7 @@ const DocsUploadDialog = ({ openForm, setOpenForm, refetch, prefillDiscipline }:
           {documentDiscipline === 'manuals_appliances' && (
             <div className="space-y-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Appliance Details (optional)</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="appliance-model" className="text-xs">Model number</Label>
                   <Input id="appliance-model" placeholder="e.g. EcoTec Plus" value={applianceModel} onChange={e => setApplianceModel(e.target.value)} className="text-sm" />

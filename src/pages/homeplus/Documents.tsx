@@ -1,8 +1,9 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Upload, Download, Eye, Trash2, FileText, Package, FolderOpen,
   Search, AlertTriangle, Pencil, Loader2, CalendarIcon, MoreHorizontal,
-  SlidersHorizontal, ChevronRight,
+  SlidersHorizontal, ChevronRight, ExternalLink,
   ShieldCheck, Umbrella, Leaf, BookOpen, ClipboardList, Ruler,
   Landmark, Key, Layers, HelpCircle, BadgeCheck, Zap,
 } from 'lucide-react';
@@ -24,6 +25,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deleteFile, updateDocument, getDocumentDownloadUrl, type NormDoc, type DocumentUpdatePayload, type PaginatedResponse } from '@/lib/Api';
 import DocsUploadDialog from '@/components/docsUploadDialog';
 import { exportDocumentPack, fetchAllPages, fetchDocumentSummary, type DocumentSummary } from '@/lib/Api2';
+import { useActiveProperty } from '@/hooks/useActiveProperty';
+import { useAuth } from '@/hooks/useAuth';
+import { attributionLabel } from '@/lib/household';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
 import { cn } from '@/lib/utils';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType, getTradeCategoryLabel } from '@/lib/tradeCategories';
@@ -89,6 +93,8 @@ const EXPIRY_URL = '/api/v1/documents/expiring/?page_size=100';
 
 const Documents = () => {
   const queryClient = useQueryClient();
+  const { activePropertyId, activeProperty } = useActiveProperty();
+  const { user: authUser } = useAuth();
 
   const [openForm, setOpenForm] = useState(false);
   const [search, setSearch] = useState('');
@@ -132,18 +138,22 @@ const Documents = () => {
   // shape), so accounts with more documents than one server page still see
   // their full vault.
   const { data: docsPage, isLoading, refetch } = useFetch<PaginatedResponse<NormDoc>>(DOCS_URL, {
-    queryKey: ['documents'],
+    queryKey: ['documents', activePropertyId],
     queryFn: async () => {
-      const results = (await fetchAllPages('/api/v1/documents/')) as NormDoc[];
+      const path = activePropertyId ? `/api/v1/documents/?property=${activePropertyId}` : '/api/v1/documents/';
+      const results = (await fetchAllPages(path)) as NormDoc[];
       return { count: results.length, next: null, previous: null, results };
     },
   });
   const allDocs = useMemo<NormDoc[]>(() => docsPage?.results ?? [], [docsPage]);
 
   const { data: expiringPage } = useFetch<PaginatedResponse<NormDoc>>(EXPIRY_URL, {
-    queryKey: ['documents-expiring'],
+    queryKey: ['documents-expiring', activePropertyId],
     queryFn: async () => {
-      const results = (await fetchAllPages('/api/v1/documents/expiring/')) as NormDoc[];
+      const path = activePropertyId
+        ? `/api/v1/documents/expiring/?property=${activePropertyId}`
+        : '/api/v1/documents/expiring/';
+      const results = (await fetchAllPages(path)) as NormDoc[];
       return { count: results.length, next: null, previous: null, results };
     },
   });
@@ -151,8 +161,8 @@ const Documents = () => {
   // Authoritative counts come from /documents/summary/ — same query key the
   // dashboard uses, so both pages share cache and always agree.
   const { data: summaryRes } = useQuery({
-    queryKey: ['documents-summary'],
-    queryFn: fetchDocumentSummary,
+    queryKey: ['documents-summary', activePropertyId],
+    queryFn: () => fetchDocumentSummary(activePropertyId),
   });
   const summary: DocumentSummary = summaryRes?.data ?? { total: 0, valid: 0, expiring: 0, expired: 0, by_discipline: {} };
 
@@ -163,11 +173,9 @@ const Documents = () => {
     queryClient.invalidateQueries({ queryKey: ['documents-summary'] });
   }, [refetch, queryClient]);
 
-  const { data: propertiesRes } = useFetch<{ results?: { id: string; role: string; heating_type?: string; year_built?: number }[]; data?: { id: string; role: string; heating_type?: string; year_built?: number }[] }>('/api/v1/properties/');
-  const primaryProperty = useMemo(() => {
-    const list = propertiesRes?.results ?? propertiesRes?.data ?? [];
-    return list[0] ?? null;
-  }, [propertiesRes]);
+  // "Missing essentials" suggestions are based on the active property's own
+  // attributes (heating type, year built) — not just whichever came back first.
+  const primaryProperty = activeProperty;
   const expiringDocs = useMemo<NormDoc[]>(() => expiringPage?.results ?? [], [expiringPage]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
@@ -205,6 +213,20 @@ const Documents = () => {
       notes: doc.notes,
     });
   };
+
+  // Deep link from System Health: ?doc=<id>&open=preview|edit opens that document
+  // (edit, e.g., to add a certificate's missing expiry date).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkDoc = searchParams.get('doc');
+  useEffect(() => {
+    if (!deepLinkDoc || isLoading) return;
+    const hit = allDocs.find(d => d.id === deepLinkDoc);
+    if (hit) {
+      if (searchParams.get('open') === 'edit') openEdit(hit);
+      else setPreviewDoc(hit);
+    }
+    setSearchParams({}, { replace: true });
+  }, [deepLinkDoc, isLoading, allDocs, searchParams, setSearchParams]);
 
   const handleEditSave = () => {
     if (!editDoc || !editState) return;
@@ -303,6 +325,15 @@ const Documents = () => {
     return suggestions.slice(0, 4);
   }, [allDocs, primaryProperty]);
 
+  function openInNewTab(docId: string) {
+    // Open the tab synchronously (inside the click) so pop-up blockers allow it,
+    // then point it at the presigned URL once we have it.
+    const tab = window.open('', '_blank');
+    getDocumentDownloadUrl(docId)
+      .then(url => { if (tab) tab.location.href = url; else window.open(url, '_blank'); })
+      .catch(() => { tab?.close(); toast.error('Could not open document.'); });
+  }
+
   function downloadFile(docId: string, fileName: string) {
     toast.promise(
       getDocumentDownloadUrl(docId).then(url =>
@@ -344,47 +375,46 @@ const Documents = () => {
       <div className="space-y-4">
 
         {/* ── DocsHero ─────────────────────────────────────── */}
-        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="flex items-center gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Document pack</p>
-              <h1 className="text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-0.5 leading-none">Your home paperwork</h1>
-              <p className="text-[13px] text-[#6B6B6B] mt-1.5">Stored safely, organised by category, exportable as a moving pack.</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 sm:overflow-x-auto">
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:w-fit">
-              {[
-                { label: 'Total files', value: String(stats.total), Icon: FileText, tint: '#F5F5F0', color: '#1A1A1A' },
-                { label: 'Compliance', value: String(stats.compliance), Icon: ShieldCheck, tint: '#F3E8FF', color: '#A855F7' },
-                { label: 'Expiring', value: String(stats.expiring), Icon: AlertTriangle, tint: '#FFFBEB', color: '#F59E0B' },
-                { label: 'Expired', value: String(stats.expired), Icon: AlertTriangle, tint: '#FEF2F2', color: '#EF4444' },
-              ].map(s => (
-                <div key={s.label} className="text-center px-3 py-2 bg-[#FAFAF7] border border-[#E8E8E3] rounded-[14px] flex flex-col items-center justify-center">
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <span className="h-5 w-5 rounded-full flex items-center justify-center"
-                      style={{ background: s.tint, color: s.color }}>
-                      <s.Icon className="w-2.5 h-2.5" />
-                    </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8B8B8B]">{s.label}</span>
-                  </div>
-                  <span className="text-[18px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.value}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
+        <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5 flex flex-col gap-4">
+          <div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Document pack</p>
+                <h1 className="text-[22px] sm:text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-0.5 leading-tight sm:leading-none">Your home paperwork</h1>
+              </div>
               <button
                 onClick={() => openUploadForm()}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors w-full sm:w-auto"
+                className="shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1A1A1A] text-white text-sm font-medium hover:bg-[#333] transition-colors"
               >
-                <Upload className="w-4 h-4" /> Upload document
+                <Upload className="w-4 h-4" />
+                <span>Upload<span className="hidden xs:inline"> document</span></span>
               </button>
             </div>
+            <p className="text-[13px] text-[#6B6B6B] mt-1.5">Stored safely, organised by category, exportable as a moving pack.</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { label: 'Total files', value: String(stats.total), Icon: FileText, tint: '#F5F5F0', color: '#1A1A1A' },
+              { label: 'Compliance', value: String(stats.compliance), Icon: ShieldCheck, tint: '#F3E8FF', color: '#A855F7' },
+              { label: 'Expiring', value: String(stats.expiring), Icon: AlertTriangle, tint: '#FFFBEB', color: '#F59E0B' },
+              { label: 'Expired', value: String(stats.expired), Icon: AlertTriangle, tint: '#FEF2F2', color: '#EF4444' },
+            ].map(s => (
+              <div key={s.label} className="min-w-0 text-center px-3 py-2 bg-[#FAFAF7] border border-[#E8E8E3] rounded-[14px] flex flex-col items-center justify-center">
+                <div className="flex items-center justify-center gap-1.5 mb-1 max-w-full">
+                  <span className="h-5 w-5 rounded-full flex items-center justify-center shrink-0"
+                    style={{ background: s.tint, color: s.color }}>
+                    <s.Icon className="w-2.5 h-2.5" />
+                  </span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8B8B8B] truncate">{s.label}</span>
+                </div>
+                <span className="text-[18px] font-bold tracking-tight text-[#1A1A1A] leading-none">{s.value}</span>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* ── Two-column layout ──────────────────────────────── */}
-        <div className="flex flex-col gap-4 items-start lg:flex-row">
+        <div className="flex flex-col gap-4 items-stretch xl:flex-row xl:items-start">
 
           {/* ── Main content ── */}
           <div className="flex-1 min-w-0 flex flex-col gap-4">
@@ -392,14 +422,14 @@ const Documents = () => {
             {/* MissingEssentials */}
             {suggestedDocs.length > 0 && (
               <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between gap-3 mb-4">
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+                    <div className="h-8 w-8 bg-[#F5F5F0] rounded-full flex items-center justify-center shrink-0">
                       <HelpCircle className="w-4 h-4 text-[#1A1A1A]" />
                     </div>
                     <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Missing essentials</span>
                   </div>
-                  <span className="text-[11px] text-[#8B8B8B]">{suggestedDocs.length} of 27 essential docs to go</span>
+                  <span className="text-[11px] text-[#8B8B8B] text-right">{suggestedDocs.length} of 27 essential docs to go</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {suggestedDocs.map(s => (
@@ -413,7 +443,7 @@ const Documents = () => {
                         <span className="text-[13px] font-semibold text-[#1A1A1A]">{s.label}</span>
                       </div>
                       <p className="text-[11.5px] text-[#6B6B6B] leading-snug">{s.reason}</p>
-                      <div className="flex gap-1.5 mt-auto">
+                      <div className="flex flex-wrap gap-1.5 mt-auto">
                         <button
                           onClick={() => openUploadForm(s.discipline)}
                           className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-[#1A1A1A] text-white hover:bg-[#333] transition-colors"
@@ -468,7 +498,7 @@ const Documents = () => {
                   <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Categories</span>
                 </div>
               </div>
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
                 <button
                   onClick={() => setActiveTab('all')}
                   className={`text-left p-4 rounded-[14px] border flex flex-col gap-3 transition-all ${activeTab === 'all' ? 'bg-[#1A1A1A] border-[#1A1A1A] text-white' : 'bg-[#FAFAF7] border-[#E8E8E3] text-[#1A1A1A] hover:border-[#FBBF24]/60'}`}
@@ -558,14 +588,15 @@ const Documents = () => {
 
               {/* Table header row */}
               <div className="hidden sm:grid items-center gap-3 px-3.5 pb-2 border-b border-[#E8E8E3] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]
-                sm:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_auto_32px]
-                md:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_100px_110px_auto_32px]">
+                sm:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_120px_96px_32px]
+                2xl:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_100px_110px_120px_96px_32px]">
                 <span />
                 <span>Document</span>
                 <span className="hidden sm:inline">Category</span>
-                <span className="hidden md:inline">Size</span>
-                <span className="hidden md:inline">Added</span>
-                <span className="text-right">Status</span>
+                <span className="hidden 2xl:inline">Size</span>
+                <span className="hidden 2xl:inline">Added</span>
+                <span>Status</span>
+                <span />
                 <span />
               </div>
 
@@ -592,8 +623,8 @@ const Documents = () => {
                         onClick={() => setPreviewDoc(doc)}
                         className="group grid items-center gap-3 px-3.5 py-3 rounded-[12px] hover:bg-[#FAFAF7] transition-colors cursor-pointer
                           grid-cols-[36px_minmax(0,1fr)_32px]
-                          sm:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_auto_32px]
-                          md:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_100px_110px_auto_32px]"
+                          sm:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_120px_96px_32px]
+                          2xl:grid-cols-[36px_minmax(0,1.6fr)_minmax(0,1fr)_100px_110px_120px_96px_32px]"
                       >
                         <span className="h-9 w-9 rounded-[10px] flex items-center justify-center shrink-0"
                           style={{ background: catCfg?.bg ?? '#F5F5F0', color: catCfg?.color ?? '#6B6B6B' }}>
@@ -615,30 +646,31 @@ const Documents = () => {
                         </button>
                         {/* Desktop: category */}
                         <span className="hidden sm:inline-block text-[12px] text-[#6B6B6B] truncate">{catCfg?.name ?? doc.discipline}</span>
-                        <span className="hidden md:inline-block text-[12px] text-[#6B6B6B]">{formatBytes(doc.file_size)}</span>
-                        <span className="hidden md:inline-block text-[12px] text-[#6B6B6B]">{format(parseISO(doc.uploaded_at), 'dd MMM yyyy')}</span>
-                        {/* Status + actions: desktop only */}
-                        <div className="hidden sm:flex flex-wrap items-center justify-end gap-1.5 min-w-0" onClick={e => e.stopPropagation()}>
-                          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
-                          <div className="flex md:hidden md:group-hover:flex items-center gap-0.5 flex-wrap justify-end">
-                            <button onClick={e => { e.stopPropagation(); setPreviewDoc(doc); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Preview">
-                              <Eye className="w-3.5 h-3.5" />
+                        <span className="hidden 2xl:inline-block text-[12px] text-[#6B6B6B] whitespace-nowrap">{formatBytes(doc.file_size)}</span>
+                        <span className="hidden 2xl:inline-block text-[12px] text-[#6B6B6B] whitespace-nowrap">{format(parseISO(doc.uploaded_at), 'dd MMM yyyy')}</span>
+                        {/* Status (+ Post Job CTA): desktop only */}
+                        <div className="hidden sm:flex flex-wrap items-center gap-1 min-w-0" onClick={e => e.stopPropagation()}>
+                          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${status.cls}`}>{status.label}</span>
+                          {needsJobCTA(doc) && (
+                            <button onClick={e => { e.stopPropagation(); handlePostJob(doc); }} className="text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] transition-colors">
+                              Post Job
                             </button>
-                            <button onClick={e => { e.stopPropagation(); downloadFile(doc.id, doc.file_name || doc.name); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Download">
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={e => { e.stopPropagation(); openEdit(doc); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Edit">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={e => { e.stopPropagation(); setDeleteDocId(doc.id); }} className="p-1 rounded-full hover:bg-[#FEF2F2] text-[#6B6B6B] hover:text-red-500" title="Delete">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                            {needsJobCTA(doc) && (
-                              <button onClick={e => { e.stopPropagation(); handlePostJob(doc); }} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#FBBF24] text-[#1A1A1A] hover:bg-[#F59E0B] transition-colors ml-1">
-                                Post Job
-                              </button>
-                            )}
-                          </div>
+                          )}
+                        </div>
+                        {/* Actions: desktop only; always shown on touch, revealed on hover/focus with a mouse */}
+                        <div className="hidden sm:flex items-center justify-end gap-0.5 transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 group-focus-within:opacity-100" onClick={e => e.stopPropagation()}>
+                          <button onClick={e => { e.stopPropagation(); setPreviewDoc(doc); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Preview">
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); downloadFile(doc.id, doc.file_name || doc.name); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Download">
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); openEdit(doc); }} className="p-1 rounded-full hover:bg-[#E8E8E3] text-[#6B6B6B]" title="Edit">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); setDeleteDocId(doc.id); }} className="p-1 rounded-full hover:bg-[#FEF2F2] text-[#6B6B6B] hover:text-red-500" title="Delete">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                         {/* Checkbox: desktop only */}
                         <span className="hidden sm:block" onClick={e => e.stopPropagation()}>
@@ -665,7 +697,7 @@ const Documents = () => {
           </div>
 
           {/* ── Right rail ────────────────────────────────────── */}
-          <div className="w-full shrink-0 flex flex-col gap-4 lg:w-[290px] lg:sticky lg:top-[80px]">
+          <div className="w-full shrink-0 flex flex-col gap-4 xl:w-[290px] xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
 
             {/* PackBuilder */}
             <div className="rounded-[18px] p-5" style={{ background: '#1A1A1A' }}>
@@ -797,8 +829,8 @@ const Documents = () => {
                 <span className="text-[11px] font-semibold text-[#1A1A1A]">2026</span>
               </div>
 
-              {/* 4×3 grid */}
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {/* Month grid */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-6 xl:grid-cols-4">
                 {MONTHS_FULL.map((month, i) => {
                   const ev = calendarData[i];
                   const isCurrent = i === currentMonth;
@@ -906,7 +938,7 @@ const Documents = () => {
                         <FileText className="w-4 h-4 text-[#6B6B6B] shrink-0" strokeWidth={1.5} />
                         <span className="text-sm text-[#1A1A1A] flex-1 truncate">{doc.name}</span>
                         {doc.discipline && doc.discipline !== 'other' && (
-                          <span className="text-[11px] text-[#6B6B6B] bg-[#F5F5F0] border border-[#E8E8E3] rounded-full px-2 py-0.5 shrink-0 capitalize">
+                          <span className="hidden xs:inline-flex text-[11px] text-[#6B6B6B] bg-[#F5F5F0] border border-[#E8E8E3] rounded-full px-2 py-0.5 shrink-0 capitalize whitespace-nowrap">
                             {doc.discipline.replace(/_/g, ' ')}
                           </span>
                         )}
@@ -915,9 +947,9 @@ const Documents = () => {
                   })}
                 {allDocs.length === 0 && <p className="text-sm text-[#8B8B8B] text-center py-6">No documents uploaded yet.</p>}
               </div>
-              <div className="flex items-center justify-between pt-4 mt-1 border-t border-[#E8E8E3]">
+              <div className="flex flex-col-reverse gap-3 xs:flex-row xs:items-center xs:justify-between pt-4 mt-1 border-t border-[#E8E8E3]">
                 <span className="text-sm text-[#6B6B6B]">{exportModalSelected.length > 0 ? `${exportModalSelected.length} selected` : 'No documents selected'}</span>
-                <div className="flex gap-2">
+                <div className="flex justify-end gap-2 shrink-0">
                   <Button variant="outline" className="text-black hover:bg-gray-100" onClick={() => setIsExportModalOpen(false)}>Cancel</Button>
                   <Button className="bg-[#1A1A1A] text-white hover:bg-[#333333]" disabled={exportModalSelected.length === 0 || exportLoading}
                     onClick={async () => {
@@ -939,7 +971,7 @@ const Documents = () => {
                     <FileText className="w-4 h-4 text-[#6B6B6B] shrink-0" strokeWidth={1.5} />
                     <span className="text-sm text-[#1A1A1A] flex-1 truncate">{doc.name}</span>
                     {doc.discipline && doc.discipline !== 'other' && (
-                      <span className="text-[11px] text-[#6B6B6B] bg-white border border-[#E8E8E3] rounded-full px-2 py-0.5 shrink-0 capitalize">{doc.discipline.replace(/_/g, ' ')}</span>
+                      <span className="hidden xs:inline-flex text-[11px] text-[#6B6B6B] bg-white border border-[#E8E8E3] rounded-full px-2 py-0.5 shrink-0 capitalize whitespace-nowrap">{doc.discipline.replace(/_/g, ' ')}</span>
                     )}
                   </div>
                 ))}
@@ -1051,20 +1083,25 @@ const Documents = () => {
                 <div className="h-10 w-10 rounded-[10px] bg-[#F5F5F0] flex items-center justify-center shrink-0">
                   <FileText className="w-5 h-5 text-[#4A4A4A]" />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-[#1A1A1A]">{previewDoc.name}</h3>
-                  <p className="text-xs text-[#6B6B6B]">
+                <div className="min-w-0 pr-6">
+                  <h3 className="font-semibold text-[#1A1A1A] break-words">{previewDoc.name}</h3>
+                  <p className="text-xs text-[#6B6B6B] break-words">
                     {tradeTypeLabel(previewDoc.doc_type) || '—'}
                     {previewDoc.category ? ` · ${getTradeCategoryLabel(previewDoc.category)}` : ''}
                     {previewDoc.discipline ? ` · ${previewDoc.discipline}` : ''}
                   </p>
                 </div>
               </div>
+
               <div className="space-y-3 py-2">
                 {([
                   { label: 'File name', value: previewDoc.file_name || '—' },
                   { label: 'File size', value: formatBytes(previewDoc.file_size) },
                   { label: 'Uploaded', value: format(parseISO(previewDoc.uploaded_at), 'dd MMM yyyy, HH:mm') },
+                  activeProperty?.is_shared && attributionLabel(previewDoc.created_by, authUser?.id)
+                    ? { label: 'Uploaded by', value: attributionLabel(previewDoc.created_by, authUser?.id) }
+                    : null,
+
                   { label: 'Last updated', value: format(parseISO(previewDoc.updated_at), 'dd MMM yyyy, HH:mm') },
                   { label: 'Expiry', value: previewDoc.expires_at ? format(parseISO(previewDoc.expires_at), 'dd MMM yyyy') : 'No expiry' },
                   previewDoc.notes ? { label: 'Notes', value: previewDoc.notes } : null,
@@ -1072,13 +1109,16 @@ const Documents = () => {
                 ] as Array<{ label: string; value: string } | null>)
                   .filter((r): r is { label: string; value: string } => r !== null)
                   .map(row => (
-                    <div key={row.label} className="flex justify-between text-sm">
-                      <span className="text-[#6B6B6B]">{row.label}</span>
-                      <span className="text-[#1A1A1A] font-medium text-right max-w-[280px] break-words">{row.value}</span>
+                    <div key={row.label} className="flex justify-between gap-4 text-sm">
+                      <span className="text-[#6B6B6B] shrink-0">{row.label}</span>
+                      <span className="text-[#1A1A1A] font-medium text-right max-w-[280px] min-w-0 [overflow-wrap:anywhere]">{row.value}</span>
                     </div>
                   ))}
               </div>
               <div className="flex justify-end gap-2 pt-2 border-t border-[#E8E8E3]">
+                <Button variant="outline" onClick={() => openInNewTab(previewDoc.id)}>
+                  <ExternalLink className="w-3.5 h-3.5 mr-2" strokeWidth={1.5} /> Open
+                </Button>
                 <Button variant="outline" onClick={() => downloadFile(previewDoc.id, previewDoc.file_name || previewDoc.name)}>
                   <Download className="w-3.5 h-3.5 mr-2" strokeWidth={1.5} /> Download
                 </Button>
@@ -1093,7 +1133,7 @@ const Documents = () => {
         <div className="sm:hidden fixed inset-0 z-50 flex items-end" onClick={() => setMobileCatOpen(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
-            className="relative w-full bg-white rounded-t-[24px] pb-8 shadow-2xl max-h-[80vh] flex flex-col"
+            className="relative w-full bg-white rounded-t-[24px] pb-[calc(2rem_+_env(safe-area-inset-bottom))] shadow-2xl max-h-[85dvh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Handle */}
@@ -1170,7 +1210,7 @@ const Documents = () => {
           <div className="sm:hidden fixed inset-0 z-50 flex items-end" onClick={() => setMobileActionDoc(null)}>
             <div className="absolute inset-0 bg-black/50" />
             <div
-              className="relative w-full bg-white rounded-t-[24px] p-5 pb-8 shadow-2xl"
+              className="relative w-full bg-white rounded-t-[24px] p-5 pb-[calc(2rem_+_env(safe-area-inset-bottom))] shadow-2xl max-h-[85dvh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               {/* Handle */}

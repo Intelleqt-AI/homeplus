@@ -103,7 +103,7 @@ const Notifications = () => {
           return (
             <div
               key={item.key}
-              className={`flex items-center justify-between py-4 ${index < ITEMS.length - 1 ? 'border-b' : ''} ${isSms ? 'opacity-50' : ''}`}
+              className={`flex items-center justify-between gap-4 py-4 ${index < ITEMS.length - 1 ? 'border-b' : ''} ${isSms ? 'opacity-50' : ''}`}
             >
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">

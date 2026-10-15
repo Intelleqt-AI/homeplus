@@ -123,7 +123,7 @@ const SignUp = () => {
             <img src={Logo} className="h-10 w-auto object-contain" />
           </Link>
           <div className="text-sm text-foreground">
-            Already have an account?{' '}
+            <span className="hidden xs:inline">Already have an account? </span>
             <Link to="/login" className="text-primary hover:underline font-medium">
               Sign in
             </Link>
@@ -131,7 +131,7 @@ const SignUp = () => {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto px-4 py-6 sm:py-12">
         <div className="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
           {/* Left Side - Benefits */}
           <div className="space-y-8">
@@ -139,7 +139,7 @@ const SignUp = () => {
               <Badge variant="secondary" className="w-fit">
                 Step {step} of 3
               </Badge>
-              <h1 className="text-4xl font-bold tracking-tight">
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                 Join thousands of homeowners managing their homes{' '}
                 <span className="bg-gradient-hero bg-clip-text text-transparent">smarter</span>
               </h1>
@@ -181,7 +181,7 @@ const SignUp = () => {
           </div>
 
           {/* Right Side - Form */}
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center order-first lg:order-none">
             <Card className="w-full max-w-md shadow-strong">
               <CardHeader className="text-center space-y-2">
                 <CardTitle className="text-2xl">
@@ -293,7 +293,7 @@ const SignUp = () => {
                 {/* ── Step 2 ── */}
                 {step === 2 && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label htmlFor="firstName">First name</Label>
                         <Input
@@ -370,9 +370,11 @@ const SignUp = () => {
                           }[formData.propertyType] ?? formData.propertyType,
                         ],
                       ].map(([label, value]) => (
-                        <div key={label} className="flex items-center justify-between px-4 py-2.5">
-                          <span className="text-muted-foreground">{label}</span>
-                          <span className="font-medium">{value || '—'}</span>
+                        <div key={label} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                          <span className="shrink-0 text-muted-foreground">{label}</span>
+                          <span className="min-w-0 truncate text-right font-medium" title={value || undefined}>
+                            {value || '—'}
+                          </span>
                         </div>
                       ))}
                     </div>

@@ -56,7 +56,7 @@ const Calendar = () => {
 
   const { data, isLoading } = useQuery({
     queryKey: ['event'],
-    queryFn: getEvents,
+    queryFn: () => getEvents(),
   });
 
   console.log(data);

@@ -2,10 +2,16 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Home, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import SocialSignInButtons from '@/components/auth/SocialSignInButtons';
 import Logo from '/homeplus-logo.png';
+
+/** Only same-origin relative paths ("/x"), never "//host" or "/\host". */
+const safeNext = (raw: string | null): string => {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return '/dashboard';
+  return raw;
+};
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -16,9 +22,11 @@ const Login = () => {
 
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = safeNext(searchParams.get('next'));
 
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={next} replace />;
   }
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -32,7 +40,7 @@ const Login = () => {
       setFormError(error.message);
       setLoading(false);
     } else {
-      navigate('/dashboard');
+      navigate(next);
     }
   };
 
@@ -142,7 +150,8 @@ const Login = () => {
         {/* Social sign-in */}
         <div className="mt-5">
           <SocialSignInButtons
-            onSuccess={() => navigate('/dashboard')}
+            onSuccess={() => navigate(next)}
+
             onError={message => setFormError(message)}
           />
         </div>

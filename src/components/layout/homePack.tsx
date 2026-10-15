@@ -3,6 +3,7 @@ import { Bell, User, Camera, Calendar, Wrench, Package, MessageSquare, Plus, Upl
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '../ui/button';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import useFetch from '@/hooks/useFetch';
 import { listFilesWithMetadata } from '@/lib/Api';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,19 +53,19 @@ const HomePack = ({ setOpenForm }) => {
               </p>
             </div>
           </div>
-          <div className="grid gap-3 pt-4">
+          <div className="grid gap-3 pt-4 max-h-[60dvh] overflow-y-auto">
             {docs &&
               docs.length > 0 &&
               docs
                 .filter(item => item.id && item.name !== 'cover')
                 ?.map(({ id, name, metadata, publicUrl }) => {
                   return (
-                    <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg" key={id}>
-                      <div className="flex items-center space-x-3">
-                        <FileText className="w-5 h-5 text-gray-600" />
-                        <span className="text-sm font-medium text-gray-700">{name}</span>
+                    <div className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-lg" key={id}>
+                      <div className="flex min-w-0 items-center space-x-3">
+                        <FileText className="w-5 h-5 shrink-0 text-gray-600" />
+                        <span className="min-w-0 truncate text-sm font-medium text-gray-700">{name}</span>
                       </div>
-                      <span className={`text-xs font-medium px-2 py-1 rounded ${getStatusColor(metadata?.metadata?.status)}`}>
+                      <span className={`shrink-0 whitespace-nowrap text-xs font-medium px-2 py-1 rounded ${getStatusColor(metadata?.metadata?.status)}`}>
                         {metadata?.metadata?.status
                           ? isPast(new Date(metadata.metadata.status))
                             ? 'Action required'
@@ -112,7 +113,7 @@ const HomePack = ({ setOpenForm }) => {
               </span>
             </div> */}
           </div>
-          <div className="flex space-x-3 pt-4">
+          <div className="flex flex-col xs:flex-row gap-3 pt-4">
             <Link to="/dashboard/documents" className="flex-1">
               <Button className="w-full">View All Documents</Button>
             </Link>

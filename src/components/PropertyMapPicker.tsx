@@ -191,8 +191,14 @@ const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) =
       </div>
 
       {/* Map */}
-      <div className="h-64 w-full rounded-lg overflow-hidden border border-gray-200">
-        <MapContainer center={center} zoom={zoom} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
+      <div className="isolate h-48 sm:h-64 w-full rounded-lg overflow-hidden border border-gray-200">
+        <MapContainer
+          center={center}
+          zoom={zoom}
+          scrollWheelZoom
+          dragging={!L.Browser.mobile}
+          style={{ height: '100%', width: '100%' }}
+        >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

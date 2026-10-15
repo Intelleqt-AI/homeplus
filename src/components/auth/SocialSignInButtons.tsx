@@ -55,7 +55,14 @@ const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin', onCredent
   const appleRedirectUri = import.meta.env.VITE_APPLE_REDIRECT_URI as string | undefined;
 
   useEffect(() => {
-    if (containerRef.current) setWidth(containerRef.current.offsetWidth);
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const w = Math.floor(entry.contentRect.width);
+      if (w > 0) setWidth(Math.min(400, w));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -141,8 +148,7 @@ const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin', onCredent
             type="button"
             onClick={handleAppleClick}
             disabled={!appleReady || appleLoading}
-            style={{ width }}
-            className="h-10 rounded-md bg-black text-white text-sm font-medium
+            className="w-full max-w-[400px] h-10 rounded-md bg-black text-white text-sm font-medium
               flex items-center justify-center gap-2
               hover:bg-black/90 active:scale-[0.98]
               disabled:opacity-60 disabled:cursor-not-allowed

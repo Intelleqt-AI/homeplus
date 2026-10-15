@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Camera, ArrowRight, ArrowLeft, X, CheckCircle, Home, Loader2, Sparkles } from 'lucide-react';
+import { Camera, ArrowRight, ArrowLeft, CheckCircle, Home, Loader2, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { usePost } from '@/hooks/usePost';
@@ -126,26 +126,17 @@ export default function SetupWizard({ isOpen, onClose, onComplete }: SetupWizard
 
   return (
     <Dialog open={isOpen} onOpenChange={open => { if (!open) handleClose(); }}>
-      <DialogContent className="sm:max-w-[580px] max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-[580px] max-h-[90dvh] overflow-y-auto p-0">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
+          <DialogHeader className="pr-0">
+            <div className="flex items-center justify-between gap-3 pr-6">
               <DialogTitle className="text-base font-semibold text-gray-900">
                 {step === 1 && 'Welcome to HomePlus'}
                 {step === 2 && 'Add your property'}
                 {step === 3 && "You're all set!"}
               </DialogTitle>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400">Step {step} of {TOTAL_STEPS}</span>
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <X className="h-4 w-4 text-gray-500" />
-                </button>
-              </div>
+              <span className="shrink-0 whitespace-nowrap text-xs text-gray-400">Step {step} of {TOTAL_STEPS}</span>
             </div>
             {/* Progress bar */}
             <div className="w-full bg-gray-100 rounded-full h-1.5 mt-4">
@@ -250,7 +241,7 @@ export default function SetupWizard({ isOpen, onClose, onComplete }: SetupWizard
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+        <div className="sticky bottom-0 bg-background px-6 py-4 border-t border-gray-100 flex items-center justify-between">
           {step > 1 && step < 3 ? (
             <Button
               variant="outline"

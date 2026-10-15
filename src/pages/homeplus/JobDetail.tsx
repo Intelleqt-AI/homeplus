@@ -110,7 +110,7 @@ const JobDetail = () => {
   return (
     <div className="min-h-screen bg-gray-50 font-manrope">
       {/* Left Navigation */}
-      <nav className="fixed left-0 top-0 h-full w-[72px] bg-white border-r border-gray-200 z-40">
+      <nav className="hidden lg:block fixed left-0 top-0 h-full w-[72px] bg-white border-r border-gray-200 z-40">
         <div className="flex flex-col h-full">
           <div className="flex-1 pt-6">
             {sidebarItems.map((item, index) => {
@@ -163,12 +163,12 @@ const JobDetail = () => {
       </nav>
 
       {/* Main Content */}
-      <div className="ml-[72px]">
+      <div className="lg:ml-[72px]">
         {/* Top Bar */}
-        <header className="sticky top-0 bg-white h-16 border-b border-gray-200 px-6 flex items-center justify-between z-30">
+        <header className="sticky top-0 bg-white h-16 border-b border-gray-200 px-4 md:px-6 flex items-center justify-between z-30">
           <div className="font-bold text-xl text-black">Home⁺</div>
 
-          <div className="flex-1 max-w-md mx-8">
+          <div className="hidden md:block flex-1 max-w-md mx-4 md:mx-8">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" strokeWidth={1} />
               <input
@@ -191,12 +191,12 @@ const JobDetail = () => {
         </header>
 
         {/* Job Content */}
-        <main className="max-w-[1200px] mx-auto p-6 space-y-6">
+        <main className="max-w-[1200px] mx-auto p-4 md:p-6 space-y-6">
           {/* Job Header (12 cols) */}
           <div className="grid grid-cols-12 gap-6">
             <div className="col-span-12">
-              <div className="flex items-start justify-between mb-4">
-                <div>
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="min-w-0">
                   <h1 className="text-2xl font-semibold text-black mb-2">{job.title}</h1>
                   <div className="text-gray-600 text-sm flex items-center">
                     <MapPin className="w-4 h-4 mr-1" strokeWidth={1} />
@@ -204,7 +204,7 @@ const JobDetail = () => {
                   </div>
                 </div>
                 <span
-                  className={`inline-flex items-center px-3 py-1 rounded-lg text-sm border ${
+                  className={`shrink-0 inline-flex items-center px-3 py-1 rounded-lg text-sm border ${
                     job.status === 'scheduled'
                       ? 'border-gray-300 text-gray-600'
                       : job.status === 'in progress'
@@ -235,8 +235,8 @@ const JobDetail = () => {
             <div className="col-span-12">
               <div className="bg-white border border-gray-200 rounded-2xl p-6">
                 {/* Trade Header */}
-                <div className="flex items-start space-x-4 mb-6">
-                  <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                <div className="flex flex-wrap items-start gap-4 mb-6">
+                  <div className="w-12 h-12 shrink-0 bg-gray-200 rounded-full flex items-center justify-center">
                     <User className="w-6 h-6 text-gray-600" strokeWidth={1} />
                   </div>
                   <div className="flex-1">
@@ -269,20 +269,20 @@ const JobDetail = () => {
                     <div className="text-sm font-medium text-gray-700 mb-1">Address</div>
                     <div className="text-black">{selectedTrade.address}</div>
                   </div>
-                  <div className="flex space-x-6">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-x-6">
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <Phone className="w-4 h-4" strokeWidth={1} />
+                      <Phone className="w-4 h-4 shrink-0" strokeWidth={1} />
                       <span>{selectedTrade.phone}</span>
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <Mail className="w-4 h-4" strokeWidth={1} />
-                      <span>{selectedTrade.email}</span>
+                      <Mail className="w-4 h-4 shrink-0" strokeWidth={1} />
+                      <span className="min-w-0 break-all">{selectedTrade.email}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex space-x-3">
+                <div className="flex flex-wrap gap-3">
                   <button className="bg-primary text-black font-medium py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors flex items-center">
                     <MessageSquare className="w-4 h-4 mr-2" strokeWidth={1} />
                     message
@@ -317,9 +317,9 @@ const JobDetail = () => {
                   <div className="space-y-4">
                     {otherQuotes.map(quote => (
                       <div key={quote.tradeId} className="bg-white border border-gray-200 rounded-2xl p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center space-x-3 min-w-0">
+                            <div className="w-8 h-8 shrink-0 bg-gray-200 rounded-full flex items-center justify-center">
                               <User className="w-4 h-4 text-gray-600" strokeWidth={1} />
                             </div>
                             <div>
@@ -364,7 +364,7 @@ const JobDetail = () => {
                         <item.icon className="w-4 h-4 text-gray-500" strokeWidth={1} />
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2 text-sm">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2 text-sm">
                           <span className="text-gray-500">{item.time}</span>
                           <span className="text-black">{item.text}</span>
                         </div>
@@ -381,12 +381,12 @@ const JobDetail = () => {
             <div className="col-span-12">
               <div className="bg-white border border-gray-200 rounded-2xl p-6">
                 <h3 className="font-medium text-black mb-6">files</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4">
                   {files.map(file => (
                     <div key={file.id} className="border border-gray-200 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-sm font-medium text-black truncate">{file.name}</div>
-                        <div className="flex space-x-1">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="min-w-0 text-sm font-medium text-black truncate">{file.name}</div>
+                        <div className="flex shrink-0 space-x-1">
                           <button className="p-1 hover:bg-gray-100 rounded">
                             <Eye className="w-3 h-3 text-gray-500" strokeWidth={1} />
                           </button>

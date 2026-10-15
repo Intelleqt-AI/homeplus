@@ -18,6 +18,7 @@ import {
   Settings as SettingsIcon,
   Clock,
   Plus,
+  Users,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,8 @@ import Profile from "@/components/settings/profile";
 import Security from "@/components/settings/security";
 import Notifications from "@/components/settings/Notifications";
 import Properties from "@/components/settings/Properties";
+import Family from "@/components/settings/Family";
+import { useActiveProperty } from "@/hooks/useActiveProperty";
 
 const CATEGORY_CONFIG: Record<string, {
   label: string;
@@ -100,6 +103,7 @@ const Settings = () => {
     { id: "notifications" as const, label: "Notifications", icon: Bell },
     { id: "security" as const, label: "Security", icon: Shield },
     { id: "properties" as const, label: "Properties", icon: Building },
+    { id: "family" as const, label: "Family", icon: Users },
     { id: "tasks" as const, label: "Task Templates", icon: Calendar },
   ];
 
@@ -109,6 +113,7 @@ const Settings = () => {
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  const { activePropertyId } = useActiveProperty();
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['motTemplates'],
@@ -117,8 +122,8 @@ const Settings = () => {
   });
 
   const { data: activeTasks = [] } = useQuery({
-    queryKey: ['motTasks'],
-    queryFn: getMotTasks,
+    queryKey: ['motTasks', activePropertyId],
+    queryFn: () => getMotTasks(activePropertyId),
     enabled: activeTab === 'tasks',
   });
 
@@ -135,12 +140,12 @@ const Settings = () => {
 
   const enableMut = useMutation({
     mutationFn: (slug: string) =>
-      enableMotTemplate(slug, new Date().toISOString().split('T')[0]),
+      enableMotTemplate(slug, new Date().toISOString().split('T')[0], activePropertyId),
     onSuccess: invalidateMot,
   });
 
   const disableMut = useMutation({
-    mutationFn: (slug: string) => disableMotTemplate(slug),
+    mutationFn: (slug: string) => disableMotTemplate(slug, activePropertyId),
     onSuccess: invalidateMot,
   });
 
@@ -254,7 +259,7 @@ const Settings = () => {
           </div>
 
           {/* Tab strip — mobile: scrollable pill row; desktop: card grid */}
-          <div className="flex sm:hidden overflow-x-auto gap-2 pb-1 [&::-webkit-scrollbar]:hidden">
+          <div className="flex xl:hidden overflow-x-auto gap-2 pb-1 [&::-webkit-scrollbar]:hidden">
             {tabs.map((tab) => {
               const IconComponent = tab.icon;
               const isActive = activeTab === tab.id;
@@ -273,7 +278,7 @@ const Settings = () => {
             })}
           </div>
 
-          <div className="hidden sm:grid grid-cols-5 gap-4">
+          <div className="hidden xl:grid grid-cols-6 gap-4">
             {tabs.map((tab) => {
               const IconComponent = tab.icon;
               const isActive = activeTab === tab.id;
@@ -285,9 +290,9 @@ const Settings = () => {
                     isActive ? 'bg-primary' : 'bg-muted hover:bg-border'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-sm ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`}>{tab.label}</span>
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className={`min-w-0 truncate text-sm ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`}>{tab.label}</span>
+                    <div className={`h-8 w-8 shrink-0 rounded-full flex items-center justify-center ${
                       isActive ? 'bg-primary-foreground/10' : 'bg-accent/10'
                     }`}>
                       <IconComponent className={`w-4 h-4 ${isActive ? 'text-primary-foreground' : 'text-accent'}`} strokeWidth={1.5} />
@@ -296,8 +301,9 @@ const Settings = () => {
                   <p className={`text-xs ${isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                     {tab.id === 'profile' && 'Your details'}
                     {tab.id === 'notifications' && 'Alerts & emails'}
-                    {tab.id === 'security' && 'Password & 2FA'}
+                    {tab.id === 'security' && 'Password & devices'}
                     {tab.id === 'properties' && 'Your homes'}
+                    {tab.id === 'family' && 'Share your home'}
                     {tab.id === 'tasks' && 'Task settings'}
                   </p>
                 </button>
@@ -307,17 +313,18 @@ const Settings = () => {
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+          <div className="xl:col-span-3">
             {activeTab === "profile" && <Profile />}
             {activeTab === "notifications" && <Notifications />}
             {activeTab === "security" && <Security />}
             {activeTab === "properties" && <Properties />}
+            {activeTab === "family" && <Family />}
             {activeTab === "tasks" && renderTaskTemplates()}
           </div>
 
           {/* Right sidebar nav */}
-          <div className="lg:col-span-1 space-y-4">
+          <div className="hidden xl:block xl:col-span-1 space-y-4">
             <div className="bg-card rounded-[16px] p-5 border border-border">
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-9 w-9 bg-accent/10 rounded-full flex items-center justify-center">

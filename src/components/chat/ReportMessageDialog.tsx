@@ -67,7 +67,7 @@ const ReportMessageDialog = ({ open, onOpenChange, conversationId, messageId }: 
           </DialogDescription>
         </DialogHeader>
 
-        <RadioGroup value={reason} onValueChange={v => setReason(v as ReportReason)} className="gap-2.5">
+        <RadioGroup value={reason} onValueChange={v => setReason(v as ReportReason)} className="grid gap-2.5 sm:grid-cols-2">
           {REASONS.map(r => (
             <label key={r.value} className="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
               <RadioGroupItem value={r.value} />

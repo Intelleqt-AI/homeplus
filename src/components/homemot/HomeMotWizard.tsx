@@ -102,6 +102,10 @@ interface HomeMotWizardProps {
     answers: Record<string, boolean>,
     dates: Record<string, string>
   ) => void;
+  /** Which property this check's tasks/score belong to. */
+  propertyId?: string | null;
+  /** Question to scroll to and highlight (e.g. "boiler-service" from System Health). */
+  focusQuestion?: string | null;
 }
 
 const todayIso = () => new Date().toISOString().split('T')[0];
@@ -113,6 +117,8 @@ const HomeMotWizard = ({
   initialAnswers,
   initialDates,
   onSave,
+  propertyId,
+  focusQuestion,
 }: HomeMotWizardProps) => {
   const config = step ? STEP_CONFIG[step] : null;
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
@@ -147,45 +153,64 @@ const HomeMotWizard = ({
   // mutation would re-run the reset and wipe an in-progress tick (auto-untick).
   const initialAnswersRef = useRef(initialAnswers);
   const initialDatesRef = useRef(initialDates);
+  const questionsRef = useRef(questions);
   initialAnswersRef.current = initialAnswers;
   initialDatesRef.current = initialDates;
+  questionsRef.current = questions;
 
   // Hydrate only when the dialog opens or the step changes — not on prop identity.
+  // Only this step's questions: stray keys from old data must not count or be re-saved.
   useEffect(() => {
     if (open) {
-      setAnswers(initialAnswersRef.current ?? {});
+      const ids = new Set(questionsRef.current.map((q) => q.id));
+      setAnswers(
+        Object.fromEntries(Object.entries(initialAnswersRef.current ?? {}).filter(([id]) => ids.has(id)))
+      );
       setDates(initialDatesRef.current ?? {});
     }
   }, [open, step]);
 
   // Refresh everything that depends on MOT data after a task mutation: the
-  // calendar/dashboard events (linked Event), the task list, and hydration dates.
+  // calendar/dashboard events (linked Event), the task list, hydration dates and
+  // System Health (a saved "yes" with its date is one of its records).
   const invalidateTasks = () => {
-    ['event', 'mot-tasks', 'mot-last-completed'].forEach((key) =>
+    ['event', 'mot-tasks', 'mot-last-completed', 'systems-health'].forEach((key) =>
       qc.invalidateQueries({ queryKey: [key] })
     );
   };
 
   const upsertMut = useMutation({
-    mutationFn: upsertMotTask,
+    mutationFn: (vars: { templateId: string; lastCompletedDate: string }) =>
+      upsertMotTask({ ...vars, property: propertyId }),
     onSuccess: invalidateTasks,
     onError: () => toast.error("Couldn't schedule that task"),
   });
   const deleteMut = useMutation({
-    mutationFn: deleteMotTask,
+    mutationFn: (templateId: string) => deleteMotTask(templateId, propertyId),
     onSuccess: invalidateTasks,
     onError: () => toast.error("Couldn't remove that task"),
   });
   const scoreMut = useMutation({
     mutationFn: ({ step: s, answers: a }: { step: HomeMotStep; answers: Record<string, boolean> }) =>
-      updateMotScore(s, a),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['mot-score'] }),
+      updateMotScore(s, a, propertyId),
+    onSuccess: () => ['mot-score', 'systems-health'].forEach((key) => qc.invalidateQueries({ queryKey: [key] })),
   });
 
   const yesCount = useMemo(
-    () => Object.values(answers).filter(Boolean).length,
-    [answers]
+    () => questions.filter((q) => answers[q.id]).length,
+    [answers, questions]
   );
+
+  // Bring the question System Health pointed at into view once the dialog has opened.
+  const focusRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open || !focusQuestion) return;
+    const t = window.setTimeout(
+      () => focusRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+      250
+    );
+    return () => window.clearTimeout(t);
+  }, [open, focusQuestion, questions.length]);
 
   if (!config || !step) return null;
 
@@ -226,8 +251,11 @@ const HomeMotWizard = ({
   const handleSave = () => {
     // Tasks are already persisted live on tick/date-change; Save just commits
     // the step's answers to the score.
-    scoreMut.mutate({ step, answers });
-    onSave?.(step, answers, dates);
+    // Only this step's questions, as answered (untouched ones stay "not answered").
+    const ids = new Set(questions.map((q) => q.id));
+    const own = Object.fromEntries(Object.entries(answers).filter(([id]) => ids.has(id)));
+    scoreMut.mutate({ step, answers: own });
+    onSave?.(step, own, dates);
 
     const label =
       step === 'A' ? 'Compliance' : step === 'B' ? 'Documents' : 'Maintenance';
@@ -237,13 +265,13 @@ const HomeMotWizard = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-10 w-10 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+            <div className="h-10 w-10 shrink-0 rounded-full bg-[#FEF9E7] flex items-center justify-center">
               <Icon className="w-5 h-5 text-[#FBBF24]" strokeWidth={1.5} />
             </div>
-            <div className="text-left">
+            <div className="min-w-0 text-left">
               <DialogTitle className="text-[#1A1A1A] text-lg font-semibold">
                 {config.title}
               </DialogTitle>
@@ -262,11 +290,13 @@ const HomeMotWizard = ({
             return (
               <div
                 key={q.id}
+                ref={q.id === focusQuestion ? focusRef : undefined}
+                data-question={q.id}
                 className={`rounded-[12px] border transition-colors ${
                   checked
                     ? 'bg-[#FEF9E7] border-[#FBBF24]'
                     : 'bg-white border-[#E8E8E3] hover:bg-[#F5F5F0]'
-                }`}
+                }${q.id === focusQuestion ? ' ring-2 ring-[#FBBF24] ring-offset-2' : ''}`}
               >
                 <label
                   htmlFor={q.id}
@@ -284,11 +314,6 @@ const HomeMotWizard = ({
                     </p>
                     {q.hint && (
                       <p className="text-[11px] text-[#6B6B6B] mt-0.5">{q.hint}</p>
-                    )}
-                    {q.placeholder && (
-                      <p className="text-[10px] text-[#A1A1A1] mt-1 italic">
-                        placeholder wording — confirm with product
-                      </p>
                     )}
                   </div>
                 </label>
@@ -348,7 +373,7 @@ const HomeMotWizard = ({
           })}
         </div>
 
-        <div className="flex items-center justify-between border-t border-[#E8E8E3] pt-4">
+        <div className="flex flex-col-reverse sm:flex-row gap-3 sm:items-center sm:justify-between border-t border-[#E8E8E3] pt-4">
           <div className="text-sm text-[#6B6B6B]">
             <span className="text-[#1A1A1A] font-semibold">{yesCount}</span> of{' '}
             {questions.length} ticked
@@ -367,7 +392,7 @@ const HomeMotWizard = ({
               </>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex justify-end gap-2">
             <Button
               variant="outline"
               className="rounded-full h-9 px-4 text-sm"

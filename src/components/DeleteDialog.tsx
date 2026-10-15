@@ -58,7 +58,7 @@ export const DeleteDialog = ({
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg z-[99]">
-        <DialogHeader className="flex flex-row items-center gap-3">
+        <DialogHeader className="flex flex-row items-center gap-3 space-y-0">
           <div
             className={`flex-shrink-0 w-10 h-10 ${
               isArchive ? "bg-gray-100" : "bg-red-100"
@@ -69,7 +69,7 @@ export const DeleteDialog = ({
               } `}
             />
           </div>
-          <div>
+          <div className="min-w-0 break-words">
             <DialogTitle>{title}</DialogTitle>
             {itemName && (
               <p className="text-sm text-muted-foreground mt-1">"{itemName}"</p>
@@ -100,7 +100,7 @@ export const DeleteDialog = ({
           </div>
         )}
 
-        <DialogFooter className="mt-3 flex gap-3 sm:justify-end">
+        <DialogFooter className="mt-3 flex gap-3 sm:justify-end sm:space-x-0">
           <Button
             type="button"
             variant="outline"

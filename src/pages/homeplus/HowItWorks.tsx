@@ -6,9 +6,9 @@ import { fetchDocumentSummary, getEvents } from '@/lib/Api2';
 import { fetchLeads } from '@/lib/Api';
 
 const HowItWorks = () => {
-  const { data: docSummary } = useQuery({ queryKey: ['documents-summary'], queryFn: fetchDocumentSummary });
-  const { data: jobsData } = useQuery({ queryKey: ['leads'], queryFn: fetchLeads });
-  const { data: eventsData } = useQuery({ queryKey: ['event'], queryFn: getEvents });
+  const { data: docSummary } = useQuery({ queryKey: ['documents-summary'], queryFn: () => fetchDocumentSummary() });
+  const { data: jobsData } = useQuery({ queryKey: ['leads'], queryFn: () => fetchLeads() });
+  const { data: eventsData } = useQuery({ queryKey: ['event'], queryFn: () => getEvents() });
 
   const docCount: number = (docSummary as any)?.data?.total ?? (docSummary as any)?.total ?? 0;
   const jobCount: number = Array.isArray(jobsData) ? jobsData.length : ((jobsData as any)?.data?.length ?? 0);
@@ -34,11 +34,11 @@ const HowItWorks = () => {
           </div>
 
           {/* Stats Row — live data */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Documents</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[#6B6B6B] text-xs sm:text-sm">Documents</span>
+                <div className="h-8 w-8 shrink-0 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <FileText className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -50,10 +50,10 @@ const HowItWorks = () => {
               </p>
             </div>
 
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Tasks</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[#6B6B6B] text-xs sm:text-sm">Tasks</span>
+                <div className="h-8 w-8 shrink-0 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Calendar className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -65,10 +65,10 @@ const HowItWorks = () => {
               </p>
             </div>
 
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">Home Improvements & Maintenance</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[#6B6B6B] text-xs sm:text-sm">Home Improvements & Maintenance</span>
+                <div className="h-8 w-8 shrink-0 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Search className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -80,10 +80,10 @@ const HowItWorks = () => {
               </p>
             </div>
 
-            <div className="bg-[#F5F5F0] rounded-[16px] px-5 py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-sm">UK Compliance</span>
-                <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
+            <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[#6B6B6B] text-xs sm:text-sm">UK Compliance</span>
+                <div className="h-8 w-8 shrink-0 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                   <Shield className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -94,9 +94,9 @@ const HowItWorks = () => {
         </div>
 
         {/* Main Content - 2 Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           {/* Left Column - Main Content (3 columns wide) */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className="xl:col-span-3 space-y-6">
             {/* Getting Started Section */}
             <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
               <div className="flex items-center gap-3 mb-6">

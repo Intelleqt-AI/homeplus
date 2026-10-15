@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AxiosRequestConfig } from 'axios';
 import apiClient from '@/lib/apiClient';
+import { throttledMessage } from '@/lib/rateLimit';
 import useFetch from '@/hooks/useFetch';
 
 export const PENDING_TOKEN_KEY = 'hp_pending_token';
@@ -82,6 +83,8 @@ const extractUser = (res: unknown): unknown => {
 
 const extractError = (err: unknown): string => {
   const e = err as { response?: { data?: { errors?: Record<string, string | string[]>; message?: string } } };
+  const throttled = throttledMessage(err);
+  if (throttled) return throttled;
   const first = Object.values(e?.response?.data?.errors ?? {})[0];
   const msg = Array.isArray(first) ? first[0] : first;
   return msg || e?.response?.data?.message || 'Something went wrong.';

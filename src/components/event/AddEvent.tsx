@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Bell,
   Building,
+  CheckCircle,
   CreditCard,
   Flame,
   Home,
@@ -40,11 +41,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { LucideIcon } from 'lucide-react';
 import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
+import { useActiveProperty } from '@/hooks/useActiveProperty';
 import useFetch from '@/hooks/useFetch';
 import { cn } from '@/lib/utils';
 import { JOB_TRADE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories';
 
-type EventMode = 'task' | 'reminder';
+// 'done' logs work that is already finished: saved as completed, so it is a record
+// (System Health counts it) and never shows as an overdue task.
+type EventMode = 'task' | 'reminder' | 'done';
 
 interface EventTemplate {
   id: string;
@@ -103,15 +107,28 @@ const eventSchema = z
 
 type EventFormValues = z.infer<typeof eventSchema>;
 
+export type AddEventInitialValues = {
+  title?: string;
+  type?: EventFormValues['type'];
+  trade?: string;
+  tradeCategory?: string;
+  complianceType?: EventFormValues['complianceType'];
+  description?: string;
+};
+
 interface AddEventProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialDate?: string;
   initialMode?: EventMode;
+  /** Applied each time the dialog opens (e.g. "Log work" from System Health). */
+  initialValues?: AddEventInitialValues;
   hideTrigger?: boolean;
 }
 
-const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }: AddEventProps = {}) => {
+const todayIso = () => new Date().toISOString().split('T')[0];
+
+const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues, hideTrigger }: AddEventProps = {}) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const isAddEventOpen = isControlled ? open : internalOpen;
@@ -149,6 +166,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
     '/api/v1/properties/',
   );
   const properties: PropertyOption[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
+  const { activePropertyId } = useActiveProperty();
 
   useEffect(() => {
     if (isAddEventOpen && initialDate) {
@@ -156,27 +174,41 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
     }
   }, [isAddEventOpen, initialDate, setValue]);
 
+  // Mode and prefilled fields apply on every open (not only at mount).
+  useEffect(() => {
+    if (!isAddEventOpen) return;
+    if (initialMode) setEventMode(initialMode);
+    if (!initialValues) return;
+    if (initialValues.title) setValue('title', initialValues.title);
+    if (initialValues.type) setValue('type', initialValues.type);
+    setValue('trade', initialValues.trade ?? '');
+    setValue('tradeCategory', initialValues.tradeCategory ?? '');
+    if (initialValues.complianceType) setValue('complianceType', initialValues.complianceType);
+    if (initialValues.description) setValue('description', initialValues.description);
+  }, [isAddEventOpen, initialMode, initialValues, setValue]);
+
   // Switching mode keeps everything else but flips the trade-quote intent.
   useEffect(() => {
     setValue('requiresTrade', eventMode === 'task');
     if (eventMode === 'reminder') {
       setValue('type', 'other');
-      setValue('propertyId', '');
     }
   }, [eventMode, setValue]);
 
-  // Auto-select the only property when in task mode
+  // Default to the property active in the sidebar switcher — the calendar is
+  // filtered by it, so an unassigned event wouldn't show under any property.
+  const onlyPropertyId = properties.length === 1 ? properties[0].id : null;
   useEffect(() => {
-    if (eventMode === 'task' && properties.length === 1) {
-      setValue('propertyId', properties[0].id);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventMode, properties.length]);
+    if (!isAddEventOpen || propertyId) return;
+    const fallback = activePropertyId ?? onlyPropertyId;
+    if (fallback) setValue('propertyId', fallback);
+  }, [isAddEventOpen, propertyId, activePropertyId, onlyPropertyId, setValue]);
 
   const mutation = usePost({
     mutationFn: addNewEvent,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['event'] });
+      ['event', 'systems-health', 'timeline', 'attention'].forEach(key =>
+        queryClient.invalidateQueries({ queryKey: [key] }));
     },
     onError: error => {
       console.log(error);
@@ -262,16 +294,18 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
       recurring: data.recurring,
       complianceType: data.complianceType,
       isRequireTrade: !!data.requiresTrade,
-      // Only send trade fields when this is a task. Reminders submit them blank.
-      trade: data.requiresTrade ? data.trade ?? '' : '',
-      tradeCategory: data.requiresTrade ? data.tradeCategory ?? '' : '',
+      // Trade fields go with tasks and with logged work (it tells which system the work
+      // belongs to). Reminders submit them blank.
+      trade: data.requiresTrade || eventMode === 'done' ? data.trade ?? '' : '',
+      tradeCategory: data.requiresTrade || eventMode === 'done' ? data.tradeCategory ?? '' : '',
       description: data.description ?? '',
       property: data.propertyId,
+      ...(eventMode === 'done' ? { status: 'completed' } : {}),
     };
 
     mutation.mutate(payload, {
       onSuccess: () => {
-        toast.success(eventMode === 'task' ? 'Task added' : 'Reminder added');
+        toast.success(eventMode === 'task' ? 'Task added' : eventMode === 'done' ? 'Work logged' : 'Reminder added');
         setIsAddEventOpen(false);
         reset();
       },
@@ -301,7 +335,11 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
         )}
 
         {quickAddOpen && (
-          <div className="absolute top-full right-0 mt-2 w-[min(24rem,calc(100vw-2rem))] bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4">
+          <div className="fixed inset-0 z-40" onClick={() => setQuickAddOpen(false)} />
+        )}
+
+        {quickAddOpen && (
+          <div className="absolute top-full right-0 mt-2 w-[min(24rem,calc(100vw-2rem))] max-h-[70dvh] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium text-gray-900">What type of task?</h3>
               <Button variant="ghost" size="sm" onClick={() => setQuickAddOpen(false)} className="h-6 w-6 p-0">
@@ -310,7 +348,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
             </div>
 
             <div className="grid grid-cols-1 gap-4 mb-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Property Maintenance</h4>
                   <div className="space-y-2">
@@ -342,7 +380,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Council & Utilities</h4>
                   <div className="grid grid-cols-1 gap-1">
@@ -423,13 +461,13 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
         <DialogTrigger asChild>
           <div style={{ display: 'none' }} />
         </DialogTrigger>
-        <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[600px] max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{eventMode === 'task' ? 'Add Task' : 'Add Reminder'}</DialogTitle>
+            <DialogTitle>{eventMode === 'task' ? 'Add Task' : eventMode === 'done' ? 'Log work done' : 'Add Reminder'}</DialogTitle>
           </DialogHeader>
 
           {/* Task / Reminder mode toggle */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-lg">
+          <div className="grid grid-cols-3 gap-2 p-1 bg-gray-100 rounded-lg">
             <button
               type="button"
               onClick={() => setEventMode('task')}
@@ -452,11 +490,24 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
               <Bell className="w-4 h-4" />
               Reminder
             </button>
+            <button
+              type="button"
+              onClick={() => setEventMode('done')}
+              className={cn(
+                'flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-colors',
+                eventMode === 'done' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+              )}
+            >
+              <CheckCircle className="w-4 h-4" />
+              Already done
+            </button>
           </div>
           <p className="text-xs text-gray-500 -mt-2">
             {eventMode === 'task'
               ? 'A task sits in your calendar and lets you press "Get Quotes" to find a trade.'
-              : 'A reminder sits in your calendar with a notification. No trade action.'}
+              : eventMode === 'done'
+                ? 'Log work that is already finished. It is saved as completed, so it counts as a record and never shows as overdue.'
+                : 'A reminder sits in your calendar with a notification. No trade action.'}
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 py-2">
@@ -485,10 +536,10 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="title">{eventMode === 'task' ? 'Task Title' : 'Reminder Title'} <span className="text-red-500">*</span></Label>
+              <Label htmlFor="title">{eventMode === 'task' ? 'Task Title' : eventMode === 'done' ? 'Work done' : 'Reminder Title'} <span className="text-red-500">*</span></Label>
               <Input
                 id="title"
-                placeholder={eventMode === 'task' ? 'e.g., Annual Boiler Service' : 'e.g., Bin Day'}
+                placeholder={eventMode === 'reminder' ? 'e.g., Bin Day' : 'e.g., Annual Boiler Service'}
                 {...register('title')}
                 className={errors.title ? 'border-red-500' : ''}
               />
@@ -496,15 +547,16 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="date">Date <span className="text-red-500">*</span></Label>
-              <Input id="date" type="date" {...register('date')} className={errors.date ? 'border-red-500' : ''} />
+              <Label htmlFor="date">{eventMode === 'done' ? 'Date done' : 'Date'} <span className="text-red-500">*</span></Label>
+              <Input id="date" type="date" max={eventMode === 'done' ? todayIso() : undefined}
+                {...register('date')} className={errors.date ? 'border-red-500' : ''} />
               {errors.date && <p className="text-xs text-red-500">{errors.date.message}</p>}
             </div>
 
-            {eventMode === 'task' && (
-              <div className="grid grid-cols-2 gap-3">
+            {(eventMode === 'task' || eventMode === 'done') && (
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="trade">Category <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="trade">Category {eventMode === 'task' ? <span className="text-red-500">*</span> : <span className="text-xs text-gray-400 font-normal">(optional)</span>}</Label>
                   <Controller
                     name="trade"
                     control={control}
@@ -514,7 +566,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                           field.onChange(v);
                           setValue('tradeCategory', '');
                           // Any task with a trade selected should show Get Quotes
-                          if (v) setValue('requiresTrade', true);
+                          if (v && eventMode === 'task') setValue('requiresTrade', true);
                         }}
                         value={field.value ?? ''}
                       >
@@ -535,7 +587,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="tradeCategory">Subcategory <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="tradeCategory">Subcategory {eventMode === 'task' ? <span className="text-red-500">*</span> : <span className="text-xs text-gray-400 font-normal">(optional)</span>}</Label>
                   <Controller
                     name="tradeCategory"
                     control={control}
@@ -569,7 +621,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="type">Type <span className="text-red-500">*</span></Label>
                 <Controller
@@ -619,7 +671,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="recurring">Recurring</Label>
                 <Controller
@@ -679,7 +731,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, hideTrigger }:
                 Cancel
               </Button>
               <Button type="submit" disabled={eventMode === 'task' && !propertyId}>
-                {eventMode === 'task' ? 'Add Task' : 'Add Reminder'}
+                {eventMode === 'task' ? 'Add Task' : eventMode === 'done' ? 'Log work' : 'Add Reminder'}
               </Button>
             </div>
           </form>

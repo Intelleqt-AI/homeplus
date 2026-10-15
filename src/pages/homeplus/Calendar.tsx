@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 const SEASONAL_TIPS: Record<number, string[]> = {
   0:  ['Lag outdoor pipes to prevent freezing', 'Check boiler pressure and bleed radiators'],
@@ -42,12 +42,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddEvent from "@/components/event/AddEvent";
+import CalendarSubscribeDialog from "@/components/calendar/CalendarSubscribeDialog";
 import EventDetailDialog, { type CalendarEventDetail } from "@/components/event/EventDetailDialog";
+import type { UserBrief } from "@/lib/household";
+
 import Quote, { type QuotePrefill } from "@/components/topbar/Quote";
 import { inferTradeFromTitle } from "@/lib/tradeInference";
 import { TRADE_OPTIONS, getTradeCategoryLabel } from "@/lib/tradeCategories";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getEvents } from "@/lib/Api2";
+import { useActiveProperty } from "@/hooks/useActiveProperty";
 import usePatch from "@/hooks/usePatch";
 import { toast } from "sonner";
 
@@ -68,8 +72,11 @@ const timeframeFromDate = (date: Date | string | null | undefined): string | und
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"month" | "list">(
-    "month"
+  // Phones default to the list view — the 7-column month grid is too cramped below sm.
+  const [viewMode, setViewMode] = useState<"month" | "list">(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches
+      ? "list"
+      : "month"
   );
   type FilterType =
     | "all"
@@ -87,10 +94,14 @@ const Calendar = () => {
   const [quotePrefill, setQuotePrefill] = useState<QuotePrefill | undefined>(undefined);
   const [detailEvent, setDetailEvent] = useState<CalendarEventDetail | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailView, setDetailView] = useState<"details" | "confirm-complete">("details");
   const queryClient = useQueryClient();
+  const { activePropertyId } = useActiveProperty();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const openDetail = (event: CalendarEventDetail) => {
+  const openDetail = (event: CalendarEventDetail, view: "details" | "confirm-complete" = "details") => {
     setDetailEvent(event);
+    setDetailView(view);
     setDetailOpen(true);
   };
 
@@ -179,8 +190,8 @@ const Calendar = () => {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["event"],
-    queryFn: getEvents,
+    queryKey: ["event", activePropertyId],
+    queryFn: () => getEvents(activePropertyId),
   });
 
   type BankHoliday = { title: string; date: string; notes?: string };
@@ -244,6 +255,7 @@ const Calendar = () => {
     tradeCategory?: string | null;
     actionStatus?: string;
     reminderDate?: string | null;
+    created_by?: UserBrief | null;
   };
 
   const mappedRemoteEvents = Array.isArray(remoteRaw)
@@ -280,6 +292,7 @@ const Calendar = () => {
           property: ev.property ?? null,
           trade: ev.trade ?? null,
           tradeCategory: ev.tradeCategory ?? null,
+          created_by: ev.created_by,
         };
       })
     : [];
@@ -287,6 +300,32 @@ const Calendar = () => {
   // MOT tasks now arrive as linked Events via /api/v1/events/, already carrying
   // the trade route + server-computed action_status — no localStorage merge.
   const events = mappedRemoteEvents;
+
+  // Deep link from System Health: ?event=<id>&view=detail|complete opens that task
+  // (straight on "mark complete" for a reminder that looks done already).
+  // Handled once per link: `events` is a new array every render, so without the ref
+  // this effect re-ran on every render and kept re-opening the popup the user closed.
+  const deepLinkEvent = searchParams.get("event");
+  const handledDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!deepLinkEvent) {
+      handledDeepLink.current = null;
+      return;
+    }
+    if (isLoading || handledDeepLink.current === deepLinkEvent) return;
+    handledDeepLink.current = deepLinkEvent;
+    const hit = events.find((e) => e.id === deepLinkEvent);
+    if (hit) openDetail(hit as CalendarEventDetail, searchParams.get("view") === "complete" ? "confirm-complete" : "details");
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("event");
+        next.delete("view");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [deepLinkEvent, isLoading, events, searchParams, setSearchParams]);
 
   // Enhanced filtering and data processing
   const filteredEvents = events.filter((event) => {
@@ -350,50 +389,50 @@ const Calendar = () => {
       case "confirmed":
         return (
           <>
-            <CheckCircle className="w-3 h-3 text-green-600 mr-1" />
-            Done
+            <CheckCircle className="w-3 h-3 text-green-600 mr-1 shrink-0" />
+            <span className="truncate">Done</span>
           </>
         );
       case "action_required":
         return (
           <>
-            <AlertTriangle className="w-3 h-3 text-yellow-600 mr-1" />
-            Book now
+            <AlertTriangle className="w-3 h-3 text-yellow-600 mr-1 shrink-0" />
+            <span className="truncate">Book now</span>
           </>
         );
       case "overdue":
         return (
           <>
-            <AlertTriangle className="w-3 h-3 text-red-600 mr-1" />
-            Overdue
+            <AlertTriangle className="w-3 h-3 text-red-600 mr-1 shrink-0" />
+            <span className="truncate">Overdue</span>
           </>
         );
       case "due_this_week":
         return (
           <>
-            <AlertTriangle className="w-3 h-3 text-yellow-600 mr-1" />
-            Book now
+            <AlertTriangle className="w-3 h-3 text-yellow-600 mr-1 shrink-0" />
+            <span className="truncate">Book now</span>
           </>
         );
       case "quotes_ready":
         return (
           <>
-            <MessageSquare className="w-3 h-3 text-blue-600 mr-1" />
-            Quotes ready
+            <MessageSquare className="w-3 h-3 text-blue-600 mr-1 shrink-0" />
+            <span className="truncate">Quotes ready</span>
           </>
         );
       case "completed":
         return (
           <>
-            <CheckCircle className="w-3 h-3 text-gray-600 mr-1" />
-            Completed
+            <CheckCircle className="w-3 h-3 text-gray-600 mr-1 shrink-0" />
+            <span className="truncate">Completed</span>
           </>
         );
       default:
         return (
           <>
-            <AlertTriangle className="w-3 h-3 text-yellow-600 mr-1" />
-            Book now
+            <AlertTriangle className="w-3 h-3 text-yellow-600 mr-1 shrink-0" />
+            <span className="truncate">Book now</span>
           </>
         );
     }
@@ -557,6 +596,7 @@ const Calendar = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              <CalendarSubscribeDialog />
               <AddEvent />
             </div>
           </div>
@@ -566,7 +606,7 @@ const Calendar = () => {
             <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-xs sm:text-sm">Total Tasks</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                <div className="h-8 w-8 shrink-0 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <ClipboardList className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -577,7 +617,7 @@ const Calendar = () => {
             <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-xs sm:text-sm">This Week</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF9E7] flex items-center justify-center">
+                <div className="h-8 w-8 shrink-0 rounded-full bg-[#FEF9E7] flex items-center justify-center">
                   <Clock className="w-4 h-4 text-[#FBBF24]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -588,7 +628,7 @@ const Calendar = () => {
             <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-xs sm:text-sm">Done</span>
-                <div className="h-8 w-8 rounded-full bg-[#ECFDF5] flex items-center justify-center">
+                <div className="h-8 w-8 shrink-0 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                   <CheckCircle className="w-4 h-4 text-[#10B981]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -599,7 +639,7 @@ const Calendar = () => {
             <div className="bg-[#F5F5F0] rounded-[16px] px-3 py-3 sm:px-5 sm:py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[#6B6B6B] text-xs sm:text-sm">Needs attention</span>
-                <div className="h-8 w-8 rounded-full bg-[#FEF2F2] flex items-center justify-center">
+                <div className="h-8 w-8 shrink-0 rounded-full bg-[#FEF2F2] flex items-center justify-center">
                   <AlertTriangle className="w-4 h-4 text-[#DC2626]" strokeWidth={1.5} />
                 </div>
               </div>
@@ -627,7 +667,7 @@ const Calendar = () => {
             </p>
             <div className="flex flex-wrap gap-2">
               {(SEASONAL_TIPS[currentDate.getMonth()] ?? []).map((tip, i) => (
-                <div key={i} className="bg-white border border-[#FDE68A] rounded-full px-3 py-1.5 text-xs text-[#1A1A1A]">
+                <div key={i} className="bg-white border border-[#FDE68A] rounded-2xl sm:rounded-full px-3 py-1.5 text-xs text-[#1A1A1A]">
                   {tip}
                 </div>
               ))}
@@ -638,8 +678,8 @@ const Calendar = () => {
         {/* View Mode & Filters */}
         <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
 
-          {/* Desktop (sm+): single row — view toggle left, pills right */}
-          <div className="hidden sm:flex items-center justify-between">
+          {/* Desktop (md+): single row — view toggle left, pills right */}
+          <div className="hidden md:flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               {[
                 { value: "month", label: "Calendar" },
@@ -658,7 +698,7 @@ const Calendar = () => {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {[
                 { value: "all", label: "All" },
                 { value: "safety", label: "Safety" },
@@ -682,7 +722,7 @@ const Calendar = () => {
           </div>
 
           {/* Mobile: single row — view toggle + Filter button with floating popup */}
-          <div className="sm:hidden flex items-center justify-between">
+          <div className="md:hidden flex items-center justify-between">
             <div className="flex items-center gap-2">
               {[
                 { value: "month", label: "Calendar" },
@@ -755,8 +795,8 @@ const Calendar = () => {
 
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+          <div className="xl:col-span-3">
             {viewMode === "month" ? (
               <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
                 <div className="flex items-center justify-between mb-6">
@@ -849,7 +889,7 @@ const Calendar = () => {
                                 key={event.id}
                                 draggable
                                 onDragStart={(e) => handleEventDragStart(e, event.id)}
-                                className={`text-xs px-1.5 sm:px-2 py-1 sm:py-2 rounded border ${getStatusBorder(
+                                className={`min-w-0 overflow-hidden text-xs px-1.5 sm:px-2 py-1 sm:py-2 rounded border ${getStatusBorder(
                                   event.status
                                 )} cursor-pointer hover:shadow-sm transition-shadow ${i === 1 ? 'hidden sm:block' : ''}`}
                                 title={`${event.time ? event.time + ' - ' : ''}${event.title}${event.description ? '\n' + event.description : ''}`}
@@ -865,7 +905,7 @@ const Calendar = () => {
                                     {event.time}
                                   </div>
                                 )}
-                                <div className="hidden sm:flex items-center text-xs text-gray-500 mt-1">
+                                <div className="hidden xl:flex min-w-0 items-center text-xs text-gray-500 mt-1">
                                   {getStatusIcon(event.status)}
                                 </div>
                               </div>
@@ -909,13 +949,13 @@ const Calendar = () => {
                       )} hover:shadow-sm transition-shadow cursor-pointer`}>
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-1">
-                              <h3 className="text-sm font-medium text-black">
+                              <h3 className="min-w-0 break-words text-sm font-medium text-black">
                                 {event.title}
                               </h3>
                               {event.time && (
-                                <span className="text-xs text-gray-600">
+                                <span className="shrink-0 whitespace-nowrap text-xs text-gray-600">
                                   {event.time}
                                 </span>
                               )}
@@ -975,11 +1015,11 @@ const Calendar = () => {
           {/* Right Sidebar - Upcoming Tasks and Reminders */}
           <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
             <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-[#F5F5F0] rounded-full flex items-center justify-center">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="h-10 w-10 shrink-0 bg-[#F5F5F0] rounded-full flex items-center justify-center">
                   <ClipboardList className="w-5 h-5 text-[#1A1A1A]" strokeWidth={1.5} />
                 </div>
-                <h3 className="text-[#1A1A1A] text-lg font-semibold">Upcoming tasks and reminders</h3>
+                <h3 className="min-w-0 text-[#1A1A1A] text-base font-semibold">Upcoming tasks and reminders</h3>
               </div>
             </div>
             <p className="text-[#6B6B6B] text-sm mb-4">Next 3 items</p>
@@ -1061,6 +1101,7 @@ const Calendar = () => {
         event={detailEvent}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        initialView={detailView}
         onGetQuotes={ev =>
           openQuoteFor({
             title: ev.title,

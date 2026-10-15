@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, ClipboardList, Settings, LogOut, HelpCircle, Search, Menu, X, Bell, MessageSquare } from 'lucide-react';
+import { Home, FileText, ClipboardList, ClipboardCheck, Settings, LogOut, HelpCircle, Search, Menu, X, Bell, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { fetchData } from '@/lib/Api';
+import PropertySwitcher from './PropertySwitcher';
+import { useActiveProperty } from '@/hooks/useActiveProperty';
+import { myRole } from '@/lib/household';
 
 const Sidebar = () => {
   const location = useLocation();
@@ -11,10 +14,15 @@ const Sidebar = () => {
   const { signOut, user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Unread badge for the active property only (matches the Notifications page).
+  const { activePropertyId, activeProperty } = useActiveProperty();
+  // The PRS register belongs to a let home: shown only while that home is selected.
+  // The register is for whoever lets the home: its landlord owner, or a member they made its landlord.
+  const hasLetHome = myRole(activeProperty) === 'landlord';
   const { data: bellData } = useQuery({
-    queryKey: ['ho-notifications'],
+    queryKey: ['ho-notifications', activePropertyId],
     queryFn: (): Promise<{ unread_count: number }> =>
-      fetchData('/api/v1/notifications/').then((r: { data?: { unread_count: number } } & { unread_count?: number }) => r?.data ?? r as { unread_count: number }),
+      fetchData(`/api/v1/notifications/${activePropertyId ? `?property=${activePropertyId}` : ''}`).then((r: { data?: { unread_count: number } } & { unread_count?: number }) => r?.data ?? r as { unread_count: number }),
     refetchInterval: 5 * 60 * 1000,
   });
   const unreadCount: number = (bellData as { unread_count?: number } | undefined)?.unread_count ?? 0;
@@ -39,6 +47,7 @@ const Sidebar = () => {
     { icon: Home, label: 'My Home', path: '/dashboard' },
     { icon: Search, label: 'Home Improvements', path: '/dashboard/job-leads' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
+    ...(hasLetHome ? [{ icon: ClipboardCheck, label: 'Rental register', path: '/dashboard/rental-register' }] : []),
     { icon: ClipboardList, label: 'Tasks & Reminders', path: '/dashboard/calendar' },
     { icon: MessageSquare, label: 'Messages', path: '/dashboard/messages', badge: messagesUnread },
     { icon: Bell, label: 'Notifications', path: '/dashboard/notifications', badge: unreadCount },
@@ -48,10 +57,12 @@ const Sidebar = () => {
   const navContent = (
     <>
       {/* Header - Home+ Logo */}
-      <div className="flex items-center gap-2 mb-8">
+      <div className="flex items-center gap-2 mb-6">
         <img src="/homeplus-logo.png" alt="Home+" className="h-9 w-9 object-contain" />
         <span className="text-lg font-bold text-sidebar-foreground">Home+</span>
       </div>
+
+      <PropertySwitcher />
 
       {/* Main Menu */}
       <div className="flex-1 overflow-y-auto">

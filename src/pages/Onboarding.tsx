@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, Navigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Home, ChevronRight, ArrowRight, Building, Building2, Warehouse, LayoutGrid, HelpCircle, KeyRound, Briefcase, Users, Check, ChevronsUpDown, Camera } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,6 +11,13 @@ import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/lib/apiClient';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import PropertyMapPicker from '@/components/PropertyMapPicker';
+import { formatPostcode, postcodeError } from '@/lib/postcode';
+
+/** The API's first message for ``field`` ({errors: {field: [...]}}), or ''. */
+const apiFieldError = (err: unknown, field: string): string => {
+  const v = (err as { response?: { data?: { errors?: Record<string, unknown> } } })?.response?.data?.errors?.[field];
+  return Array.isArray(v) ? String(v[0] ?? '') : typeof v === 'string' ? v : '';
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -47,7 +55,7 @@ const LOADING_PHRASES = [
 
 // ─── Framer variants ─────────────────────────────────────────────────────────
 
-const stepVariants = {
+const stepVariants: Variants = {
   enter: (d: number) => ({ x: d > 0 ? 72 : -72, opacity: 0 }),
   center: { x: 0, opacity: 1, transition: { duration: 0.32, ease: [0.32, 0.72, 0, 1] } },
   exit: (d: number) => ({ x: d > 0 ? -72 : 72, opacity: 0, transition: { duration: 0.22, ease: [0.32, 0.72, 0, 1] } }),
@@ -62,7 +70,7 @@ function StepPhone({
     <div className="space-y-8">
       <div className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 1 of 3</p>
-        <h1 className="text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
+        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
           What's your<br />phone number?
         </h1>
         <p className="text-[17px] text-muted-foreground leading-relaxed max-w-sm">
@@ -84,7 +92,7 @@ function StepPhone({
             onChange={e => setPhone(e.target.value.replace(/[^0-9 ()+\-]/g, ''))}
             placeholder="7700 900 123"
             autoFocus
-            className="flex-1 px-4 py-4 text-[17px] font-medium text-foreground placeholder:text-muted-foreground/50 bg-transparent outline-none"
+            className="flex-1 min-w-0 px-4 py-4 text-[17px] font-medium text-foreground placeholder:text-muted-foreground/50 bg-transparent outline-none"
             aria-label="Phone number"
             autoComplete="tel-national"
           />
@@ -155,7 +163,7 @@ function StepProperty({
     <div className="space-y-7">
       <div className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 2 of 3</p>
-        <h1 className="text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
+        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
           Tell us about<br />your home.
         </h1>
         <p className="text-[17px] text-muted-foreground">
@@ -193,20 +201,20 @@ function StepProperty({
           className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
         />
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 xs:grid-cols-3 gap-3">
           <input
             type="text"
             value={address}
             onChange={e => setAddress(e.target.value)}
             placeholder="Address"
-            className="col-span-2 rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+            className="xs:col-span-2 min-w-0 rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
           />
           <input
             type="text"
             value={postcode}
             onChange={e => setPostcode(e.target.value.toUpperCase())}
             placeholder="Postcode"
-            className="rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors uppercase"
+            className="min-w-0 rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors uppercase"
           />
         </div>
 
@@ -288,7 +296,7 @@ function StepProperty({
         </div>
 
         {/* Role */}
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 xs:grid-cols-3 gap-2.5">
           {ROLES.map(r => (
             <motion.button
               key={r.value}
@@ -297,14 +305,14 @@ function StepProperty({
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               transition={{ duration: 0.15 }}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-2 py-3.5 px-4 text-left transition-all ${
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-2 py-3.5 px-2.5 sm:px-4 text-left transition-all ${
                 role === r.value
                   ? 'border-accent bg-gradient-hero text-accent-foreground'
                   : 'border-border bg-card text-foreground hover:border-foreground'
               }`}
             >
               <r.icon className="w-4 h-4 mb-1" />
-              <span className="text-sm font-bold">{r.label}</span>
+              <span className="text-xs sm:text-sm font-bold">{r.label}</span>
               <span className={`text-xs ${role === r.value ? 'text-accent-foreground/60' : 'text-muted-foreground'}`}>{r.desc}</span>
             </motion.button>
           ))}
@@ -388,6 +396,95 @@ function StepProperty({
   );
 }
 
+type LetHome = { id: string; name: string; postcode: string };
+
+/** Landlords: add the other homes they let, right after the first one. */
+function StepMoreHomes({
+  homes, onAdd, adding, error,
+}: {
+  homes: LetHome[];
+  onAdd: (home: { address: string; postcode: string; property_type: string; bedrooms: number }) => Promise<boolean>;
+  adding: boolean;
+  error: string;
+}) {
+  const [address, setAddress] = useState('');
+  const [postcode, setPostcode] = useState('');
+  const [propertyType, setPropertyType] = useState('');
+  const [bedrooms, setBedrooms] = useState('');
+  const [formError, setFormError] = useState('');
+  const field = 'w-full rounded-2xl border border-border bg-card px-4 py-3 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20';
+
+  const add = async () => {
+    if (!address.trim() || !postcode.trim() || !propertyType) {
+      setFormError('Add the address, postcode and property type.');
+      return;
+    }
+    const pcError = postcodeError(postcode);
+    if (pcError) {
+      setFormError(pcError);
+      return;
+    }
+    setFormError('');
+    const ok = await onAdd({
+      address: address.trim(), postcode: formatPostcode(postcode), property_type: propertyType,
+      bedrooms: bedrooms ? parseInt(bedrooms, 10) || 0 : 0,
+    });
+    if (ok) {
+      setAddress(''); setPostcode(''); setPropertyType(''); setBedrooms('');
+    }
+  };
+
+  return (
+    <div className="space-y-6" data-step="more-homes">
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 2 of 3</p>
+        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
+          Do you let<br />other homes?
+        </h1>
+        <p className="text-[17px] text-muted-foreground">
+          Add them now and we track every home's certificates and rental register. You can add details later.
+        </p>
+      </div>
+
+      <ul className="space-y-2" data-section="let-homes">
+        {homes.map(h => (
+          <li key={h.id} className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="flex-1 min-w-0 truncate text-[15px] font-medium text-foreground">{h.name}</span>
+            <span className="text-[13px] text-muted-foreground shrink-0">{h.postcode}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="space-y-3 rounded-2xl border border-dashed border-border p-4">
+        <p className="text-[13px] font-semibold text-foreground">Add another home you let</p>
+        <input className={field} value={address} onChange={e => setAddress(e.target.value)} placeholder="Address" aria-label="Address" />
+        <div className="grid grid-cols-2 gap-3">
+          <input className={cn(field, 'uppercase')} value={postcode} onChange={e => setPostcode(e.target.value.toUpperCase())}
+            placeholder="Postcode" aria-label="Postcode" />
+          <input className={field} type="number" min="0" max="20" value={bedrooms} onChange={e => setBedrooms(e.target.value)}
+            placeholder="Bedrooms" aria-label="Bedrooms" />
+        </div>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Property type">
+          {PROPERTY_TYPES.map(t => (
+            <button key={t.value} type="button" role="radio" aria-checked={propertyType === t.value}
+              onClick={() => setPropertyType(t.value)}
+              className={cn('px-3 py-1.5 rounded-full border text-[13px] font-medium transition-colors',
+                propertyType === t.value ? 'bg-foreground text-white border-foreground' : 'bg-card text-foreground border-border hover:bg-muted')}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {(formError || error) && <p className="text-[13px] text-destructive">{formError || error}</p>}
+        <button type="button" onClick={add} disabled={adding}
+          className="w-full rounded-2xl border border-foreground py-3 text-[15px] font-semibold text-foreground hover:bg-muted transition-colors disabled:opacity-50">
+          {adding ? 'Adding…' : '+ Add this home'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StepNotifications({
   prefs, setPrefs,
 }: { prefs: NotifPrefs; setPrefs: (p: NotifPrefs) => void }) {
@@ -402,7 +499,7 @@ function StepNotifications({
     <div className="space-y-8">
       <div className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 3 of 3</p>
-        <h1 className="text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
+        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
           How should<br />we reach you?
         </h1>
         <p className="text-[17px] text-muted-foreground">
@@ -420,7 +517,7 @@ function StepNotifications({
               type="button"
               disabled={disabled}
               onClick={() => !disabled && setPrefs({ ...prefs, [item.key]: !prefs[item.key] })}
-              className={`w-full flex items-center justify-between rounded-2xl border-2 px-5 py-4 text-left transition-all ${
+              className={`w-full flex items-center justify-between gap-3 rounded-2xl border-2 px-5 py-4 text-left transition-all ${
                 disabled
                   ? 'border-border bg-muted/50 text-muted-foreground cursor-not-allowed opacity-60'
                   : checked
@@ -528,6 +625,7 @@ function StepLoading({ onDone }: { onDone: () => void }) {
 const Onboarding = () => {
   const { user, loading, refreshUser } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -556,6 +654,11 @@ const Onboarding = () => {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
+  // Landlords: the other homes they let, added right after the first.
+  const [moreHomes, setMoreHomes] = useState(false);
+  const [letHomes, setLetHomes] = useState<LetHome[]>([]);
+  const [addingHome, setAddingHome] = useState(false);
+  const [homeError, setHomeError] = useState('');
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -573,6 +676,12 @@ const Onboarding = () => {
     calendar_reminders: true,
     marketing_emails: false,
   });
+
+  // The postcode given at sign-up fills the home's postcode (still editable).
+  const signupPostcode = user?.user_metadata?.postcode ?? '';
+  useEffect(() => {
+    if (signupPostcode) setPostcode(prev => prev || formatPostcode(signupPostcode));
+  }, [signupPostcode]);
 
   // Load existing notification prefs
   useEffect(() => {
@@ -624,13 +733,18 @@ const Onboarding = () => {
       setPropertyError('Please fill in address, postcode and select a property type.');
       return;
     }
+    const pcError = postcodeError(postcode);
+    if (pcError) {
+      setPropertyError(pcError);
+      return;
+    }
     setPropertyError('');
     setSubmitting(true);
     try {
       const payload = {
         name:          propertyName.trim() || undefined,
         address:       address.trim(),
-        postcode:      postcode.trim().toUpperCase(),
+        postcode:      formatPostcode(postcode),
         location:      location.trim() || undefined,
         property_type: propertyType,
         role,
@@ -659,31 +773,59 @@ const Onboarding = () => {
       if (propertyId && postcode.trim()) {
         try {
           const epcRes = await apiClient.get('/api/v1/properties/epc-lookup/', {
-            params: { postcode: postcode.trim().toUpperCase() },
+            params: { postcode: formatPostcode(postcode), address: address.trim() },
           });
-          const band = epcRes?.data?.data?.band;
-          if (band) {
-            await apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {});
+          const { band, certificate_number: certificateNumber } = epcRes?.data?.data ?? {};
+          if (band && certificateNumber) {
+            // Link the official certificate (band, expiry reminder, monthly re-check);
+            // fall back to just the band if linking fails.
+            await apiClient
+              .post(`/api/v1/properties/${propertyId}/epc/link/`, { certificate_number: certificateNumber })
+              .catch(() => apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {}));
           }
         } catch {
           // Non-critical — user can set EPC band manually in Settings
         }
       }
-    } catch {
-      // non-critical, continue anyway
+    } catch (e) {
+      // A home is required: stay on this step and say why it was not saved.
+      setPropertyError(apiFieldError(e, 'postcode') || apiFieldError(e, 'address')
+        || 'Could not save your home. Check the details and try again.');
+      setSubmitting(false);
+      return;
     } finally {
       setSubmitting(false);
+    }
+    if (role === 'landlord') {
+      // Show the first home in the list (it may have been edited after going back).
+      setLetHomes(prev => {
+        const first = { id: 'first', name: propertyName.trim() || address.trim(), postcode: formatPostcode(postcode) };
+        return [first, ...prev.filter(h => h.id !== 'first')];
+      });
+      setMoreHomes(true);
+      return;
     }
     advance();
   };
 
-  const handlePhoneSkip = () => {
-    setPhoneError('');
-    advance();
+  const addLetHome = async (home: { address: string; postcode: string; property_type: string; bedrooms: number }) => {
+    setAddingHome(true);
+    setHomeError('');
+    try {
+      const { data: res } = await apiClient.post('/api/v1/properties/', { ...home, role: 'landlord', bathrooms: 0 });
+      const created = res?.data ?? res;
+      setLetHomes(prev => [...prev, { id: created.id, name: created.name || created.address, postcode: created.postcode }]);
+      return true;
+    } catch (e) {
+      setHomeError(apiFieldError(e, 'postcode') || 'Could not add this home. Check the postcode and try again.');
+      return false;
+    } finally {
+      setAddingHome(false);
+    }
   };
 
-  const handlePropertySkip = () => {
-    setPropertyError('');
+  const handlePhoneSkip = () => {
+    setPhoneError('');
     advance();
   };
 
@@ -704,9 +846,19 @@ const Onboarding = () => {
     try {
       await apiClient.patch('/api/v1/auth/me/', { profile: { onboarding_completed: true } });
       await refreshUser();
-    } catch {
-      // best effort
+    } catch (e) {
+      if (apiFieldError(e, 'property')) {
+        setPropertyError('Add your home to finish setting up.');
+        setDirection(-1);
+        setStep(1);
+        return;
+      }
+      // anything else: best effort
     }
+    // The home list was loaded at sign-in, before these homes existed.
+    await queryClient.invalidateQueries({
+      predicate: q => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).startsWith('/api/v1/properties/'),
+    });
     navigate('/dashboard', { replace: true });
   };
 
@@ -752,7 +904,20 @@ const Onboarding = () => {
               </motion.div>
             )}
 
-            {step === 1 && (
+            {step === 1 && moreHomes && (
+              <motion.div
+                key="more-homes"
+                custom={direction}
+                variants={stepVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <StepMoreHomes homes={letHomes} onAdd={addLetHome} adding={addingHome} error={homeError} />
+              </motion.div>
+            )}
+
+            {step === 1 && !moreHomes && (
               <motion.div
                 key="property"
                 custom={direction}
@@ -849,7 +1014,17 @@ const Onboarding = () => {
               </div>
             )}
 
-            {step === 1 && (
+            {step === 1 && moreHomes && (
+              <button
+                onClick={() => { setMoreHomes(false); advance(); }}
+                disabled={addingHome}
+                className="w-full flex items-center justify-center gap-2 bg-foreground text-white rounded-2xl py-4 text-[16px] font-semibold hover:bg-foreground/90 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                <span>{letHomes.length > 1 ? 'Continue' : 'No more homes, continue'}</span><ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+
+            {step === 1 && !moreHomes && (
               <button
                 onClick={handlePropertyContinue}
                 disabled={submitting}
@@ -882,22 +1057,13 @@ const Onboarding = () => {
               {step > 0 ? (
                 <button
                   type="button"
-                  onClick={back}
+                  onClick={() => (step === 1 && moreHomes ? setMoreHomes(false) : back())}
                   className="text-[14px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
                   ← Back
                 </button>
               ) : <div />}
 
-              {step === 1 && (
-                <button
-                  type="button"
-                  onClick={handlePropertySkip}
-                  className="text-[14px] font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                >
-                  Skip <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              )}
             </div>
           </div>
         </motion.footer>

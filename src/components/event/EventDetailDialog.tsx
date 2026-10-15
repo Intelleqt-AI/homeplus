@@ -15,10 +15,15 @@ import {
   FileText,
   Repeat,
   Trash2,
+  UserRound,
   Wrench,
 } from 'lucide-react';
+
 import { TRADE_OPTIONS, getTradeCategoryLabel } from '@/lib/tradeCategories';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useActiveProperty } from '@/hooks/useActiveProperty';
+import { attributionLabel, type UserBrief } from '@/lib/household';
 
 export interface CalendarEventDetail {
   id: string | number;
@@ -35,6 +40,8 @@ export interface CalendarEventDetail {
   trade?: string | null;
   tradeCategory?: string | null;
   property?: string | null;
+  /** Family members: who added it. null = former member; undefined = older API. */
+  created_by?: UserBrief | null;
 }
 
 interface Props {
@@ -43,6 +50,8 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   /** Called when the user clicks "Get Quotes". Caller routes to Quote.tsx. */
   onGetQuotes?: (event: CalendarEventDetail) => void;
+  /** Open straight on the "mark complete" step (e.g. a stale reminder from System Health). */
+  initialView?: 'details' | 'confirm-complete';
 }
 
 const formatDate = (d: Date | string | undefined | null): string => {
@@ -77,8 +86,10 @@ const statusLabel: Record<string, string> = {
   pending: 'Upcoming',
 };
 
-const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) => {
+const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes, initialView = 'details' }: Props) => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { activeProperty } = useActiveProperty();
 
   // The dialog swaps between three in-place views (so the user keeps context):
   // the details panel, a "what should we delete?" panel, and a "mark complete +
@@ -87,20 +98,20 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
   const [scope, setScope] = useState<DeleteScope>('this');
   const [cost, setCost] = useState<string>('');
 
-  // Reset to the details view whenever the dialog re-opens for a new event.
+  // Reset to the requested view whenever the dialog re-opens for a new event.
   useEffect(() => {
     if (open) {
-      setView('details');
+      setView(initialView === 'confirm-complete' && event?.status !== 'completed' ? 'confirm-complete' : 'details');
       setScope('this');
       setCost('');
     }
-  }, [open, event?.id]);
+  }, [open, event?.id, event?.status, initialView]);
 
   // Events feed the calendar (event), the dashboard Timeline & Needs-Attention
   // cards, and (via logged cost) the Annual Spend tracker — refresh them all on
   // any event change.
   const invalidateEventViews = () => {
-    ['event', 'timeline', 'attention', 'annual-spend'].forEach(k =>
+    ['event', 'timeline', 'attention', 'annual-spend', 'systems-health'].forEach(k =>
       queryClient.invalidateQueries({ queryKey: [k] }),
     );
   };
@@ -159,11 +170,11 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[520px] max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
-            {isTask ? <Wrench className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
-            <span className="flex-1">{event.title}</span>
+            {isTask ? <Wrench className="w-5 h-5 shrink-0" /> : <Bell className="w-5 h-5 shrink-0" />}
+            <span className="flex-1 min-w-0 break-words">{event.title}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -231,6 +242,12 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
           {event.property && (
             <Row icon={<Building2 className="w-4 h-4 text-gray-400" />} label="Property">
               <span className="text-gray-500 text-xs">{String(event.property).slice(0, 8)}…</span>
+            </Row>
+          )}
+
+          {activeProperty?.is_shared && attributionLabel(event.created_by, user?.id) && (
+            <Row icon={<UserRound className="w-4 h-4 text-gray-400" />} label="Added by">
+              {attributionLabel(event.created_by, user?.id)}
             </Row>
           )}
 
@@ -306,7 +323,7 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
           <div className="space-y-4 pt-2">
             <div className="flex items-start gap-3 p-3 rounded-lg border border-green-100 bg-green-50">
               <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-              <div className="text-sm">
+              <div className="min-w-0 break-words text-sm">
                 <p className="font-medium text-green-900">Mark "{event.title}" complete</p>
                 <p className="text-green-700 text-xs mt-0.5">
                   Add what it cost to track it in your Annual Spend — or leave blank to just mark it done.
@@ -364,7 +381,7 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes }: Props) =>
           <div className="space-y-4 pt-2">
             <div className="flex items-start gap-3 p-3 rounded-lg border border-red-100 bg-red-50">
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div className="text-sm">
+              <div className="min-w-0 break-words text-sm">
                 <p className="font-medium text-red-900">
                   {isRecurring ? 'Delete recurring task' : 'Delete event'}
                 </p>

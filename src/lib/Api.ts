@@ -1,6 +1,7 @@
 import apiClient, { BASE_URL } from '@/lib/apiClient';
 import { fetchAllPages } from '@/lib/Api2';
 import { TRADE_OPTIONS } from '@/lib/tradeCategories';
+import type { UserBrief } from '@/lib/household';
 
 // ─── Generic CRUD ─────────────────────────────────────────────────────────────
 
@@ -107,8 +108,12 @@ export type NormDoc = {
   created_event: string | null;
   /** OCR-suggested expiry date returned by the backend after upload. */
   suggested_expiry?: string | null;
+  /** Compliance type the backend recognised on upload (e.g. 'gas_safety'); '' if none. */
+  compliance_type?: string | null;
   /** Set to 'unreadable' when an energy_epc upload could not be AI-rated. */
   epc_status?: string | null;
+  /** Who uploaded it (family members). null = former member; undefined = older API. */
+  created_by?: UserBrief | null;
   _docId: string;
   // Legacy compat — homePack.tsx and HomePlusDashboard.tsx use these
   publicUrl: null;
@@ -136,7 +141,9 @@ const normDoc = (doc: any): NormDoc => ({
   property_address: doc.property_address ?? null,
   created_event: doc.created_event ?? null,
   suggested_expiry: doc.suggested_expiry ?? null,
+  compliance_type: doc.compliance_type ?? null,
   epc_status: doc.epc_status ?? null,
+  created_by: doc.created_by,
   _docId: doc.id,
   publicUrl: null,
   metadata: {
@@ -228,6 +235,9 @@ export const uploadFileWithMetadata = async ({
     appliance_model?: string;
     appliance_serial?: string;
     last_serviced?: string;
+    property?: string;
+    /** The finished job this certificate came from (links it back to the job). */
+    job?: string;
   };
 }): Promise<NormDoc> => {
   const form = new FormData();
@@ -240,6 +250,8 @@ export const uploadFileWithMetadata = async ({
   if (metadata?.appliance_model?.trim()) form.append('appliance_model', metadata.appliance_model.trim());
   if (metadata?.appliance_serial?.trim()) form.append('appliance_serial', metadata.appliance_serial.trim());
   if (metadata?.last_serviced?.trim()) form.append('last_serviced', metadata.last_serviced.trim());
+  if (metadata?.property) form.append('property', metadata.property);
+  if (metadata?.job) form.append('job', metadata.job);
   if (metadata?.status) {
     const d = metadata.status instanceof Date ? metadata.status : new Date(metadata.status);
     if (!isNaN(d.getTime())) form.append('expires_at', d.toISOString().split('T')[0]);
@@ -351,8 +363,10 @@ export const updateUserInfo = async ({ userData }: { userData: any }) => {
  * Normalize a Django JobLead to the legacy shape used by JobLeads.tsx:
  * { id, name, service, location, value, homeID, isApproved, updated_at, bids: [...] }
  */
-const normLead = (job: any) => ({
+export const normLead = (job: any) => ({
   id: job.id,
+  expected_certificate: job.expected_certificate ?? null,
+  certificate_document: job.certificate_document ?? null,
   name: job.title,
   service: tradeLabel(job.trade),
   trade: job.trade || 'other',
@@ -368,7 +382,7 @@ const normLead = (job: any) => ({
   isApproved: job.is_approved,
   status: job.status,
   answers: job.answers || {},
-  created_by: job.created_by || null,
+  created_by: job.created_by,
   created_at: job.created_at,
   updated_at: job.updated_at,
   todo_at: job.todo_at ?? null,
@@ -377,6 +391,8 @@ const normLead = (job: any) => ({
   bids: (job.bids || []).map((b: any) => ({
     id: b.id,
     proposedValue: parseFloat(b.amount ?? 0),
+    previousAmount: b.previous_amount != null ? parseFloat(b.previous_amount) : null,
+    quoteHistory: (b.quote_history || []).map((h: any) => ({ amount: parseFloat(h.amount), created_at: h.created_at })),
     status: b.status,
     Available: b.availability,
     bid_by: b.tradepilot_bidder || b.id,
@@ -402,9 +418,21 @@ const normLead = (job: any) => ({
   })),
 });
 
-export const fetchLeads = async () => {
-  const jobs = await fetchAllPages('/api/v1/jobs/');
+export const fetchLeads = async (propertyId?: string | null) => {
+  const path = propertyId ? `/api/v1/jobs/?property=${propertyId}` : '/api/v1/jobs/';
+  const jobs = await fetchAllPages(path);
   return jobs.map(normLead);
+};
+
+/** Jobs with no property (posted without one, or their property was deleted). */
+export const fetchUnassignedLeads = async () => {
+  const jobs = await fetchAllPages('/api/v1/jobs/?unassigned=1');
+  return jobs.map(normLead);
+};
+
+export const assignJobProperty = async ({ jobId, propertyId }: { jobId: string; propertyId: string }) => {
+  const { data: res } = await apiClient.post(`/api/v1/jobs/${jobId}/assign-property/`, { property: propertyId });
+  return res.data;
 };
 
 export const modifyBid = async ({

@@ -5,6 +5,7 @@ import { Home, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/lib/apiClient';
+import { throttledMessage } from '@/lib/rateLimit';
 import Logo from '/homeplus-logo.png';
 
 const ForgotPassword = () => {
@@ -29,7 +30,7 @@ const ForgotPassword = () => {
       setSent(true);
     } catch (err: any) {
       const errors = err.response?.data?.errors || {};
-      setError(errors.email?.[0] || err.response?.data?.message || 'Something went wrong. Try again.');
+      setError(throttledMessage(err) || errors.email?.[0] || err.response?.data?.message || 'Something went wrong. Try again.');
     } finally {
       setLoading(false);
     }
@@ -54,7 +55,7 @@ const ForgotPassword = () => {
             <div className="space-y-1.5">
               <h1 className="text-xl font-semibold">Check your inbox</h1>
               <p className="text-sm text-muted-foreground">
-                If <span className="font-medium text-foreground">{email}</span> is registered, you'll receive a password reset link shortly.
+                If <span className="font-medium text-foreground break-all">{email}</span> is registered, you'll receive a password reset link shortly.
               </p>
             </div>
             <p className="text-xs text-muted-foreground">

@@ -3,6 +3,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/hooks/useAuth';
+import { ActivePropertyProvider } from '@/hooks/useActiveProperty';
+import { TraderProfileProvider } from '@/hooks/useTraderProfile';
 import { useMessagingSocket } from '@/hooks/useMessagingSocket';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Index from './pages/Index';
@@ -17,6 +19,7 @@ import VerifyEmail from './pages/VerifyEmail';
 import Onboarding from './pages/Onboarding';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import AcceptInvite from './pages/AcceptInvite';
 import Dashboard from './pages/Dashboard';
 import HomePlusDashboard from './pages/HomePlusDashboard';
 import Insights from './pages/Insights';
@@ -30,6 +33,7 @@ import HowItWorks from './pages/homeplus/HowItWorks';
 import NotificationsPage from './pages/homeplus/Notifications';
 import Messages from './pages/homeplus/Messages';
 import EnergyEPC from './pages/homeplus/EnergyEPC';
+import RentalRegister from './pages/homeplus/RentalRegister';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 
@@ -55,10 +59,12 @@ const MessagingSocket = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
+      <ActivePropertyProvider>
       <TooltipProvider>
         <MessagingSocket />
         <GooeyToaster preset="subtle" position="bottom-right" />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <TraderProfileProvider>
           <Routes>
             <Route
               path="/"
@@ -169,11 +175,24 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/dashboard/rental-register"
+              element={
+                <ProtectedRoute>
+                  <RentalRegister />
+                </ProtectedRoute>
+              }
+            />
+            {/* Public: family-member invitation links (works logged in or out) */}
+            <Route path="/accept-invite" element={<AcceptInvite />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </TraderProfileProvider>
         </BrowserRouter>
       </TooltipProvider>
+      </ActivePropertyProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

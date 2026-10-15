@@ -24,7 +24,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { CONVERSATIONS_URL, deleteMessage, getMessagesUrl, UNREAD_URL, type DeleteScope } from '@/lib/messaging';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -33,8 +32,10 @@ import ReportMessageDialog from './ReportMessageDialog';
 
 export interface ChatMessage {
   id: string;
-  sender: string;
+  sender: string | null;
   sender_name: string;
+  /** Which side of the conversation sent it. Household members share the 'homeowner' side. */
+  sender_side?: 'homeowner' | 'trader';
   body: string;
   created_at: string;
   read_at: string | null;
@@ -110,9 +111,14 @@ const AttachmentContent = ({ m }: { m: ChatMessage }) => {
   );
 };
 
+/** Right-aligned when it came from our side (me or another household member). */
+const isOurSide = (m: ChatMessage) => m.is_mine || m.sender_side === 'homeowner';
+
 const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProps) => {
+  const ours = isOurSide(m);
+  const household = ours && !m.is_mine;
+  const canReport = m.sender_side ? m.sender_side === 'trader' : !m.is_mine;
   const queryClient = useQueryClient();
-  const isMobile = useIsMobile();
   const [deleteScope, setDeleteScope] = useState<DeleteScope | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -137,7 +143,7 @@ const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProp
 
   if (m.is_deleted) {
     return (
-      <div className={cn('flex', m.is_mine ? 'justify-end' : 'justify-start')}>
+      <div className={cn('flex', ours ? 'justify-end' : 'justify-start')}>
         <div className="max-w-[80%] rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2 text-sm italic text-gray-400">
           <p>This message was deleted</p>
           <p className="mt-1 text-[10px] text-gray-400">{fmtTime(m.created_at)}</p>
@@ -166,7 +172,7 @@ const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProp
       destructive: true,
     });
   }
-  if (!m.is_mine) {
+  if (canReport) {
     actions.push(
       m.is_reported_by_me
         ? { key: 'report', label: 'Reported', disabled: true }
@@ -182,13 +188,13 @@ const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProp
           size="icon"
           className={cn(
             'h-6 w-6 shrink-0 text-gray-400 transition-opacity hover:text-gray-600',
-            isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+            'opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
           )}
         >
           <MoreVertical className="h-3.5 w-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={m.is_mine ? 'end' : 'start'}>
+      <DropdownMenuContent align={ours ? 'end' : 'start'}>
         {actions.map(a => (
           <DropdownMenuItem
             key={a.key}
@@ -205,16 +211,23 @@ const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProp
 
   return (
     <>
-      <div className={cn('group flex items-center gap-1', m.is_mine ? 'justify-end' : 'justify-start')}>
-        {m.is_mine && menuButton}
+      {household && (
+        <p className="-mb-2 truncate pr-1 text-right text-[11px] font-medium text-[#6B6B6B]">
+          {m.sender_name || 'Former member'}
+        </p>
+      )}
+      <div className={cn('group flex items-center gap-1', ours ? 'justify-end' : 'justify-start')}>
+        {ours && menuButton}
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div
               className={cn(
-                'max-w-[80%] rounded-2xl px-3.5 py-2 text-sm',
+                'max-w-[80%] px-3.5 py-2 text-sm shadow-sm',
                 m.is_mine
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border border-gray-200 bg-white text-gray-800',
+                  ? 'rounded-[18px] rounded-br-[6px] bg-[#1A1A1A] text-white'
+                  : household
+                    ? 'rounded-[18px] rounded-br-[6px] border border-[#DADAD3] bg-[#E9E9E3] text-[#1A1A1A]'
+                    : 'rounded-[18px] rounded-bl-[6px] border border-[#E8E8E3] bg-white text-[#1A1A1A]',
               )}
             >
               {m.attachment_url && (
@@ -223,7 +236,7 @@ const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProp
                 </div>
               )}
               {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
-              <p className={cn('mt-1 flex items-center gap-1 text-[10px]', m.is_mine ? 'opacity-80' : 'text-gray-400')}>
+              <p className={cn('mt-1 flex items-center gap-1 text-[10px]', m.is_mine ? 'text-white/60' : 'text-[#A1A1A1]')}>
                 {fmtTime(m.created_at)}
                 {m.is_edited && <span>· edited</span>}
               </p>
@@ -242,7 +255,8 @@ const MessageBubble = ({ message: m, conversationId, onEdit }: MessageBubbleProp
             ))}
           </ContextMenuContent>
         </ContextMenu>
-        {!m.is_mine && menuButton}
+        {!ours && menuButton}
+
       </div>
 
       <AlertDialog open={deleteScope !== null} onOpenChange={open => !open && setDeleteScope(null)}>

@@ -41,7 +41,7 @@ const EditHistoryDialog = ({ open, onOpenChange, conversationId, messageId }: Ed
         ) : entries.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-500">No earlier versions found.</p>
         ) : (
-          <div className="max-h-80 space-y-3 overflow-y-auto">
+          <div className="max-h-[min(20rem,60dvh)] space-y-3 overflow-y-auto">
             {entries.map((entry, i) => (
               <div key={i} className="rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2">
                 <p className="whitespace-pre-wrap break-words text-sm text-gray-700">{entry.previous_body}</p>

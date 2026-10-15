@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Trash2, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Trash2, AlertTriangle, ArrowLeft, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,12 +25,15 @@ export const DeleteAccountDialog = ({
   isOpen,
   onClose,
   onConfirm,
-  hasPassword: _hasPassword,
+  hasPassword = true,
+  providerName: accountProvider = "Google",
 }: {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (payload: DeleteAccountPayload) => Promise<void>;
+  /** False for Google/Apple-only accounts: they confirm with that provider, not a password. */
   hasPassword?: boolean;
+  providerName?: string;
 }) => {
   const [step, setStep] = useState<'confirm' | 'verify'>('confirm');
   const [confirmationInput, setConfirmationInput] = useState("");
@@ -90,11 +93,11 @@ export const DeleteAccountDialog = ({
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg z-[99]">
-        <DialogHeader className="flex flex-row items-center gap-3">
-          <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-            <AlertTriangle className="w-5 h-5 text-red-600" />
+        <DialogHeader className="flex flex-row items-center gap-3 space-y-0">
+          <div className="flex-shrink-0 w-10 h-10 bg-destructive/10 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5 text-destructive" />
           </div>
-          <DialogTitle>Delete Account</DialogTitle>
+          <DialogTitle>Delete account</DialogTitle>
         </DialogHeader>
 
         <DialogDescription className="text-sm text-muted-foreground">
@@ -105,9 +108,9 @@ export const DeleteAccountDialog = ({
         {step === 'confirm' ? (
           <>
             <div className="mt-2 space-y-1.5">
-              <p className="text-sm text-gray-700">
+              <p className="text-sm text-foreground">
                 To confirm deletion, please type{" "}
-                <code className="bg-gray-100 px-1.5 py-0.5 rounded text-red-600 font-mono text-xs">
+                <code className="bg-muted px-1.5 py-0.5 rounded text-destructive font-mono text-xs">
                   {CONFIRMATION_TEXT}
                 </code>{" "}
                 below:
@@ -121,7 +124,7 @@ export const DeleteAccountDialog = ({
               />
             </div>
 
-            <DialogFooter className="mt-3 flex gap-3 sm:justify-end">
+            <DialogFooter className="mt-3 flex gap-3 sm:justify-end sm:space-x-0">
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
@@ -147,37 +150,47 @@ export const DeleteAccountDialog = ({
                 <ArrowLeft className="w-3 h-3" /> Back
               </button>
 
-              {/* Password option */}
-              <div className="space-y-1.5">
-                <Label htmlFor="delete-account-password">
-                  Confirm your password
-                  {hasSocialButtons && (
-                    <span className="ml-1 text-xs font-normal text-muted-foreground">(optional if using Google below)</span>
-                  )}
-                </Label>
-                <Input
-                  id="delete-account-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); if (providerCredential) setProviderCredential(null); }}
-                  autoComplete="current-password"
-                  disabled={isDeleting}
-                  placeholder="Enter your password"
-                  autoFocus
-                />
-              </div>
+              {/* Password option (accounts that have one) */}
+              {hasPassword && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="delete-account-password">
+                    Confirm your password
+                    {hasSocialButtons && (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">(or use Google / Apple below)</span>
+                    )}
+                  </Label>
+                  <Input
+                    id="delete-account-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); if (providerCredential) setProviderCredential(null); }}
+                    autoComplete="current-password"
+                    disabled={isDeleting}
+                    placeholder="Enter your password"
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {!hasPassword && !hasSocialButtons && (
+                <p className="text-sm text-muted-foreground">
+                  Your account has no password. Contact support to delete it.
+                </p>
+              )}
 
               {/* Social sign-in option */}
               {hasSocialButtons && (
                 <>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 border-t border-border" />
-                    <span className="text-xs text-muted-foreground">or</span>
-                    <div className="flex-1 border-t border-border" />
-                  </div>
+                  {hasPassword && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 border-t border-border" />
+                      <span className="text-xs text-muted-foreground">or</span>
+                      <div className="flex-1 border-t border-border" />
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
-                    <Label>Sign in with your account</Label>
+                    <Label>{hasPassword ? "Sign in with your account" : `Confirm it's you with ${accountProvider}`}</Label>
                     {providerCredential ? (
                       <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
                         <span className="text-muted-foreground">
@@ -210,7 +223,7 @@ export const DeleteAccountDialog = ({
               {error && <p className="text-xs text-destructive">{error}</p>}
             </div>
 
-            <DialogFooter className="mt-3 flex gap-3 sm:justify-end">
+            <DialogFooter className="mt-3 flex gap-3 sm:justify-end sm:space-x-0">
               <Button type="button" variant="outline" onClick={handleClose} disabled={isDeleting}>
                 Cancel
               </Button>
@@ -222,13 +235,13 @@ export const DeleteAccountDialog = ({
               >
                 {isDeleting ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Deleting...
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    Deleting…
                   </>
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4 mr-1" />
-                    Delete Account
+                    Delete account
                   </>
                 )}
               </Button>

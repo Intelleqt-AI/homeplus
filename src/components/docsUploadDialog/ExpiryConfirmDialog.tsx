@@ -30,6 +30,8 @@ interface UploadedDoc {
   created_event?: string | null;
   /** OCR-suggested expiry date — user must confirm before saving. */
   suggested_expiry?: string | null;
+  /** Compliance type the backend recognised (e.g. 'gas_safety'). */
+  compliance_type?: string | null;
 }
 
 interface Props {
@@ -37,6 +39,18 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }
+
+const COMPLIANCE_LABELS: Record<string, string> = {
+  gas_safety: 'Gas safety certificate',
+  eicr: 'Electrical installation report (EICR)',
+  epc: 'Energy performance certificate',
+  pat_testing: 'PAT testing',
+  fire_safety: 'Fire safety',
+  legionella: 'Legionella risk assessment',
+  asbestos: 'Asbestos survey',
+  insurance: 'Insurance',
+  other: 'Compliance document',
+};
 
 const TODAY_ISO = () => new Date().toISOString().split('T')[0];
 
@@ -148,7 +162,7 @@ const ExpiryConfirmDialog = ({ doc, open, onOpenChange }: Props) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarClock className="w-5 h-5" />
@@ -156,14 +170,21 @@ const ExpiryConfirmDialog = ({ doc, open, onOpenChange }: Props) => {
           </DialogTitle>
         </DialogHeader>
 
+        {doc.compliance_type && COMPLIANCE_LABELS[doc.compliance_type] && (
+          <p className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+            <Sparkles className="h-3 w-3" />
+            Recognised as: {COMPLIANCE_LABELS[doc.compliance_type]}
+          </p>
+        )}
+
         {isUpdate ? (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 [overflow-wrap:anywhere]">
             We've added <strong>{doc.name}</strong> to your calendar and scheduled a reminder
             1 month before it expires. Adjust the lead time or trade below, or skip to keep the
             defaults.
           </p>
         ) : (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 [overflow-wrap:anywhere]">
             We've saved <strong>{doc.name}</strong>. When does it expire, and how far in advance do you want a reminder?
           </p>
         )}
@@ -220,8 +241,8 @@ const ExpiryConfirmDialog = ({ doc, open, onOpenChange }: Props) => {
               />
             )}
             {previewRemindOn && (
-              <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                <Bell className="w-3 h-3" />
+              <p className="text-xs text-gray-500">
+                <Bell className="inline-block w-3 h-3 mr-1.5" />
                 Reminder will fire on{' '}
                 <strong className="text-gray-700">{previewRemindOn}</strong>
                 {remindDaysBefore > 0 && ` (${remindDaysBefore} day${remindDaysBefore === 1 ? '' : 's'} before)`}
@@ -272,7 +293,7 @@ const ExpiryConfirmDialog = ({ doc, open, onOpenChange }: Props) => {
           </div>
         </div>
 
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:gap-3">
           <Button className="flex-1" onClick={handleConfirm} disabled={mutation.isPending}>
             {mutation.isPending
               ? 'Saving…'

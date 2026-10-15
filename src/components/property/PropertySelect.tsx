@@ -10,8 +10,9 @@ import {
 } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
 import useFetch from '@/hooks/useFetch';
-import { Check, ChevronsUpDown, Building2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Building2, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { groupHomes } from '@/lib/household';
 
 export interface PropertyOption {
   id: string;
@@ -21,6 +22,27 @@ export interface PropertyOption {
   name?: string;
   latitude?: number | null;
   longitude?: number | null;
+  // Rest of the Property API shape — not used by this picker, but present on
+  // every row, so other consumers (e.g. useActiveProperty) can rely on it too.
+  role?: string;
+  property_type?: string;
+  heating_type?: string;
+  year_built?: number | null;
+  epc_band?: string | null;
+  /** Linked home/certificate on the GOV.UK EPC register (read-only). */
+  epc_uprn?: string;
+  epc_certificate_number?: string;
+  epc_checked_at?: string | null;
+  // Family members: 'member' = shared with me by owner_name.
+  access?: 'owner' | 'member';
+  owner_id?: string | null;
+  owner_name?: string | null;
+  is_shared?: boolean;
+  member_count?: number;
+  /** The role the app uses for the caller: a member's own role on the home, else `role`. */
+  my_role?: string;
+  /** What the owner made a member on this home (incl. "family"); null for the owner. */
+  member_role?: string | null;
 }
 
 interface PropertySelectProps {
@@ -109,13 +131,17 @@ const PropertySelect = ({
             <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-[500px] p-0" align="start">
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] min-w-[16rem] max-w-[calc(100vw-2rem)] p-0"
+          align="start"
+        >
           <Command>
             <CommandInput placeholder="Search properties…" />
             <CommandList>
               <CommandEmpty>No properties found.</CommandEmpty>
-              <CommandGroup>
-                {properties.map(p => (
+              {groupHomes(properties).map(group => (
+              <CommandGroup key={group.key} heading={group.heading || undefined}>
+                {group.items.map(p => (
                   <CommandItem
                     key={p.id}
                     value={`${p.name ?? ''} ${p.address}`}
@@ -141,6 +167,9 @@ const PropertySelect = ({
                         </span>
                       )}
                     </span>
+                    {p.is_shared && (
+                      <Users className="ml-1 h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Shared" />
+                    )}
                     {p.postcode && !p.name && (
                       <Badge variant="outline" className="ml-auto text-xs shrink-0">
                         {p.postcode}
@@ -149,6 +178,8 @@ const PropertySelect = ({
                   </CommandItem>
                 ))}
               </CommandGroup>
+              ))}
+
             </CommandList>
           </Command>
         </PopoverContent>

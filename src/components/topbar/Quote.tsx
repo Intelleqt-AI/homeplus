@@ -13,6 +13,8 @@ import { categoryConfig } from '@/lib/jobCategories';
 import { TRADE_OPTIONS, JOB_TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { Upload, File as FileIcon, X, Loader2, AlertCircle } from 'lucide-react';
 import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
+import { useActiveProperty } from '@/hooks/useActiveProperty';
+import { Link } from 'react-router-dom';
 
 const MAX_FILES = 3;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -25,6 +27,12 @@ export type QuotePrefill = {
   property?: string;
   /** One of the Timeframe dropdown values below (e.g. 'within_1_week'). */
   timeframe?: string;
+  description?: string;
+  /** 'low' | 'medium' | 'high' */
+  priority?: string;
+  /** Known answers keyed by question output_key; only values that are options of the
+   *  prefilled category's questions are applied. */
+  answers?: Record<string, string>;
 };
 
 interface QuoteProps {
@@ -39,6 +47,8 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
 
   // Property
   const [propertyId, setPropertyId] = useState('');
+  // Every job belongs to a home.
+  const [propertyError, setPropertyError] = useState('');
 
   // Job details
   const [title, setTitle] = useState('');
@@ -67,14 +77,16 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
 
   // Selected property (used for location autofill + map-pin validation).
   // The full list of properties is fetched inside <PropertySelect />.
-  const { data: propertiesRes } = useFetch<{ results?: PropertyOption[]; data?: PropertyOption[] }>(
+  const { data: propertiesRes, isLoading: propertiesLoading } = useFetch<{ results?: PropertyOption[]; data?: PropertyOption[] }>(
     '/api/v1/properties/',
   );
   const properties: PropertyOption[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
+  const { activePropertyId } = useActiveProperty();
   const selectedProperty = properties.find(p => p.id === propertyId);
   const propertyHasPostcode = !!selectedProperty?.postcode;
 
   const reset = () => {
+    setPropertyError('');
     setPropertyId('');
     setTitle('');
     setDescription('');
@@ -110,7 +122,17 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     if (prefill.category) setCategory(prefill.category);
     if (prefill.property) setPropertyId(prefill.property);
     if (prefill.timeframe) setUrgency(prefill.timeframe);
-  }, [open, prefill?.title, prefill?.service, prefill?.category, prefill?.property, prefill?.timeframe]);
+    if (prefill.description) setDescription(prefill.description);
+    if (prefill.priority) setPriority(prefill.priority);
+    if (prefill.answers && prefill.category) {
+      // After the service reset above; keep only real options of this category's questions.
+      const questions = categoryConfig.find(c => c.category === prefill.category)?.questions ?? [];
+      const valid = Object.fromEntries(Object.entries(prefill.answers).filter(([key, value]) =>
+        questions.some(q => q.output_key === key && (!q.options || q.options.includes(value)))));
+      setAnswers(valid);
+    }
+  }, [open, prefill?.title, prefill?.service, prefill?.category, prefill?.property, prefill?.timeframe,
+    prefill?.description, prefill?.priority, prefill?.answers]);
 
   // Whenever the selected property changes (from either the picker or a
   // prefill), populate the location fields from it. Without this, prefilled
@@ -122,12 +144,13 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     setLocationAddress(selectedProperty.address ?? '');
   }, [propertyId, selectedProperty]);
 
-  // Auto-select when the user has exactly one property
+  // Default to the property active in the sidebar switcher (a prefill wins).
+  const onlyPropertyId = properties.length === 1 ? properties[0].id : null;
   useEffect(() => {
-    if (properties.length === 1 && !propertyId) {
-      setPropertyId(properties[0].id);
-    }
-  }, [properties.length, propertyId]);
+    if (!open || propertyId || prefill?.property) return;
+    const fallback = activePropertyId ?? onlyPropertyId;
+    if (fallback) setPropertyId(fallback);
+  }, [open, propertyId, prefill?.property, activePropertyId, onlyPropertyId]);
 
   const { mutate: submitJob, isPending } = usePost({
     mutationFn: (vars: Record<string, unknown>) => createJob(vars),
@@ -152,8 +175,10 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
       setOpen(false);
     },
     onError: (err: unknown) => {
-      const e = err as { response?: { data?: { message?: string } }; message?: string };
-      const msg = e?.response?.data?.message || e?.message || 'Failed to post job';
+      const e = err as { response?: { data?: { message?: string; errors?: Record<string, string[] | string> } }; message?: string };
+      const propErr = e?.response?.data?.errors?.property;
+      if (propErr) setPropertyError(Array.isArray(propErr) ? propErr[0] : propErr);
+      const msg = (Array.isArray(propErr) ? propErr[0] : propErr) || e?.response?.data?.message || e?.message || 'Failed to post job';
       toast.error(msg);
     },
   });
@@ -168,6 +193,11 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   };
 
   const handleSubmit = () => {
+    if (!propertyId) {
+      setPropertyError('Choose the home this job is for.');
+      toast.error('Choose the home this job is for.');
+      return;
+    }
     if (selectedProperty && (selectedProperty.latitude === null || selectedProperty.longitude === null)) {
       toast.error('Selected property has no exact location. Open Settings → Properties to set its map pin.');
       return;
@@ -223,7 +253,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
         setOpen(open);
       }}
     >
-      <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-[680px] max-h-[90dvh] overflow-y-auto p-0">
         {/* Header */}
         <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-gray-100">
           <DialogHeader>
@@ -235,12 +265,25 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
         <div className="px-4 sm:px-6 py-5 space-y-6">
           {/* ── Property ─────────────────────────────────────── */}
           <div>
-            <p className={sectionTitle}>Property</p>
-            <PropertySelect
-              value={propertyId}
-              onChange={id => setPropertyId(id)}
-              requireMapPin
-            />
+            <p className={sectionTitle}>Property <span className="text-red-500">*</span></p>
+            {!propertiesLoading && properties.length === 0 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Every job belongs to a home. Add your home first, then post the job.{' '}
+                <Link to="/dashboard/settings?tab=properties" onClick={() => setOpen(false)} className="font-medium underline">
+                  Add a home
+                </Link>
+              </div>
+            ) : (
+              <PropertySelect
+                value={propertyId}
+                onChange={id => {
+                  setPropertyId(id);
+                  setPropertyError('');
+                }}
+                requireMapPin
+              />
+            )}
+            {propertyError && <p className="mt-1.5 text-xs text-red-600">{propertyError}</p>}
           </div>
 
           {/* ── Job Details ───────────────────────────────────── */}
@@ -351,7 +394,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
           {/* ── Requirements ─────────────────────────────────── */}
           <div>
             <p className={sectionTitle}>Requirements</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium text-gray-700">Timeframe</Label>
                 <Select value={urgency} onValueChange={setUrgency}>
@@ -499,7 +542,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
 
         {/* Footer */}
         <div className="px-4 sm:px-6 py-4 border-t border-gray-100 flex gap-3">
-          <Button onClick={handleSubmit} className="flex-1" disabled={isPending || uploading}>
+          <Button onClick={handleSubmit} className="flex-1" disabled={isPending || uploading || (!propertiesLoading && properties.length === 0)}>
             {uploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Uploading…</> : isPending ? 'Posting…' : 'Post Job'}
           </Button>
           <Button
