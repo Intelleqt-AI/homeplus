@@ -396,7 +396,13 @@ function StepProperty({
   );
 }
 
-type LetHome = { id: string; name: string; postcode: string };
+type LetHome = {
+  id: string;
+  name: string;
+  postcode: string;
+  /** Full details for the ones we add here; the first (`id: 'first'`) stays undefined. */
+  _draft?: { address: string; postcode: string; property_type: string; bedrooms: number; role: string; bathrooms: number };
+};
 
 /** Landlords: add the other homes they let, right after the first one. */
 function StepMoreHomes({
@@ -650,7 +656,6 @@ const Onboarding = () => {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [propertyError, setPropertyError] = useState('');
-  const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
@@ -728,7 +733,9 @@ const Onboarding = () => {
     advance();
   };
 
-  const handlePropertyContinue = async () => {
+  // Validates the home form and moves on; the actual API call is deferred to
+  // Finish setup so going Back does not leave a half-created record.
+  const handlePropertyContinue = () => {
     if (!address.trim() || !postcode.trim() || !propertyType) {
       setPropertyError('Please fill in address, postcode and select a property type.');
       return;
@@ -739,65 +746,7 @@ const Onboarding = () => {
       return;
     }
     setPropertyError('');
-    setSubmitting(true);
-    try {
-      const payload = {
-        name:          propertyName.trim() || undefined,
-        address:       address.trim(),
-        postcode:      formatPostcode(postcode),
-        location:      location.trim() || undefined,
-        property_type: propertyType,
-        role,
-        bedrooms:  bedrooms  ? parseInt(bedrooms,  10) : 0,
-        bathrooms: bathrooms ? parseInt(bathrooms, 10) : 0,
-        ...(heatingType ? { heating_type: heatingType } : {}),
-        ...(yearBuilt   ? { year_built: parseInt(yearBuilt, 10) } : {}),
-        ...(tenure      ? { tenure } : {}),
-        ...(lat !== null ? { latitude: lat } : {}),
-        ...(lng !== null ? { longitude: lng } : {}),
-      };
-      const { data: res } = createdPropertyId
-        ? await apiClient.patch(`/api/v1/properties/${createdPropertyId}/`, payload)
-        : await apiClient.post('/api/v1/properties/', payload);
-      const propertyId = res?.data?.id ?? res?.id ?? createdPropertyId;
-      if (propertyId) setCreatedPropertyId(propertyId);
-      if (coverFile && propertyId) {
-        const fd = new FormData();
-        fd.append('file', coverFile);
-        await apiClient.post(`/api/v1/properties/${propertyId}/cover-image/`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        }).catch(() => {});
-      }
-      // Auto-pull EPC band from the UK EPC Register via the backend proxy
-      // (the register's API has no CORS headers, so this can't be called directly).
-      if (propertyId && postcode.trim()) {
-        try {
-          const epcRes = await apiClient.get('/api/v1/properties/epc-lookup/', {
-            params: { postcode: formatPostcode(postcode), address: address.trim() },
-          });
-          const { band, certificate_number: certificateNumber } = epcRes?.data?.data ?? {};
-          if (band && certificateNumber) {
-            // Link the official certificate (band, expiry reminder, monthly re-check);
-            // fall back to just the band if linking fails.
-            await apiClient
-              .post(`/api/v1/properties/${propertyId}/epc/link/`, { certificate_number: certificateNumber })
-              .catch(() => apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {}));
-          }
-        } catch {
-          // Non-critical — user can set EPC band manually in Settings
-        }
-      }
-    } catch (e) {
-      // A home is required: stay on this step and say why it was not saved.
-      setPropertyError(apiFieldError(e, 'postcode') || apiFieldError(e, 'address')
-        || 'Could not save your home. Check the details and try again.');
-      setSubmitting(false);
-      return;
-    } finally {
-      setSubmitting(false);
-    }
     if (role === 'landlord') {
-      // Show the first home in the list (it may have been edited after going back).
       setLetHomes(prev => {
         const first = { id: 'first', name: propertyName.trim() || address.trim(), postcode: formatPostcode(postcode) };
         return [first, ...prev.filter(h => h.id !== 'first')];
@@ -808,20 +757,18 @@ const Onboarding = () => {
     advance();
   };
 
+  // Collects the home locally; it is created along with the first home at Finish setup.
   const addLetHome = async (home: { address: string; postcode: string; property_type: string; bedrooms: number }) => {
-    setAddingHome(true);
     setHomeError('');
-    try {
-      const { data: res } = await apiClient.post('/api/v1/properties/', { ...home, role: 'landlord', bathrooms: 0 });
-      const created = res?.data ?? res;
-      setLetHomes(prev => [...prev, { id: created.id, name: created.name || created.address, postcode: created.postcode }]);
-      return true;
-    } catch (e) {
-      setHomeError(apiFieldError(e, 'postcode') || 'Could not add this home. Check the postcode and try again.');
-      return false;
-    } finally {
-      setAddingHome(false);
-    }
+    const id = `let-${Date.now()}`;
+    setLetHomes(prev => [...prev, {
+      id,
+      name: home.address,
+      postcode: home.postcode,
+      // Carry the full details so Finish setup can POST them.
+      _draft: { ...home, role: 'landlord', bathrooms: 0 },
+    } as LetHome]);
+    return true;
   };
 
   const handlePhoneSkip = () => {
@@ -843,19 +790,79 @@ const Onboarding = () => {
   };
 
   const handleComplete = async () => {
+    // The homes are only saved once Finish setup is pressed, so a user who
+    // bails out at any earlier step leaves nothing behind. First home, then
+    // the landlord's other homes, then the cover/EPC side-effects, then the
+    // onboarding_completed flag.
+    const payload = {
+      name:          propertyName.trim() || undefined,
+      address:       address.trim(),
+      postcode:      formatPostcode(postcode),
+      location:      location.trim() || undefined,
+      property_type: propertyType,
+      role,
+      bedrooms:  bedrooms  ? parseInt(bedrooms,  10) : 0,
+      bathrooms: bathrooms ? parseInt(bathrooms, 10) : 0,
+      ...(heatingType ? { heating_type: heatingType } : {}),
+      ...(yearBuilt   ? { year_built: parseInt(yearBuilt, 10) } : {}),
+      ...(tenure      ? { tenure } : {}),
+      ...(lat !== null ? { latitude: lat } : {}),
+      ...(lng !== null ? { longitude: lng } : {}),
+    };
+    let propertyId: string | null = null;
+    try {
+      const { data: res } = await apiClient.post('/api/v1/properties/', payload);
+      propertyId = res?.data?.id ?? res?.id ?? null;
+    } catch (e) {
+      setPropertyError(apiFieldError(e, 'postcode') || apiFieldError(e, 'address')
+        || 'Could not save your home. Check the details and try again.');
+      setDirection(-1);
+      setStep(1);
+      return;
+    }
+
+    // Landlord: the other let homes.
+    for (const h of letHomes) {
+      if (!h._draft) continue;  // the first home is already saved
+      try {
+        await apiClient.post('/api/v1/properties/', h._draft);
+      } catch {
+        // Non-critical — the main home is in; user can add the rest later.
+      }
+    }
+
+    if (coverFile && propertyId) {
+      const fd = new FormData();
+      fd.append('file', coverFile);
+      await apiClient.post(`/api/v1/properties/${propertyId}/cover-image/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).catch(() => {});
+    }
+
+    // EPC auto-link on the first home. Non-critical: user can set it manually.
+    if (propertyId && postcode.trim()) {
+      try {
+        const epcRes = await apiClient.get('/api/v1/properties/epc-lookup/', {
+          params: { postcode: formatPostcode(postcode), address: address.trim() },
+        });
+        const { band, certificate_number: certificateNumber } = epcRes?.data?.data ?? {};
+        if (band && certificateNumber) {
+          await apiClient
+            .post(`/api/v1/properties/${propertyId}/epc/link/`, { certificate_number: certificateNumber })
+            .catch(() => apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {}));
+        }
+      } catch {
+        // non-critical
+      }
+    }
+
     try {
       await apiClient.patch('/api/v1/auth/me/', { profile: { onboarding_completed: true } });
       await refreshUser();
-    } catch (e) {
-      if (apiFieldError(e, 'property')) {
-        setPropertyError('Add your home to finish setting up.');
-        setDirection(-1);
-        setStep(1);
-        return;
-      }
-      // anything else: best effort
+    } catch {
+      // best effort — the home is saved, so this will succeed on the next load.
     }
-    // The home list was loaded at sign-in, before these homes existed.
+
     await queryClient.invalidateQueries({
       predicate: q => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).startsWith('/api/v1/properties/'),
     });
@@ -1033,7 +1040,7 @@ const Onboarding = () => {
                 {submitting ? (
                   <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
                 ) : (
-                  <><span>Add property</span><ArrowRight className="w-4 h-4" /></>
+                  <><span>Continue</span><ArrowRight className="w-4 h-4" /></>
                 )}
               </button>
             )}
