@@ -9,6 +9,13 @@ import { Home, ArrowRight, Check, Shield, Users, Star, Eye, EyeOff, Loader2, Ale
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import SocialSignInButtons from '@/components/auth/SocialSignInButtons';
+import HomeSelector from '@/components/HomeSelector';
+import PropertyDetailsFields from '@/components/PropertyDetailsFields';
+import { EMPTY_HOME, fetchHomeDetails, type HomeSelection } from '@/lib/homeLookup';
+import {
+  EMPTY_HOME_DETAILS, HEATING_TYPES, PROPERTY_TYPES, ROLES, WALL_TYPES, applyEpc, clearEpc, epcSummary, labelFor,
+  toHomeDetailsPayload, type HomeDetails,
+} from '@/lib/propertyOptions';
 import Logo from '/homeplus-logo.png';
 
 // ── validation ────────────────────────────────────────────────────────────────
@@ -22,15 +29,16 @@ function validateStep1(data: typeof INITIAL) {
   else if (!/(?=.*[a-zA-Z])(?=.*\d)/.test(data.password)) e.password = 'Include at least one letter and one number.';
   if (!data.confirmPassword) e.confirmPassword = 'Please confirm your password.';
   else if (data.password !== data.confirmPassword) e.confirmPassword = 'Passwords do not match.';
-  if (!data.postCode) e.postCode = 'Postcode is required.';
+  if (!data.firstName.trim()) e.firstName = 'First name is required.';
+  if (!data.lastName.trim()) e.lastName = 'Last name is required.';
   return e;
 }
 
-function validateStep2(data: typeof INITIAL) {
+function validateHome(home: HomeSelection) {
   const e: Record<string, string> = {};
-  if (!data.firstName.trim()) e.firstName = 'First name is required.';
-  if (!data.lastName.trim()) e.lastName = 'Last name is required.';
-  if (!data.propertyType) e.propertyType = 'Select a property type.';
+  if (!home.postcode) e.home = 'Select your area and postcode, then your home.';
+  else if (!home.address.trim()) e.home = "Select your home, or choose \"My home isn't listed\" and enter the address.";
+  else if (home.lat === null || home.lng === null) e.home = 'Place the pin on the map to mark your home.';
   return e;
 }
 
@@ -42,8 +50,6 @@ const INITIAL = {
   confirmPassword: '',
   firstName: '',
   lastName: '',
-  propertyType: '',
-  postCode: '',
   agreeToTerms: false,
 };
 
@@ -59,9 +65,12 @@ const benefits = [
 const SignUp = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [checkingHome, setCheckingHome] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [formData, setFormData] = useState(INITIAL);
+  const [details, setDetails] = useState<HomeDetails>(EMPTY_HOME_DETAILS);
+  const [home, setHome] = useState<HomeSelection>(EMPTY_HOME);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState('');
 
@@ -79,14 +88,40 @@ const SignUp = () => {
     });
   };
 
-  const handleNext = () => {
-    const errs = step === 1 ? validateStep1(formData) : validateStep2(formData);
+  const handleDetailsChange = (patch: Partial<HomeDetails>) => {
+    setDetails(prev => ({ ...prev, ...patch }));
+    setErrors(prev => {
+      const next = { ...prev };
+      for (const k of Object.keys(patch)) delete next[k];
+      return next;
+    });
+  };
+
+  const handleHomeChange = (next: HomeSelection) => {
+    setHome(next);
+    setErrors(prev => {
+      if (!prev.home) return prev;
+      const { home: _drop, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const handleNext = async () => {
+    const errs = step === 1 ? validateStep1(formData) : step === 2 ? validateHome(home) : {};
     if (Object.keys(errs).length) {
       setErrors(errs);
       return;
     }
     setErrors({});
     setSubmitError('');
+    if (step === 2) {
+      // Read what the home's EPC certificate says (type, floor area, ...). A failed or empty
+      // lookup just means nothing is prefilled.
+      setCheckingHome(true);
+      const epc = home.homeId !== null ? await fetchHomeDetails(home.homeId) : {};
+      setDetails(prev => applyEpc(clearEpc(prev), epc));
+      setCheckingHome(false);
+    }
     setStep(s => s + 1);
   };
 
@@ -101,8 +136,15 @@ const SignUp = () => {
     const { error, email } = await signUp(formData.email, formData.password, {
       first_name: formData.firstName,
       last_name: formData.lastName,
-      property_type: formData.propertyType,
-      postcode: formData.postCode.trim().toUpperCase(),
+      property_type: details.propertyType,
+      home_details: toHomeDetailsPayload(details),
+      postcode: home.postcode,
+      location: home.area,
+      address: home.address.trim(),
+      latitude: home.lat,
+      longitude: home.lng,
+      uprn: home.uprn,
+      epc_certificate_number: home.certificateNumber,
     });
 
     if (error) {
@@ -137,7 +179,7 @@ const SignUp = () => {
           <div className="space-y-8">
             <div className="space-y-4">
               <Badge variant="secondary" className="w-fit">
-                Step {step} of 3
+                Step {step} of 4
               </Badge>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                 Join thousands of homeowners managing their homes{' '}
@@ -186,25 +228,48 @@ const SignUp = () => {
               <CardHeader className="text-center space-y-2">
                 <CardTitle className="text-2xl">
                   {step === 1 && 'Create your account'}
-                  {step === 2 && 'Tell us about yourself'}
-                  {step === 3 && 'Almost there!'}
+                  {step === 2 && 'Where is your home?'}
+                  {step === 3 && 'Tell us about your home'}
+                  {step === 4 && 'Almost there!'}
                 </CardTitle>
                 <CardDescription>
                   {step === 1 && 'Start your home management journey'}
-                  {step === 2 && 'Help us personalize your experience'}
-                  {step === 3 && 'Confirm your details and get started'}
+                  {step === 2 && 'Pick your area, postcode and home'}
+                  {step === 3 && 'We use this to tailor your maintenance schedule'}
+                  {step === 4 && 'Confirm your details and get started'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* ── Step 1 ── */}
                 {step === 1 && (
                   <div className="space-y-4">
-                    <SocialSignInButtons
-                      variant="signup"
-                      onSuccess={() => navigate('/dashboard')}
-                      onError={setSubmitError}
-                    />
-                    {submitError && <p className="text-sm text-destructive text-center">{submitError}</p>}
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="firstName">First name</Label>
+                        <Input
+                          id="firstName"
+                          placeholder="John"
+                          autoComplete="given-name"
+                          autoFocus
+                          value={formData.firstName}
+                          onChange={e => update('firstName')(e.target.value)}
+                          className={errors.firstName ? 'border-destructive focus-visible:ring-0' : ''}
+                        />
+                        {errors.firstName && <p className="text-xs text-destructive">{errors.firstName}</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="lastName">Last name</Label>
+                        <Input
+                          id="lastName"
+                          placeholder="Smith"
+                          autoComplete="family-name"
+                          value={formData.lastName}
+                          onChange={e => update('lastName')(e.target.value)}
+                          className={errors.lastName ? 'border-destructive focus-visible:ring-0' : ''}
+                        />
+                        {errors.lastName && <p className="text-xs text-destructive">{errors.lastName}</p>}
+                      </div>
+                    </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="email">Email address</Label>
@@ -215,7 +280,6 @@ const SignUp = () => {
                         value={formData.email}
                         onChange={e => update('email')(e.target.value)}
                         autoComplete="email"
-                        autoFocus
                         className={errors.email ? 'border-destructive focus-visible:ring-0' : ''}
                       />
                       {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
@@ -274,106 +338,59 @@ const SignUp = () => {
                       </div>
                       {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
                     </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="postCode">Postcode</Label>
-                      <Input
-                        id="postCode"
-                        placeholder="e.g. NW1 4NP"
-                        value={formData.postCode}
-                        onChange={e => update('postCode')(e.target.value.toUpperCase())}
-                        autoComplete="postal-code"
-                        className={`uppercase ${errors.postCode ? 'border-destructive focus-visible:ring-0' : ''}`}
-                      />
-                      {errors.postCode && <p className="text-xs text-destructive">{errors.postCode}</p>}
-                    </div>
                   </div>
                 )}
 
-                {/* ── Step 2 ── */}
-                {step === 2 && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="firstName">First name</Label>
-                        <Input
-                          id="firstName"
-                          placeholder="John"
-                          autoFocus
-                          value={formData.firstName}
-                          onChange={e => update('firstName')(e.target.value)}
-                          className={errors.firstName ? 'border-destructive focus-visible:ring-0' : ''}
-                        />
-                        {errors.firstName && <p className="text-xs text-destructive">{errors.firstName}</p>}
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="lastName">Last name</Label>
-                        <Input
-                          id="lastName"
-                          placeholder="Smith"
-                          value={formData.lastName}
-                          onChange={e => update('lastName')(e.target.value)}
-                          className={errors.lastName ? 'border-destructive focus-visible:ring-0' : ''}
-                        />
-                        {errors.lastName && <p className="text-xs text-destructive">{errors.lastName}</p>}
-                      </div>
-                    </div>
+                {/* ── Step 2: home ── */}
+                {step === 2 && <HomeSelector value={home} onChange={handleHomeChange} error={errors.home} />}
 
-                    <div className="space-y-1.5">
-                      <Label>Property type</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { value: 'detached', label: 'Detached' },
-                          { value: 'semi_detached', label: 'Semi-Detached' },
-                          { value: 'terraced', label: 'Terraced' },
-                          { value: 'flat', label: 'Flat' },
-                          { value: 'bungalow', label: 'Bungalow' },
-                          { value: 'other', label: 'Other' },
-                        ].map(({ value, label }) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => update('propertyType')(value)}
-                            className={`h-12 rounded-md border text-sm font-medium transition-all
-                              ${
-                                formData.propertyType === value
-                                  ? 'border-primary bg-primary/5 text-primary ring-1 ring-primary'
-                                  : 'border-input bg-background hover:bg-muted/50'
-                              }`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      {errors.propertyType && <p className="text-xs text-destructive">{errors.propertyType}</p>}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Step 3 ── */}
+                {/* ── Step 3: property details ── */}
                 {step === 3 && (
+                  <div className="space-y-4">
+                    {epcSummary(details).length > 0 && (
+                      <div className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <p className="text-sm text-foreground">
+                          <span className="font-medium">Filled from your EPC:</span> {epcSummary(details).join(' · ')}
+                        </p>
+                      </div>
+                    )}
+                    <PropertyDetailsFields
+                      value={details}
+                      onChange={handleDetailsChange}
+                      errors={errors}
+                      show={['name', 'role']}
+                      autoFocus
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      We&apos;ll ask for any other details, like bedrooms, after you verify your email.
+                    </p>
+                  </div>
+                )}
+
+                {/* ── Step 4 ── */}
+                {step === 4 && (
                   <div className="space-y-5">
                     <div className="bg-muted/50 rounded-lg border divide-y text-sm">
                       {[
                         ['Name', `${formData.firstName} ${formData.lastName}`],
                         ['Email', formData.email],
-                        ['Postcode', formData.postCode],
-                        [
-                          'Property',
-                          {
-                            detached: 'Detached',
-                            semi_detached: 'Semi-Detached',
-                            terraced: 'Terraced',
-                            flat: 'Flat',
-                            bungalow: 'Bungalow',
-                            other: 'Other',
-                          }[formData.propertyType] ?? formData.propertyType,
-                        ],
-                      ].map(([label, value]) => (
+                        ['Home name', details.name.trim()],
+                        ['Address', home.address],
+                        ['Postcode', home.postcode],
+                        ['Area', home.area],
+                        ['Property type', details.propertyType ? labelFor(PROPERTY_TYPES, details.propertyType) : ''],
+                        ['Built form', details.builtForm.toLowerCase() === labelFor(PROPERTY_TYPES, details.propertyType).toLowerCase() ? '' : details.builtForm],
+                        ['Floor area', details.floorArea ? `${details.floorArea} m²` : ''],
+                        ['Built', details.ageBand || details.yearBuilt],
+                        ['Heating', details.heatingType ? labelFor(HEATING_TYPES, details.heatingType) : ''],
+                        ['Walls', details.wallConstruction ? labelFor(WALL_TYPES, details.wallConstruction) : ''],
+                        ['Role', labelFor(ROLES, details.role)],
+                      ].filter(([, value]) => value).map(([label, value]) => (
                         <div key={label} className="flex items-center justify-between gap-3 px-4 py-2.5">
                           <span className="shrink-0 text-muted-foreground">{label}</span>
                           <span className="min-w-0 truncate text-right font-medium" title={value || undefined}>
-                            {value || '—'}
+                            {value}
                           </span>
                         </div>
                       ))}
@@ -414,8 +431,8 @@ const SignUp = () => {
                 <div className="space-y-2">
                   <button
                     type="button"
-                    onClick={step === 3 ? handleSignUp : handleNext}
-                    disabled={loading}
+                    onClick={step === 4 ? handleSignUp : handleNext}
+                    disabled={loading || checkingHome}
                     className="w-full h-12 rounded-md bg-primary text-primary-foreground text-base font-medium
                       flex items-center justify-center gap-2
                       hover:bg-primary/90 active:scale-[0.98]
@@ -426,7 +443,11 @@ const SignUp = () => {
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" /> Creating account…
                       </>
-                    ) : step === 3 ? (
+                    ) : checkingHome ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Checking your home…
+                      </>
+                    ) : step === 4 ? (
                       'Complete Registration'
                     ) : (
                       <>
@@ -445,6 +466,18 @@ const SignUp = () => {
                     </Button>
                   )}
                 </div>
+
+                {/* Social sign-up sits under the form, as on the sign-in page. */}
+                {step === 1 && (
+                  <div className="space-y-3">
+                    <SocialSignInButtons
+                      variant="signup"
+                      onSuccess={() => navigate('/dashboard')}
+                      onError={setSubmitError}
+                    />
+                    {submitError && <p className="text-sm text-destructive text-center">{submitError}</p>}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

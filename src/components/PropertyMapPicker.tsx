@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Loader2, Search } from 'lucide-react';
@@ -44,6 +44,15 @@ interface Props {
   postcode?: string;
   onChange: (change: PickerChange) => void;
   className?: string;
+  /** Hide the address search box (the home picker has its own dropdowns). */
+  hideSearch?: boolean;
+  /** Called when the user clicks the map to place the pin. */
+  onMapClick?: (lat: number, lng: number) => void;
+  /**
+   * When set, dragging the pin only reports the new position here, with no
+   * browser-side reverse geocoding; the caller looks the address up itself.
+   */
+  onPinMove?: (lat: number, lng: number) => void;
 }
 
 function Recenter({ lat, lng }: { lat: number | null; lng: number | null }) {
@@ -53,6 +62,11 @@ function Recenter({ lat, lng }: { lat: number | null; lng: number | null }) {
       map.setView([lat, lng], 16, { animate: true });
     }
   }, [lat, lng, map]);
+  return null;
+}
+
+function ClickToPlace({ onClick }: { onClick: (lat: number, lng: number) => void }) {
+  useMapEvents({ click: e => onClick(e.latlng.lat, e.latlng.lng) });
   return null;
 }
 
@@ -79,7 +93,7 @@ async function searchPlaces(query: string): Promise<Suggestion[]> {
   }
 }
 
-const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) => {
+const PropertyMapPicker = ({ lat, lng, postcode, onChange, className, hideSearch, onMapClick, onPinMove }: Props) => {
   const [search, setSearch] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -149,6 +163,7 @@ const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) =
   return (
     <div className={className ?? 'space-y-2'}>
       {/* Search with autocomplete */}
+      {!hideSearch && (
       <div ref={wrapperRef} className="relative">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -189,6 +204,7 @@ const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) =
         )}
         <p className="text-xs text-gray-400 mt-1">Pick a suggestion or drag the pin on the map to fine-tune the location.</p>
       </div>
+      )}
 
       {/* Map */}
       <div className="isolate h-48 sm:h-64 w-full rounded-lg overflow-hidden border border-gray-200">
@@ -211,6 +227,10 @@ const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) =
               eventHandlers={{
                 async dragend(e) {
                   const p = (e.target as L.Marker).getLatLng();
+                  if (onPinMove) {
+                    onPinMove(p.lat, p.lng);
+                    return;
+                  }
                   const rev = await reverseGeocode(p.lat, p.lng);
                   if (rev?.postcode) {
                     lastLookedUp.current = rev.postcode.replace(/\s+/g, '').toUpperCase();
@@ -226,6 +246,7 @@ const PropertyMapPicker = ({ lat, lng, postcode, onChange, className }: Props) =
               }}
             />
           )}
+          {onMapClick && <ClickToPlace onClick={onMapClick} />}
           <Recenter lat={lat} lng={lng} />
         </MapContainer>
       </div>

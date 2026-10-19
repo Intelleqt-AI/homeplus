@@ -2,16 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Home, ChevronRight, ArrowRight, Building, Building2, Warehouse, LayoutGrid, HelpCircle, KeyRound, Briefcase, Users, Check, ChevronsUpDown, Camera } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Home, ChevronRight, ArrowRight, Building, Building2, Warehouse, LayoutGrid, HelpCircle, KeyRound, Briefcase, Users, Check, Camera } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/lib/apiClient';
-import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
-import PropertyMapPicker from '@/components/PropertyMapPicker';
+import HomeSelector from '@/components/HomeSelector';
+import { EMPTY_HOME, fetchHomeDetails, type HomeSelection } from '@/lib/homeLookup';
 import { formatPostcode, postcodeError } from '@/lib/postcode';
+import {
+  PROPERTY_TYPES as TYPE_OPTIONS, ROLES as ROLE_OPTIONS, HEATING_TYPES, TENURE_TYPES, WALL_TYPES, EMPTY_HOME_DETAILS,
+  applyEpc, clearEpc, labelFor, type HomeDetails,
+} from '@/lib/propertyOptions';
+import PropertyDetailsFields, { type DetailField } from '@/components/PropertyDetailsFields';
 
 /** The API's first message for ``field`` ({errors: {field: [...]}}), or ''. */
 const apiFieldError = (err: unknown, field: string): string => {
@@ -30,20 +33,13 @@ type NotifPrefs = {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PROPERTY_TYPES = [
-  { value: 'detached',      label: 'Detached',      icon: Home },
-  { value: 'semi_detached', label: 'Semi-Detached',  icon: Building2 },
-  { value: 'terraced',      label: 'Terraced',       icon: LayoutGrid },
-  { value: 'flat',          label: 'Flat',           icon: Building },
-  { value: 'bungalow',      label: 'Bungalow',       icon: Warehouse },
-  { value: 'other',         label: 'Other',          icon: HelpCircle },
-];
+const TYPE_ICONS: Record<string, typeof Home> = {
+  detached: Home, semi_detached: Building2, terraced: LayoutGrid, flat: Building, bungalow: Warehouse, other: HelpCircle,
+};
+const ROLE_ICONS: Record<string, typeof Home> = { homeowner: KeyRound, landlord: Briefcase, tenant: Users };
 
-const ROLES = [
-  { value: 'homeowner', label: 'Homeowner', desc: "It's my place",      icon: KeyRound },
-  { value: 'landlord',  label: 'Landlord',  desc: 'I own & rent it out', icon: Briefcase },
-  { value: 'tenant',    label: 'Tenant',    desc: "I'm renting",         icon: Users },
-];
+const PROPERTY_TYPES = TYPE_OPTIONS.map(t => ({ ...t, icon: TYPE_ICONS[t.value] ?? Home }));
+const ROLES = ROLE_OPTIONS.map(r => ({ ...r, icon: ROLE_ICONS[r.value] ?? Home }));
 
 const LOADING_PHRASES = [
   'Setting up your profile',
@@ -103,26 +99,9 @@ function StepPhone({
   );
 }
 
-const HEATING_TYPES = [
-  { value: 'gas_combi', label: 'Gas Combi Boiler' },
-  { value: 'gas_system', label: 'Gas System Boiler' },
-  { value: 'electric', label: 'Electric Heating' },
-  { value: 'oil', label: 'Oil Boiler' },
-  { value: 'heat_pump', label: 'Heat Pump' },
-  { value: 'other', label: 'Other / Not sure' },
-];
-
-const TENURE_TYPES = [
-  { value: 'freehold', label: 'Freehold' },
-  { value: 'leasehold', label: 'Leasehold' },
-  { value: 'share_of_freehold', label: 'Share of Freehold' },
-];
-
 function StepProperty({
   name, setName,
-  address, setAddress,
-  postcode, setPostcode,
-  location, setLocation,
+  home, onHomeChange, hasSavedHome,
   propertyType, setPropertyType,
   role, setRole,
   bedrooms, setBedrooms,
@@ -130,15 +109,15 @@ function StepProperty({
   heatingType, setHeatingType,
   yearBuilt, setYearBuilt,
   tenure, setTenure,
-  lat, setLat,
-  lng, setLng,
+  floorArea, setFloorArea,
+  details, patchDetails, askFields,
   coverPreview, onCoverClick,
+  editing, setEditing, onDoneEditing,
   error,
 }: {
   name: string; setName: (v: string) => void;
-  address: string; setAddress: (v: string) => void;
-  postcode: string; setPostcode: (v: string) => void;
-  location: string; setLocation: (v: string) => void;
+  /** The home chosen at signup (or being chosen now), with the map pin. */
+  home: HomeSelection; onHomeChange: (h: HomeSelection) => void; hasSavedHome: boolean;
   propertyType: string; setPropertyType: (v: string) => void;
   role: string; setRole: (v: string) => void;
   bedrooms: string; setBedrooms: (v: string) => void;
@@ -146,28 +125,29 @@ function StepProperty({
   heatingType: string; setHeatingType: (v: string) => void;
   yearBuilt: string; setYearBuilt: (v: string) => void;
   tenure: string; setTenure: (v: string) => void;
-  lat: number | null; setLat: (v: number | null) => void;
-  lng: number | null; setLng: (v: number | null) => void;
+  floorArea: string; setFloorArea: (v: string) => void;
+  /** All the home's details in one object (for the summary and the "Complete your details" list). */
+  details: HomeDetails; patchDetails: (patch: Partial<HomeDetails>) => void;
+  /** The fields signup and EPC left empty, asked under the summary. */
+  askFields: DetailField[];
   coverPreview: string | null; onCoverClick: () => void;
+  /** Signup users: false = summary of the home they added, true = the full editable form. */
+  editing: boolean; setEditing: (v: boolean) => void; onDoneEditing: () => void;
   error: string;
 }) {
-  const [locationOpen, setLocationOpen] = useState(false);
-
-  const selectLocation = (val: string) => {
-    setLocation(val);
-    setPostcode(LOCATION_POSTCODE[val] ?? postcode);
-    setLocationOpen(false);
-  };
+  // People who added their home at signup see a summary (with Edit). Google/Apple
+  // sign-ups have no saved home, so they get the full form and must complete it.
+  const showSummary = hasSavedHome && !editing && !!home.address;
 
   return (
     <div className="space-y-7">
       <div className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 2 of 3</p>
         <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
-          Tell us about<br />your home.
+          {showSummary ? <>Here&apos;s your<br />home.</> : <>Tell us about<br />your home.</>}
         </h1>
         <p className="text-[17px] text-muted-foreground">
-          We'll use this to tailor your maintenance schedule.
+          {showSummary ? 'Check the details. You can edit anything.' : "We'll use this to tailor your maintenance schedule."}
         </p>
       </div>
 
@@ -190,6 +170,61 @@ function StepProperty({
         </span>
       </div>
 
+      {showSummary ? (
+        <>
+          <div className="rounded-2xl border-2 border-border bg-card px-4 py-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your home</p>
+                <p className="text-[17px] font-semibold text-foreground break-words">{name.trim() || home.address}</p>
+              </div>
+              <button type="button" onClick={() => setEditing(true)} className="shrink-0 text-sm font-semibold text-primary hover:underline">
+                Edit
+              </button>
+            </div>
+            <dl className="mt-3 divide-y divide-border text-sm">
+              {([
+                ['Address', home.address],
+                ['Postcode', [home.postcode, home.area].filter(Boolean).join(' · ')],
+                ['Property type', propertyType ? labelFor(PROPERTY_TYPES, propertyType) : ''],
+                ['Built form', details.builtForm.toLowerCase() === labelFor(PROPERTY_TYPES, propertyType).toLowerCase() ? '' : details.builtForm],
+                ['Floor area', floorArea ? `${floorArea} m²` : ''],
+                ['Built', details.ageBand || yearBuilt],
+                ['Walls', details.wallConstruction ? labelFor(WALL_TYPES, details.wallConstruction) : ''],
+                ['Role', labelFor(ROLES, role)],
+                ['Bedrooms', bedrooms],
+                ['Bathrooms', bathrooms],
+                ['Heating', heatingType ? labelFor(HEATING_TYPES, heatingType) : ''],
+                ['Tenure', tenure ? labelFor(TENURE_TYPES, tenure) : ''],
+              ] as [string, string][]).filter(([, value]) => value).map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-3 py-2">
+                  <dt className="shrink-0 text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 text-right font-medium text-foreground break-words">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          {askFields.length > 0 && (
+            <div className="space-y-3 rounded-2xl border-2 border-border bg-card px-4 py-4">
+              <div>
+                <p className="text-[15px] font-semibold text-foreground">Complete your details</p>
+                <p className="text-sm text-muted-foreground">
+                  {details.epcFilled.length > 0 ? 'We filled in what we could from your EPC. ' : ''}
+                  These are the ones we couldn&apos;t.
+                </p>
+              </div>
+              <PropertyDetailsFields
+                value={details}
+                onChange={patchDetails}
+                show={askFields}
+                required={['propertyType']}
+              />
+            </div>
+          )}
+        </>
+      ) : (
+      <>
       {/* Address */}
       <div className="space-y-3">
         {/* Property name */}
@@ -201,79 +236,11 @@ function StepProperty({
           className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
         />
 
-        <div className="grid grid-cols-1 xs:grid-cols-3 gap-3">
-          <input
-            type="text"
-            value={address}
-            onChange={e => setAddress(e.target.value)}
-            placeholder="Address"
-            className="xs:col-span-2 min-w-0 rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
-          />
-          <input
-            type="text"
-            value={postcode}
-            onChange={e => setPostcode(e.target.value.toUpperCase())}
-            placeholder="Postcode"
-            className="min-w-0 rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors uppercase"
-          />
-        </div>
-
-        {/* City / Area selector */}
-        <Popover open={locationOpen} onOpenChange={setLocationOpen}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                'w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium outline-none transition-colors',
-                'flex items-center justify-between gap-2',
-                !location ? 'text-muted-foreground/50' : 'text-foreground',
-              )}
-            >
-              <span className="truncate">{location || 'City / Area'}</span>
-              <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-40" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-72 p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search area…" />
-              <CommandList>
-                <CommandEmpty>No area found.</CommandEmpty>
-                {UK_LOCATIONS.map(group => (
-                  <CommandGroup key={group.group} heading={group.group}>
-                    {group.items.map(item => (
-                      <CommandItem key={item} value={item} onSelect={selectLocation}>
-                        <Check className={cn('mr-2 h-3.5 w-3.5', location === item ? 'opacity-100' : 'opacity-0')} />
-                        {item}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                ))}
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-
-        {/* Exact location map */}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-            Exact location
-            <span className="font-normal normal-case ml-1 text-muted-foreground/60">— drag pin to fine-tune</span>
-          </p>
-          <PropertyMapPicker
-            lat={lat}
-            lng={lng}
-            postcode={postcode}
-            onChange={({ lat: newLat, lng: newLng, address: newAddr, postcode: newPc, city: newCity }) => {
-              setLat(newLat);
-              setLng(newLng);
-              if (newAddr) setAddress(newAddr);
-              if (newPc) setPostcode(newPc.toUpperCase());
-              if (newCity) setLocation(newCity);
-            }}
-          />
-        </div>
+        <HomeSelector value={home} onChange={onHomeChange} />
 
         {/* Property type */}
+        <div>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Property type</label>
         <div className="grid grid-cols-3 gap-2.5">
           {PROPERTY_TYPES.map(t => (
             <motion.button
@@ -294,8 +261,11 @@ function StepProperty({
             </motion.button>
           ))}
         </div>
+        </div>
 
         {/* Role */}
+        <div>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Your role</label>
         <div className="grid grid-cols-1 xs:grid-cols-3 gap-2.5">
           {ROLES.map(r => (
             <motion.button
@@ -316,6 +286,7 @@ function StepProperty({
               <span className={`text-xs ${role === r.value ? 'text-accent-foreground/60' : 'text-muted-foreground'}`}>{r.desc}</span>
             </motion.button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -345,6 +316,19 @@ function StepProperty({
               className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
             />
           </div>
+        </div>
+
+        {/* Floor area */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Floor area (m²) <span className="font-normal normal-case text-muted-foreground/60">(optional)</span></label>
+          <input
+            type="number"
+            min="1"
+            value={floorArea}
+            onChange={e => setFloorArea(e.target.value)}
+            placeholder="e.g. 85"
+            className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
+          />
         </div>
 
         {/* Heating type */}
@@ -391,102 +375,19 @@ function StepProperty({
           </div>
         </div>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
-    </div>
-  );
-}
-
-type LetHome = {
-  id: string;
-  name: string;
-  postcode: string;
-  /** Full details for the ones we add here; the first (`id: 'first'`) stays undefined. */
-  _draft?: { address: string; postcode: string; property_type: string; bedrooms: number; role: string; bathrooms: number };
-};
-
-/** Landlords: add the other homes they let, right after the first one. */
-function StepMoreHomes({
-  homes, onAdd, adding, error,
-}: {
-  homes: LetHome[];
-  onAdd: (home: { address: string; postcode: string; property_type: string; bedrooms: number }) => Promise<boolean>;
-  adding: boolean;
-  error: string;
-}) {
-  const [address, setAddress] = useState('');
-  const [postcode, setPostcode] = useState('');
-  const [propertyType, setPropertyType] = useState('');
-  const [bedrooms, setBedrooms] = useState('');
-  const [formError, setFormError] = useState('');
-  const field = 'w-full rounded-2xl border border-border bg-card px-4 py-3 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20';
-
-  const add = async () => {
-    if (!address.trim() || !postcode.trim() || !propertyType) {
-      setFormError('Add the address, postcode and property type.');
-      return;
-    }
-    const pcError = postcodeError(postcode);
-    if (pcError) {
-      setFormError(pcError);
-      return;
-    }
-    setFormError('');
-    const ok = await onAdd({
-      address: address.trim(), postcode: formatPostcode(postcode), property_type: propertyType,
-      bedrooms: bedrooms ? parseInt(bedrooms, 10) || 0 : 0,
-    });
-    if (ok) {
-      setAddress(''); setPostcode(''); setPropertyType(''); setBedrooms('');
-    }
-  };
-
-  return (
-    <div className="space-y-6" data-step="more-homes">
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 2 of 3</p>
-        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
-          Do you let<br />other homes?
-        </h1>
-        <p className="text-[17px] text-muted-foreground">
-          Add them now and we track every home's certificates and rental register. You can add details later.
-        </p>
-      </div>
-
-      <ul className="space-y-2" data-section="let-homes">
-        {homes.map(h => (
-          <li key={h.id} className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
-            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="flex-1 min-w-0 truncate text-[15px] font-medium text-foreground">{h.name}</span>
-            <span className="text-[13px] text-muted-foreground shrink-0">{h.postcode}</span>
-          </li>
-        ))}
-      </ul>
-
-      <div className="space-y-3 rounded-2xl border border-dashed border-border p-4">
-        <p className="text-[13px] font-semibold text-foreground">Add another home you let</p>
-        <input className={field} value={address} onChange={e => setAddress(e.target.value)} placeholder="Address" aria-label="Address" />
-        <div className="grid grid-cols-2 gap-3">
-          <input className={cn(field, 'uppercase')} value={postcode} onChange={e => setPostcode(e.target.value.toUpperCase())}
-            placeholder="Postcode" aria-label="Postcode" />
-          <input className={field} type="number" min="0" max="20" value={bedrooms} onChange={e => setBedrooms(e.target.value)}
-            placeholder="Bedrooms" aria-label="Bedrooms" />
-        </div>
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Property type">
-          {PROPERTY_TYPES.map(t => (
-            <button key={t.value} type="button" role="radio" aria-checked={propertyType === t.value}
-              onClick={() => setPropertyType(t.value)}
-              className={cn('px-3 py-1.5 rounded-full border text-[13px] font-medium transition-colors',
-                propertyType === t.value ? 'bg-foreground text-white border-foreground' : 'bg-card text-foreground border-border hover:bg-muted')}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {(formError || error) && <p className="text-[13px] text-destructive">{formError || error}</p>}
-        <button type="button" onClick={add} disabled={adding}
-          className="w-full rounded-2xl border border-foreground py-3 text-[15px] font-semibold text-foreground hover:bg-muted transition-colors disabled:opacity-50">
-          {adding ? 'Adding…' : '+ Add this home'}
+      {hasSavedHome && editing && (
+        <button
+          type="button"
+          onClick={onDoneEditing}
+          className="w-full rounded-2xl border border-foreground py-3 text-[15px] font-semibold text-foreground hover:bg-muted transition-colors"
+        >
+          Done editing
         </button>
-      </div>
+      )}
+      </>
+      )}
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
     </div>
   );
 }
@@ -653,17 +554,29 @@ const Onboarding = () => {
   const [heatingType, setHeatingType] = useState('');
   const [yearBuilt, setYearBuilt] = useState('');
   const [tenure, setTenure] = useState('');
+  // Read from the home's EPC certificate (see applyEpc); the user can change the editable ones.
+  const [floorArea, setFloorArea] = useState('');
+  const [builtForm, setBuiltForm] = useState('');
+  const [ageBand, setAgeBand] = useState('');
+  const [wallConstruction, setWallConstruction] = useState('');
+  const [heatingNote, setHeatingNote] = useState('');
+  const [epcFilled, setEpcFilled] = useState<string[]>([]);
+  const [homeId, setHomeId] = useState<number | null>(null);
+  // The fields asked under the summary: decided once, from what signup and EPC left empty,
+  // so a field does not vanish while the user is typing in it.
+  const [askFields, setAskFields] = useState<DetailField[] | null>(null);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+  // From the home picker: the register entry for the chosen home, when it has one.
+  const [uprn, setUprn] = useState('');
+  const [epcCertificate, setEpcCertificate] = useState('');
   const [propertyError, setPropertyError] = useState('');
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
   // Landlords: the other homes they let, added right after the first.
-  const [moreHomes, setMoreHomes] = useState(false);
-  const [letHomes, setLetHomes] = useState<LetHome[]>([]);
-  const [addingHome, setAddingHome] = useState(false);
-  const [homeError, setHomeError] = useState('');
+  // Signup users: false shows the summary of the home they added, true the editable form.
+  const [editingHome, setEditingHome] = useState(false);
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -682,11 +595,97 @@ const Onboarding = () => {
     marketing_emails: false,
   });
 
-  // The postcode given at sign-up fills the home's postcode (still editable).
-  const signupPostcode = user?.user_metadata?.postcode ?? '';
+  // The home picked at sign-up (area, postcode, address, pin) and the property type
+  // chosen there fill this step. Google/Apple sign-ups have none, so the home picker shows.
+  const meta = user?.user_metadata;
+  const hasSavedHome = !!meta?.address && meta.latitude !== null && !!meta.postcode;
   useEffect(() => {
-    if (signupPostcode) setPostcode(prev => prev || formatPostcode(signupPostcode));
-  }, [signupPostcode]);
+    if (!meta) return;
+    if (meta.postcode) setPostcode(prev => prev || formatPostcode(meta.postcode));
+    if (meta.location) setLocation(prev => prev || meta.location);
+    if (meta.address) setAddress(prev => prev || meta.address);
+    if (meta.latitude !== null && meta.longitude !== null) {
+      setLat(prev => prev ?? meta.latitude);
+      setLng(prev => prev ?? meta.longitude);
+    }
+    if (meta.uprn) setUprn(prev => prev || meta.uprn);
+    if (meta.epc_certificate_number) setEpcCertificate(prev => prev || meta.epc_certificate_number);
+    if (PROPERTY_TYPES.some(t => t.value === meta.property_type)) setPropertyType(prev => prev || meta.property_type);
+    // The rest of the details from signup step 2.
+    const hd = meta.home_details ?? {};
+    const text = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '');
+    const count = (v: unknown) => (Number(v) > 0 ? String(v) : '');
+    if (hd.name) setPropertyName(prev => prev || text(hd.name));
+    if (ROLES.some(r => r.value === hd.role)) setRole(text(hd.role));
+    setBedrooms(prev => prev || count(hd.bedrooms));
+    setBathrooms(prev => prev || count(hd.bathrooms));
+    if (hd.heating_type) setHeatingType(prev => prev || text(hd.heating_type));
+    if (hd.year_built) setYearBuilt(prev => prev || text(hd.year_built));
+    if (hd.tenure) setTenure(prev => prev || text(hd.tenure));
+    if (Number(hd.floor_area) > 0) setFloorArea(prev => prev || text(hd.floor_area));
+    if (hd.built_form) setBuiltForm(prev => prev || text(hd.built_form));
+    if (hd.construction_age_band) setAgeBand(prev => prev || text(hd.construction_age_band));
+    if (hd.wall_construction) setWallConstruction(prev => prev || text(hd.wall_construction));
+    if (hd.heating_note) setHeatingNote(prev => prev || text(hd.heating_note));
+    const filled = hd.epc_filled;
+    if (Array.isArray(filled)) setEpcFilled(prev => (prev.length ? prev : filled.map(String)));
+    setAskFields(prev => prev ?? ([
+      !PROPERTY_TYPES.some(t => t.value === meta.property_type) && 'propertyType',
+      !(Number(hd.bedrooms) > 0) && 'bedrooms',
+      !(Number(hd.bathrooms) > 0) && 'bathrooms',
+      !hd.heating_type && 'heatingType',
+      !hd.year_built && 'yearBuilt',
+      !hd.tenure && 'tenure',
+    ].filter(Boolean) as DetailField[]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // All the details as one object, so the summary and "Complete your details" share the helpers.
+  const details: HomeDetails = {
+    ...EMPTY_HOME_DETAILS,
+    name: propertyName, propertyType, role, bedrooms, bathrooms, heatingType, yearBuilt, tenure,
+    floorArea, builtForm, ageBand, wallConstruction, heatingNote, epcFilled,
+  };
+  const detailsRef = useRef(details);
+  detailsRef.current = details;
+  const patchDetails = (p: Partial<HomeDetails>) => {
+    if (p.name !== undefined) setPropertyName(p.name);
+    if (p.propertyType !== undefined) setPropertyType(p.propertyType);
+    if (p.role !== undefined) setRole(p.role);
+    if (p.bedrooms !== undefined) setBedrooms(p.bedrooms);
+    if (p.bathrooms !== undefined) setBathrooms(p.bathrooms);
+    if (p.heatingType !== undefined) setHeatingType(p.heatingType);
+    if (p.yearBuilt !== undefined) setYearBuilt(p.yearBuilt);
+    if (p.tenure !== undefined) setTenure(p.tenure);
+    if (p.floorArea !== undefined) setFloorArea(p.floorArea);
+    if (p.builtForm !== undefined) setBuiltForm(p.builtForm);
+    if (p.ageBand !== undefined) setAgeBand(p.ageBand);
+    if (p.wallConstruction !== undefined) setWallConstruction(p.wallConstruction);
+    if (p.heatingNote !== undefined) setHeatingNote(p.heatingNote);
+    if (p.epcFilled !== undefined) setEpcFilled(p.epcFilled);
+  };
+
+  const home: HomeSelection = { ...EMPTY_HOME, area: location, postcode, address, uprn, certificateNumber: epcCertificate, lat, lng, homeId };
+  const handleHomeChange = (h: HomeSelection) => {
+    setLocation(h.area);
+    setPostcode(h.postcode);
+    setAddress(h.address);
+    setUprn(h.uprn);
+    setEpcCertificate(h.certificateNumber);
+    setLat(h.lat);
+    setLng(h.lng);
+    if (h.homeId !== homeId) {
+      setHomeId(h.homeId);
+      // A different home: drop what the last one gave us and read this one's EPC facts.
+      patchDetails(clearEpc(detailsRef.current));
+      if (h.homeId !== null) {
+        const picked = h.homeId;
+        fetchHomeDetails(picked).then(epc => {
+          patchDetails(applyEpc(clearEpc(detailsRef.current), epc));
+        });
+      }
+    }
+  };
 
   // Load existing notification prefs
   useEffect(() => {
@@ -737,6 +736,26 @@ const Onboarding = () => {
   // Finish setup so going Back does not leave a half-created record.
   const handlePropertyContinue = () => {
     if (!address.trim() || !postcode.trim() || !propertyType) {
+      setPropertyError(
+        hasSavedHome && !editingHome && address.trim() && postcode.trim()
+          ? 'Select your property type to continue.'
+          : 'Please fill in address, postcode and select a property type.',
+      );
+      return;
+    }
+    const pcError = postcodeError(postcode);
+    if (pcError) {
+      setPropertyError(pcError);
+      return;
+    }
+    setPropertyError('');
+    setEditingHome(false);
+    advance();
+  };
+
+  // "Done editing" on a signup user's home: check it, then back to the summary.
+  const handleDoneEditing = () => {
+    if (!address.trim() || !postcode.trim() || !propertyType) {
       setPropertyError('Please fill in address, postcode and select a property type.');
       return;
     }
@@ -746,29 +765,7 @@ const Onboarding = () => {
       return;
     }
     setPropertyError('');
-    if (role === 'landlord') {
-      setLetHomes(prev => {
-        const first = { id: 'first', name: propertyName.trim() || address.trim(), postcode: formatPostcode(postcode) };
-        return [first, ...prev.filter(h => h.id !== 'first')];
-      });
-      setMoreHomes(true);
-      return;
-    }
-    advance();
-  };
-
-  // Collects the home locally; it is created along with the first home at Finish setup.
-  const addLetHome = async (home: { address: string; postcode: string; property_type: string; bedrooms: number }) => {
-    setHomeError('');
-    const id = `let-${Date.now()}`;
-    setLetHomes(prev => [...prev, {
-      id,
-      name: home.address,
-      postcode: home.postcode,
-      // Carry the full details so Finish setup can POST them.
-      _draft: { ...home, role: 'landlord', bathrooms: 0 },
-    } as LetHome]);
-    return true;
+    setEditingHome(false);
   };
 
   const handlePhoneSkip = () => {
@@ -806,6 +803,10 @@ const Onboarding = () => {
       ...(heatingType ? { heating_type: heatingType } : {}),
       ...(yearBuilt   ? { year_built: parseInt(yearBuilt, 10) } : {}),
       ...(tenure      ? { tenure } : {}),
+      ...(floorArea   ? { floor_area: parseInt(floorArea, 10) } : {}),
+      ...(builtForm   ? { built_form: builtForm } : {}),
+      ...(ageBand     ? { construction_age_band: ageBand } : {}),
+      ...(wallConstruction ? { wall_construction: wallConstruction } : {}),
       ...(lat !== null ? { latitude: lat } : {}),
       ...(lng !== null ? { longitude: lng } : {}),
     };
@@ -821,16 +822,6 @@ const Onboarding = () => {
       return;
     }
 
-    // Landlord: the other let homes.
-    for (const h of letHomes) {
-      if (!h._draft) continue;  // the first home is already saved
-      try {
-        await apiClient.post('/api/v1/properties/', h._draft);
-      } catch {
-        // Non-critical — the main home is in; user can add the rest later.
-      }
-    }
-
     if (coverFile && propertyId) {
       const fd = new FormData();
       fd.append('file', coverFile);
@@ -842,14 +833,19 @@ const Onboarding = () => {
     // EPC auto-link on the first home. Non-critical: user can set it manually.
     if (propertyId && postcode.trim()) {
       try {
-        const epcRes = await apiClient.get('/api/v1/properties/epc-lookup/', {
-          params: { postcode: formatPostcode(postcode), address: address.trim() },
-        });
-        const { band, certificate_number: certificateNumber } = epcRes?.data?.data ?? {};
-        if (band && certificateNumber) {
+        // A home picked from the list already carries its certificate; otherwise match by address.
+        let band: string | undefined;
+        let certificateNumber: string | undefined = epcCertificate || undefined;
+        if (!certificateNumber) {
+          const epcRes = await apiClient.get('/api/v1/properties/epc-lookup/', {
+            params: { postcode: formatPostcode(postcode), address: address.trim() },
+          });
+          ({ band, certificate_number: certificateNumber } = epcRes?.data?.data ?? {});
+        }
+        if (certificateNumber) {
           await apiClient
             .post(`/api/v1/properties/${propertyId}/epc/link/`, { certificate_number: certificateNumber })
-            .catch(() => apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {}));
+            .catch(() => (band ? apiClient.patch(`/api/v1/properties/${propertyId}/`, { epc_band: band }).catch(() => {}) : undefined));
         }
       } catch {
         // non-critical
@@ -911,20 +907,7 @@ const Onboarding = () => {
               </motion.div>
             )}
 
-            {step === 1 && moreHomes && (
-              <motion.div
-                key="more-homes"
-                custom={direction}
-                variants={stepVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-              >
-                <StepMoreHomes homes={letHomes} onAdd={addLetHome} adding={addingHome} error={homeError} />
-              </motion.div>
-            )}
-
-            {step === 1 && !moreHomes && (
+            {step === 1 && (
               <motion.div
                 key="property"
                 custom={direction}
@@ -940,15 +923,14 @@ const Onboarding = () => {
                   heatingType={heatingType} setHeatingType={setHeatingType}
                   yearBuilt={yearBuilt} setYearBuilt={setYearBuilt}
                   tenure={tenure} setTenure={setTenure}
-                  address={address} setAddress={setAddress}
-                  postcode={postcode} setPostcode={setPostcode}
-                  location={location} setLocation={setLocation}
+                  floorArea={floorArea} setFloorArea={setFloorArea}
+                  details={details} patchDetails={patchDetails} askFields={askFields ?? []}
+                  home={home} onHomeChange={handleHomeChange} hasSavedHome={hasSavedHome}
                   propertyType={propertyType} setPropertyType={setPropertyType}
                   role={role} setRole={setRole}
-                  lat={lat} setLat={setLat}
-                  lng={lng} setLng={setLng}
                   coverPreview={coverPreview}
                   onCoverClick={() => coverRef.current?.click()}
+                  editing={editingHome} setEditing={setEditingHome} onDoneEditing={handleDoneEditing}
                   error={propertyError}
                 />
                 <input
@@ -1021,17 +1003,7 @@ const Onboarding = () => {
               </div>
             )}
 
-            {step === 1 && moreHomes && (
-              <button
-                onClick={() => { setMoreHomes(false); advance(); }}
-                disabled={addingHome}
-                className="w-full flex items-center justify-center gap-2 bg-foreground text-white rounded-2xl py-4 text-[16px] font-semibold hover:bg-foreground/90 active:scale-[0.98] transition-all disabled:opacity-50"
-              >
-                <span>{letHomes.length > 1 ? 'Continue' : 'No more homes, continue'}</span><ArrowRight className="w-4 h-4" />
-              </button>
-            )}
-
-            {step === 1 && !moreHomes && (
+            {step === 1 && (
               <button
                 onClick={handlePropertyContinue}
                 disabled={submitting}
@@ -1064,7 +1036,7 @@ const Onboarding = () => {
               {step > 0 ? (
                 <button
                   type="button"
-                  onClick={() => (step === 1 && moreHomes ? setMoreHomes(false) : back())}
+                  onClick={back}
                   className="text-[14px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
                   ← Back

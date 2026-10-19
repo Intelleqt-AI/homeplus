@@ -44,6 +44,10 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import PropertyMapPicker from '@/components/PropertyMapPicker';
+import NewPropertyFields from '@/components/property/NewPropertyFields';
+import apiClient from '@/lib/apiClient';
+import { EMPTY_HOME, type HomeSelection } from '@/lib/homeLookup';
+import { EMPTY_HOME_DETAILS, toHomeDetailsPayload, type HomeDetails } from '@/lib/propertyOptions';
 import { useActiveProperty } from '@/hooks/useActiveProperty';
 import { memberRoleLabel } from '@/lib/household';
 import HomePeople from './HomePeople';
@@ -95,6 +99,11 @@ interface Property {
   epc_band: string;
   tenure: string;
   heating_type: string;
+  // About the building (filled from its EPC certificate at signup)
+  floor_area?: number | null;
+  built_form?: string;
+  construction_age_band?: string;
+  wall_construction?: string | null;
   // Letting details (PRS Database)
   rent_amount?: string | null;
   rent_frequency?: string;
@@ -129,6 +138,8 @@ export interface PropertyForm {
   epc_band: string;
   tenure: string;
   heating_type: string;
+  floor_area: string;
+  wall_construction: string;
   rent_amount: string;
   rent_frequency: string;
   occupants: string;
@@ -197,6 +208,8 @@ export const EMPTY_FORM: PropertyForm = {
   epc_band: '',
   tenure: '',
   heating_type: '',
+  floor_area: '',
+  wall_construction: '',
   rent_amount: '',
   rent_frequency: '',
   occupants: '',
@@ -222,6 +235,8 @@ function propertyToForm(p: Property): PropertyForm {
     epc_band: p.epc_band ?? '',
     tenure: p.tenure ?? '',
     heating_type: p.heating_type ?? '',
+    floor_area: p.floor_area != null ? String(p.floor_area) : '',
+    wall_construction: p.wall_construction ?? '',
     rent_amount: p.rent_amount != null ? String(Number(p.rent_amount)) : '',
     rent_frequency: p.rent_frequency ?? '',
     occupants: p.occupants != null ? String(p.occupants) : '',
@@ -250,7 +265,9 @@ export function validatePropertyForm(form: PropertyForm): FormErrors {
   return errors;
 }
 
-export function formToPayload(form: PropertyForm) {
+/** `withBuildingFacts`: also send floor area and wall construction. Only the edit form has them,
+ *  so adding a property sends exactly what it always did. */
+export function formToPayload(form: PropertyForm, withBuildingFacts = false) {
   return {
     name: form.name.trim(),
     address: form.address.trim(),
@@ -266,6 +283,12 @@ export function formToPayload(form: PropertyForm) {
     epc_band: form.epc_band || null,
     tenure: form.tenure || null,
     heating_type: form.heating_type || null,
+    ...(withBuildingFacts
+      ? {
+          floor_area: form.floor_area ? parseInt(form.floor_area) || null : null,
+          wall_construction: form.wall_construction || null,
+        }
+      : {}),
     rent_amount: form.rent_amount.trim() ? Number(form.rent_amount).toFixed(2) : null,
     rent_frequency: form.rent_frequency,
     occupants: form.occupants.trim() ? parseInt(form.occupants) || 0 : null,
@@ -354,6 +377,7 @@ export function PropertyFormFields({
   onClearError,
   highlightField,
   member,
+  showBuildingFacts = false,
 }: {
   form: PropertyForm;
   setForm: React.Dispatch<React.SetStateAction<PropertyForm>>;
@@ -363,6 +387,8 @@ export function PropertyFormFields({
   highlightField?: HighlightField;
   /** A family member's view: their role is set by the owner and shown read-only. */
   member?: { role: string; ownerName?: string | null; viewerRole: string };
+  /** Floor area and wall construction: shown when editing a home (signup fills them from EPC). */
+  showBuildingFacts?: boolean;
 }) {
   const set = (k: keyof PropertyForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [k]: e.target.value }));
@@ -580,6 +606,35 @@ export function PropertyFormFields({
             </Select>
           </div>
         </div>
+        {showBuildingFacts && (
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 mt-3">
+          <div className="space-y-1.5">
+            <Label>Floor area (m²)</Label>
+            <Input
+              type="number"
+              min="1"
+              value={form.floor_area}
+              onChange={set('floor_area')}
+              placeholder="e.g. 85"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Wall construction</Label>
+            <Select value={form.wall_construction || '_none'} onValueChange={v => setForm(prev => ({ ...prev, wall_construction: v === '_none' ? '' : v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Not set" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">Not set</SelectItem>
+                <SelectItem value="cavity">Cavity wall</SelectItem>
+                <SelectItem value="solid">Solid wall</SelectItem>
+                <SelectItem value="timber">Timber frame</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        )}
       </div>
 
       {((member?.viewerRole ?? form.role) === 'landlord' || (highlightField && LETTING_FIELDS.includes(highlightField))) && (
@@ -690,8 +745,11 @@ export default function Properties() {
 
   // Add modal
   const [addOpen, setAddOpen] = useState(false);
-  const [addForm, setAddForm] = useState<PropertyForm>(EMPTY_FORM);
-  const [addErrors, setAddErrors] = useState<FormErrors>({});
+  // Add works like onboarding: pick Area → Postcode → Home, EPC fills in the details.
+  const [addHome, setAddHome] = useState<HomeSelection>(EMPTY_HOME);
+  const [addDetails, setAddDetails] = useState<HomeDetails>(EMPTY_HOME_DETAILS);
+  const [addErrors, setAddErrors] = useState<Record<string, string>>({});
+  const addCertificate = useRef('');
   const [addCoverFile, setAddCoverFile] = useState<File | null>(null);
   const [addCoverPreview, setAddCoverPreview] = useState<string | null>(null);
   const addCoverRef = useRef<HTMLInputElement>(null);
@@ -735,10 +793,14 @@ export default function Properties() {
           config: { headers: { 'Content-Type': 'multipart/form-data' } },
         });
       }
+      // A home picked from the list already carries its EPC certificate: link it (non-critical).
+      if (addCertificate.current) {
+        await apiClient
+          .post(`/api/v1/properties/${created.id}/epc/link/`, { certificate_number: addCertificate.current })
+          .catch(() => {});
+      }
       setAddOpen(false);
-      setAddForm(EMPTY_FORM);
-      setAddErrors({});
-      resetAddCover();
+      resetAdd();
       toast.success('Property added.');
       // Await the refetch before switching: useActiveProperty's own list query
       // must already include the new property, or its "stored id not in list
@@ -748,10 +810,10 @@ export default function Properties() {
     },
     onError: (err: Error & { response?: { data?: { errors?: Record<string, string[]> } } }) => {
       const apiErrs = err?.response?.data?.errors ?? {};
-      const mapped: FormErrors = {};
-      if (apiErrs.address) mapped.address = apiErrs.address[0];
-      if (apiErrs.postcode) mapped.postcode = apiErrs.postcode[0];
-      if (apiErrs.property_type) mapped.property_type = apiErrs.property_type[0];
+      const mapped: Record<string, string> = {};
+      const homeError = apiErrs.postcode?.[0] ?? apiErrs.address?.[0];
+      if (homeError) mapped.home = homeError;
+      if (apiErrs.property_type) mapped.propertyType = apiErrs.property_type[0];
       if (Object.keys(mapped).length) {
         setAddErrors(mapped);
       } else {
@@ -785,6 +847,14 @@ export default function Properties() {
   });
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  const resetAdd = () => {
+    setAddHome(EMPTY_HOME);
+    setAddDetails(EMPTY_HOME_DETAILS);
+    setAddErrors({});
+    addCertificate.current = '';
+    resetAddCover();
+  };
 
   const resetAddCover = () => {
     if (addCoverPreview) URL.revokeObjectURL(addCoverPreview);
@@ -851,19 +921,49 @@ export default function Properties() {
       setEditErrors(errors);
       return;
     }
-    const payload: Partial<ReturnType<typeof formToPayload>> = formToPayload(editForm);
+    const payload: Partial<ReturnType<typeof formToPayload>> = formToPayload(editForm, true);
     // Only the owner sets the home's role; a member's role comes from Settings → Family.
     if (selected.access === 'member') delete payload.role;
     patchMutation.mutate({ url: `/api/v1/properties/${selected.id}/`, data: payload });
   };
 
   const handleAdd = () => {
-    const errors = validatePropertyForm(addForm);
+    const errors: Record<string, string> = {};
+    if (!addHome.postcode) errors.home = 'Select your area and postcode, then your home.';
+    else if (!addHome.address.trim()) errors.home = "Select your home, or choose \"My home isn't listed\" and enter the address.";
+    else if (addHome.lat === null || addHome.lng === null) errors.home = 'Place the pin on the map to mark your home.';
+    if (!addDetails.propertyType) errors.propertyType = 'Select a property type.';
+    if (addDetails.yearBuilt && (+addDetails.yearBuilt < 1800 || +addDetails.yearBuilt > new Date().getFullYear())) {
+      errors.yearBuilt = 'Enter a valid year.';
+    }
     if (Object.keys(errors).length) {
       setAddErrors(errors);
       return;
     }
-    addMutation.mutate({ url: '/api/v1/properties/', data: formToPayload(addForm) });
+    const d = toHomeDetailsPayload(addDetails);
+    addCertificate.current = addHome.certificateNumber;
+    addMutation.mutate({
+      url: '/api/v1/properties/',
+      data: {
+        name: d.name,
+        address: addHome.address.trim(),
+        postcode: formatPostcode(addHome.postcode),
+        location: addHome.area,
+        property_type: addDetails.propertyType,
+        role: d.role,
+        bedrooms: d.bedrooms,
+        bathrooms: d.bathrooms,
+        latitude: addHome.lat,
+        longitude: addHome.lng,
+        heating_type: d.heating_type || null,
+        year_built: d.year_built,
+        tenure: d.tenure || null,
+        floor_area: d.floor_area,
+        built_form: d.built_form,
+        construction_age_band: d.construction_age_band,
+        wall_construction: d.wall_construction || null,
+      },
+    });
   };
 
   const handleDelete = () => {
@@ -897,8 +997,7 @@ export default function Properties() {
           <Button
             size="sm"
             onClick={() => {
-              setAddForm(EMPTY_FORM);
-              setAddErrors({});
+              resetAdd();
               setAddOpen(true);
             }}
           >
@@ -1022,6 +1121,7 @@ export default function Properties() {
                 <PropertyFormFields
                   form={editForm}
                   setForm={setEditForm}
+                  showBuildingFacts
                   errors={editErrors}
                   onClearError={field => setEditErrors(prev => ({ ...prev, [field]: undefined }))}
                   highlightField={focusField}
@@ -1045,7 +1145,15 @@ export default function Properties() {
                     { label: 'Postcode', value: selected.postcode },
                     { label: 'Bedrooms', value: selected.bedrooms > 0 ? String(selected.bedrooms) : undefined },
                     { label: 'Bathrooms', value: selected.bathrooms > 0 ? String(selected.bathrooms) : undefined },
-                    { label: 'Year Built', value: selected.year_built ? String(selected.year_built) : undefined },
+                    { label: 'Built form', value: selected.built_form && selected.built_form.toLowerCase() !== (TYPE_LABEL[selected.property_type] ?? '').toLowerCase() ? selected.built_form : undefined },
+                    { label: 'Floor area', value: selected.floor_area ? `${selected.floor_area} m²` : undefined },
+                    {
+                      label: 'Year Built',
+                      value: selected.year_built
+                        ? `${selected.year_built}${selected.construction_age_band ? ` (EPC: ${selected.construction_age_band})` : ''}`
+                        : selected.construction_age_band || undefined,
+                    },
+                    { label: 'Walls', value: selected.wall_construction ? ({ cavity: 'Cavity wall', solid: 'Solid wall', timber: 'Timber frame', other: 'Other' } as Record<string, string>)[selected.wall_construction] ?? selected.wall_construction : undefined },
                     { label: 'EPC Band', value: selected.epc_band || undefined },
                     { label: 'Tenure', value: selected.tenure || undefined },
                     { label: 'Heating', value: selected.heating_type ? selected.heating_type.replace(/_/g, ' ') : undefined },
@@ -1118,9 +1226,7 @@ export default function Properties() {
         onOpenChange={open => {
           if (!open) {
             setAddOpen(false);
-            setAddForm(EMPTY_FORM);
-            setAddErrors({});
-            resetAddCover();
+            resetAdd();
           }
         }}
       >
@@ -1149,11 +1255,18 @@ export default function Properties() {
             <input ref={addCoverRef} type="file" accept="image/*" className="hidden" onChange={handleAddCoverChange} />
           </div>
 
-          <PropertyFormFields
-            form={addForm}
-            setForm={setAddForm}
+          <NewPropertyFields
+            home={addHome}
+            onHomeChange={h => {
+              setAddHome(h);
+              setAddErrors(prev => ({ ...prev, home: '' }));
+            }}
+            details={addDetails}
+            onDetailsChange={d => {
+              setAddDetails(d);
+              setAddErrors(prev => ({ ...prev, propertyType: '', yearBuilt: '' }));
+            }}
             errors={addErrors}
-            onClearError={field => setAddErrors(prev => ({ ...prev, [field]: undefined }))}
           />
 
           <DialogFooter className="mt-2">

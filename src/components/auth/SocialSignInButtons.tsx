@@ -128,7 +128,7 @@ const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin', onCredent
 
   return (
     <div className="space-y-3">
-      {!isSignup && !isReauth && <Divider label="Or continue with" />}
+      {!isReauth && <Divider label={isSignup ? 'Or sign up with' : 'Or continue with'} />}
 
       <div ref={containerRef} className="flex flex-col items-center gap-2.5 w-full">
         {googleClientId && (
@@ -162,7 +162,6 @@ const SocialSignInButtons = ({ onSuccess, onError, variant = 'signin', onCredent
         )}
       </div>
 
-      {isSignup && <Divider label="or sign up with email" />}
     </div>
   );
 };

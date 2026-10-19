@@ -23,6 +23,14 @@ export type HomePlusUser = {
     postcode: string;
     property_type: string;
     avatar_url: string;
+    /** The home picked at signup (empty for social sign-ins). */
+    address: string;
+    latitude: number | null;
+    longitude: number | null;
+    uprn: string;
+    epc_certificate_number: string;
+    /** name, role, bedrooms, bathrooms, heating_type, year_built, tenure from signup. */
+    home_details: Record<string, unknown>;
   };
   _raw: Record<string, unknown>;
 };
@@ -47,6 +55,12 @@ const normalizeUser = (raw: unknown): HomePlusUser | null => {
       postcode: String(profile.postcode ?? ''),
       property_type: String(profile.property_type ?? ''),
       avatar_url: String(profile.avatar_url ?? ''),
+      address: String(profile.address ?? ''),
+      latitude: typeof profile.latitude === 'number' ? profile.latitude : null,
+      longitude: typeof profile.longitude === 'number' ? profile.longitude : null,
+      uprn: String(profile.uprn ?? ''),
+      epc_certificate_number: String(profile.epc_certificate_number ?? ''),
+      home_details: (profile.home_details && typeof profile.home_details === 'object' ? profile.home_details : {}) as Record<string, unknown>,
     },
     _raw: u,
   };
@@ -136,6 +150,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           property_type: metadata.property_type ?? '',
           postcode: String(metadata.postcode ?? ''),
           location: metadata.location ?? '',
+          // The home picked at signup; onboarding creates the Property from it.
+          address: String(metadata.address ?? ''),
+          latitude: metadata.latitude ?? null,
+          longitude: metadata.longitude ?? null,
+          uprn: String(metadata.uprn ?? ''),
+          epc_certificate_number: String(metadata.epc_certificate_number ?? ''),
+          home_details: metadata.home_details ?? {},
         },
         skipRefresh,
       );
