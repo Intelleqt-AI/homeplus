@@ -2,6 +2,7 @@
 // match the backend `Property` choices (backend/apps/properties/models.py).
 
 import type { EpcDetails } from '@/lib/homeLookup';
+import { ROLE_FOR_USAGE, USAGE_OPTIONS, type Usage } from '@/lib/account';
 
 export type Option = { value: string; label: string };
 
@@ -14,11 +15,8 @@ export const PROPERTY_TYPES: Option[] = [
   { value: 'other', label: 'Other' },
 ];
 
-export const ROLES: (Option & { desc: string })[] = [
-  { value: 'homeowner', label: 'Homeowner', desc: "It's my place" },
-  { value: 'landlord', label: 'Landlord', desc: 'I own & rent it out' },
-  { value: 'tenant', label: 'Tenant', desc: "I'm renting" },
-];
+/** What the property is to its owner: own home / let / rented (replaces the old "Your role"). */
+export const USAGES: Option[] = USAGE_OPTIONS;
 
 export const HEATING_TYPES: Option[] = [
   { value: 'gas_combi', label: 'Gas Combi Boiler' },
@@ -49,7 +47,8 @@ export const WALL_TYPES: Option[] = [
 export type HomeDetails = {
   name: string;
   propertyType: string;
-  role: string;
+  /** What the home is to its owner; sent as `usage` (and the matching older `role`). */
+  usage: Usage;
   bedrooms: string;
   bathrooms: string;
   heatingType: string;
@@ -66,14 +65,16 @@ export type HomeDetails = {
 };
 
 export const EMPTY_HOME_DETAILS: HomeDetails = {
-  name: '', propertyType: '', role: 'homeowner', bedrooms: '', bathrooms: '', heatingType: '', yearBuilt: '', tenure: '',
+  name: '', propertyType: '', usage: 'own_home', bedrooms: '', bathrooms: '', heatingType: '', yearBuilt: '', tenure: '',
   floorArea: '', builtForm: '', ageBand: '', wallConstruction: '', heatingNote: '', epcFilled: [],
 };
 
 /** The backend's `home_details` object for a details form. */
 export const toHomeDetailsPayload = (d: HomeDetails) => ({
   name: d.name.trim(),
-  role: d.role,
+  usage: d.usage,
+  // The older `role` twin: the backend keeps the two in step, and an older backend only knows this.
+  role: ROLE_FOR_USAGE[d.usage],
   bedrooms: d.bedrooms ? parseInt(d.bedrooms, 10) || 0 : 0,
   bathrooms: d.bathrooms ? parseInt(d.bathrooms, 10) || 0 : 0,
   heating_type: d.heatingType,

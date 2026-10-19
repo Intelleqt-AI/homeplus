@@ -36,6 +36,7 @@ import {
   ClipboardList,
   Bell,
   Settings,
+  Loader2,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,81 @@ const timeframeFromDate = (date: Date | string | null | undefined): string | und
   return "flexible";
 };
 
+const FILTER_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "safety", label: "Safety" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "financial", label: "Financial" },
+  { value: "household", label: "Household" },
+];
+
+/** "Filter" button with a small floating list of categories (shared by the mobile row and the Tasks List header). */
+const FilterMenu = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-filter-menu
+        className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-full border transition-all duration-200 ${
+          open || value !== "all"
+            ? "bg-[#1A1A1A] text-white border-[#1A1A1A]"
+            : "text-[#4A4A4A] border-[#E8E8E3] hover:bg-[#F5F5F0]"
+        }`}
+      >
+        <Filter className="w-3.5 h-3.5" />
+        Filter
+        {value !== "all" && (
+          <span className="h-1.5 w-1.5 rounded-full bg-[#FBBF24] ml-0.5" data-filter-active />
+        )}
+      </button>
+
+      {open && (
+        <>
+          {/* Backdrop: closes the popup on an outside tap */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            role="listbox"
+            className="absolute top-full right-0 mt-2 z-20 bg-white border border-[#E8E8E3] rounded-[16px] shadow-lg py-2 min-w-[160px]"
+          >
+            {FILTER_OPTIONS.map((filter) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === filter.value}
+                key={filter.value}
+                onClick={() => {
+                  onChange(filter.value);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${
+                  value === filter.value
+                    ? "bg-[#F5F5F0] text-[#1A1A1A] font-semibold"
+                    : "text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A]"
+                }`}
+              >
+                {value === filter.value && (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#1A1A1A] mr-2 mb-0.5" />
+                )}
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   // Phones default to the list view — the 7-column month grid is too cramped below sm.
@@ -86,7 +162,6 @@ const Calendar = () => {
     | "household"
     | "custom";
   const [filterType, setFilterType] = useState<FilterType>("all");
-  const [filterOpen, setFilterOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addDialogDate, setAddDialogDate] = useState<string | undefined>(undefined);
   const [dragOverDateKey, setDragOverDateKey] = useState<string | null>(null);
@@ -282,7 +357,8 @@ const Calendar = () => {
           description: ev.description ?? "",
           contractor: ev.contractor ?? "",
           priority: ev.priority ?? "medium",
-          complianceType: ev.complianceType ?? "none",
+          // the API sends "" for a task with no compliance type; the Safety filter treats anything but "none" as compliance
+          complianceType: ev.complianceType || "none",
           hasDocument: !!ev.hasDocument,
           hasQuotes: !!ev.hasQuotes,
           tradeConfirmed: !!ev.isRequireTrade || !!ev.tradeConfirmed,
@@ -383,6 +459,84 @@ const Calendar = () => {
         event.date.toDateString() !== new Date().toDateString()
     )
     .slice(0, 5);
+
+  // Right-hand panel: the next three items, or (View all) every task under the current filter.
+  const [showAllTasks, setShowAllTasks] = useState(false);
+  const panelItems = showAllTasks
+    ? [...filteredEvents].sort((a, b) => {
+        const rank = (ev: (typeof filteredEvents)[number]) =>
+          ev.status === "overdue" ? 0 : ev.status === "completed" ? 2 : 1;
+        return rank(a) - rank(b) || new Date(a.date).getTime() - new Date(b.date).getTime();
+      })
+    : [...overdueEvents, ...thisWeekEvents, ...upcomingEvents].slice(0, 3);
+
+  // View all loads the list a page at a time as the panel scrolls to its end.
+  const PANEL_PAGE = 10;
+  const [panelShown, setPanelShown] = useState(PANEL_PAGE);
+  const panelListRef = useRef<HTMLDivElement>(null);
+  const panelEndRef = useRef<HTMLDivElement>(null);
+  const panelHasMore = showAllTasks && panelShown < panelItems.length;
+  useEffect(() => setPanelShown(PANEL_PAGE), [showAllTasks, filterType, activePropertyId]);
+  useEffect(() => {
+    if (!panelHasMore || !panelEndRef.current) return;
+    const io = new IntersectionObserver(
+      entries => { if (entries[0]?.isIntersecting) setPanelShown(n => n + PANEL_PAGE); },
+      { root: panelListRef.current, rootMargin: '120px' },
+    );
+    io.observe(panelEndRef.current);
+    return () => io.disconnect();
+  }, [panelHasMore, panelShown]);
+
+  const renderPanelItem = (item: (typeof filteredEvents)[number], idx: number) => {
+        const dueDate = item?.date ? new Date(item.date) : null;
+        const diffDays = dueDate ? Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+
+        let urgencyColor = 'text-[#6B7280]';
+        let urgencyBg = 'bg-[#F9FAFB]';
+        let urgencyBorder = 'border-[#E5E7EB]';
+        if (diffDays < 0) {
+          urgencyColor = 'text-[#DC2626]';
+          urgencyBg = 'bg-[#FEF2F2]';
+          urgencyBorder = 'border-[#FECACA]';
+        } else if (diffDays <= 3) {
+          urgencyColor = 'text-[#D97706]';
+          urgencyBg = 'bg-[#FFFBEB]';
+          urgencyBorder = 'border-[#FDE68A]';
+        } else if (diffDays <= 7) {
+          urgencyColor = 'text-[#1F2937]';
+          urgencyBg = 'bg-[#FEF3C7]/50';
+          urgencyBorder = 'border-[#FDE68A]/50';
+        }
+
+        return (
+          <div
+            className={`${urgencyBg} border ${urgencyBorder} rounded-[12px] p-4 hover:shadow-sm transition-all cursor-pointer`}
+            key={item?.id || idx}
+            onClick={() => openDetail(item as unknown as CalendarEventDetail)}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`h-8 w-8 rounded-[8px] flex items-center justify-center bg-white border border-[#E5E7EB]`}>
+                <Clock size={14} className={urgencyColor} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-[#1F2937] text-sm font-medium truncate">{item?.title}</h4>
+                <p className="text-[#9CA3AF] capitalize text-[11px] mt-0.5">{item?.type}</p>
+                <p className={`text-xs mt-2 font-medium ${urgencyColor}`}>
+                  {item.status === 'completed'
+                    ? 'Done'
+                    : diffDays < 0
+                    ? `Overdue by ${Math.abs(diffDays)} days`
+                    : diffDays === 0
+                    ? 'Due today'
+                    : diffDays === 1
+                    ? 'Due tomorrow'
+                    : `${diffDays} days left`}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -699,13 +853,7 @@ const Calendar = () => {
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {[
-                { value: "all", label: "All" },
-                { value: "safety", label: "Safety" },
-                { value: "maintenance", label: "Maintenance" },
-                { value: "financial", label: "Financial" },
-                { value: "household", label: "Household" },
-              ].map((filter) => (
+              {FILTER_OPTIONS.map((filter) => (
                 <button
                   key={filter.value}
                   onClick={() => setFilterType(filter.value as FilterType)}
@@ -743,54 +891,7 @@ const Calendar = () => {
             </div>
 
             {/* Filter button + floating popup */}
-            <div className="relative">
-              <button
-                onClick={() => setFilterOpen(v => !v)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-full border transition-all duration-200 ${
-                  filterOpen || filterType !== 'all'
-                    ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                    : 'text-[#4A4A4A] border-[#E8E8E3] hover:bg-[#F5F5F0]'
-                }`}
-              >
-                <Filter className="w-3.5 h-3.5" />
-                Filter
-                {filterType !== 'all' && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#FBBF24] ml-0.5" />
-                )}
-              </button>
-
-              {filterOpen && (
-                <>
-                  {/* Backdrop — closes popup on outside tap */}
-                  <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
-                  {/* Mini popup */}
-                  <div className="absolute top-full right-0 mt-2 z-20 bg-white border border-[#E8E8E3] rounded-[16px] shadow-lg py-2 min-w-[160px]">
-                    {[
-                      { value: "all", label: "All" },
-                      { value: "safety", label: "Safety" },
-                      { value: "maintenance", label: "Maintenance" },
-                      { value: "financial", label: "Financial" },
-                      { value: "household", label: "Household" },
-                    ].map((filter) => (
-                      <button
-                        key={filter.value}
-                        onClick={() => { setFilterType(filter.value as FilterType); setFilterOpen(false); }}
-                        className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${
-                          filterType === filter.value
-                            ? 'bg-[#F5F5F0] text-[#1A1A1A] font-semibold'
-                            : 'text-[#4A4A4A] hover:bg-[#F5F5F0] hover:text-[#1A1A1A]'
-                        }`}
-                      >
-                        {filterType === filter.value && (
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#1A1A1A] mr-2 mb-0.5" />
-                        )}
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+            <FilterMenu value={filterType} onChange={(v) => setFilterType(v as FilterType)} />
           </div>
 
         </div>
@@ -933,10 +1034,7 @@ const Calendar = () => {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-[#1A1A1A] text-lg font-semibold">Tasks List</h2>
                   <div className="flex items-center gap-2">
-                    <button className="px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F5F0] rounded-full transition-colors flex items-center gap-2 border border-[#E8E8E3]">
-                      <Filter className="w-3 h-3" />
-                      Filter
-                    </button>
+                    <FilterMenu value={filterType} onChange={(v) => setFilterType(v as FilterType)} />
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -1012,8 +1110,9 @@ const Calendar = () => {
             ) : null}
           </div>
 
-          {/* Right Sidebar - Upcoming Tasks and Reminders */}
-          <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3]">
+          {/* Right Sidebar - Upcoming Tasks and Reminders: as tall as the calendar (xl), list scrolls inside */}
+          <div className="relative min-h-0">
+          <div className="bg-white rounded-[20px] p-4 md:p-6 border border-[#E8E8E3] flex flex-col xl:absolute xl:inset-0">
             <div className="flex items-center justify-between mb-5">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="h-10 w-10 shrink-0 bg-[#F5F5F0] rounded-full flex items-center justify-center">
@@ -1022,65 +1121,36 @@ const Calendar = () => {
                 <h3 className="min-w-0 text-[#1A1A1A] text-base font-semibold">Upcoming tasks and reminders</h3>
               </div>
             </div>
-            <p className="text-[#6B6B6B] text-sm mb-4">Next 3 items</p>
+            <p className="text-[#6B6B6B] text-sm mb-4" data-panel-heading>
+              {showAllTasks ? `All ${filteredEvents.length} tasks` : "Next 3 items"}
+            </p>
 
             {/* Task List */}
-            <div className="space-y-3">
-              {[...overdueEvents, ...thisWeekEvents, ...upcomingEvents].slice(0, 3).map((item, idx) => {
-                const dueDate = item?.date ? new Date(item.date) : null;
-                const diffDays = dueDate ? Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-
-                let urgencyColor = 'text-[#6B7280]';
-                let urgencyBg = 'bg-[#F9FAFB]';
-                let urgencyBorder = 'border-[#E5E7EB]';
-                if (diffDays < 0) {
-                  urgencyColor = 'text-[#DC2626]';
-                  urgencyBg = 'bg-[#FEF2F2]';
-                  urgencyBorder = 'border-[#FECACA]';
-                } else if (diffDays <= 3) {
-                  urgencyColor = 'text-[#D97706]';
-                  urgencyBg = 'bg-[#FFFBEB]';
-                  urgencyBorder = 'border-[#FDE68A]';
-                } else if (diffDays <= 7) {
-                  urgencyColor = 'text-[#1F2937]';
-                  urgencyBg = 'bg-[#FEF3C7]/50';
-                  urgencyBorder = 'border-[#FDE68A]/50';
-                }
-
-                return (
-                  <div
-                    className={`${urgencyBg} border ${urgencyBorder} rounded-[12px] p-4 hover:shadow-sm transition-all cursor-pointer`}
-                    key={item?.id || idx}
-                    onClick={() => openDetail(item as unknown as CalendarEventDetail)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`h-8 w-8 rounded-[8px] flex items-center justify-center bg-white border border-[#E5E7EB]`}>
-                        <Clock size={14} className={urgencyColor} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-[#1F2937] text-sm font-medium truncate">{item?.title}</h4>
-                        <p className="text-[#9CA3AF] capitalize text-[11px] mt-0.5">{item?.type}</p>
-                        <p className={`text-xs mt-2 font-medium ${urgencyColor}`}>
-                          {diffDays < 0
-                            ? `Overdue by ${Math.abs(diffDays)} days`
-                            : diffDays === 0
-                            ? 'Due today'
-                            : diffDays === 1
-                            ? 'Due tomorrow'
-                            : `${diffDays} days left`}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div
+              ref={panelListRef}
+              className={`space-y-3 min-h-0 overflow-y-auto pr-1 xl:flex-1 ${showAllTasks ? "max-h-[70vh] xl:max-h-none" : ""}`}
+              data-panel-list
+            >
+              {(showAllTasks ? panelItems.slice(0, panelShown) : panelItems).map((item, idx) => renderPanelItem(item, idx))}
+              {panelHasMore && (
+                <div ref={panelEndRef} className="flex justify-center py-2" data-panel-loading>
+                  <Loader2 className="w-4 h-4 animate-spin text-[#6B6B6B]" />
+                </div>
+              )}
             </div>
 
             {filteredEvents.length > 3 && (
-              <button className="text-[#FBBF24] text-sm mt-4 block text-center hover:text-[#D4A017] transition-colors font-medium w-full">
-                View all {filteredEvents.length} tasks
+              <button
+                type="button"
+                aria-expanded={showAllTasks}
+                data-action="toggle-all-tasks"
+                onClick={() => setShowAllTasks((v) => !v)}
+                className="text-[#FBBF24] text-sm mt-4 block text-center hover:text-[#D4A017] transition-colors font-medium w-full"
+              >
+                {showAllTasks ? "Show fewer" : `View all ${filteredEvents.length} tasks`}
               </button>
             )}
+          </div>
           </div>
         </div>
       </div>

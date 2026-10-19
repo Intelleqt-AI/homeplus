@@ -4,6 +4,7 @@ import type { AxiosRequestConfig } from 'axios';
 import apiClient from '@/lib/apiClient';
 import { throttledMessage } from '@/lib/rateLimit';
 import useFetch from '@/hooks/useFetch';
+import { ACCOUNT_TYPES, type AccountType } from '@/lib/account';
 
 export const PENDING_TOKEN_KEY = 'hp_pending_token';
 
@@ -15,6 +16,12 @@ export type HomePlusUser = {
   id: string;
   email: string;
   created_at: string;
+  /** "How will you use Home+?": changes the dashboard and labels, never limits properties. */
+  account_type: AccountType;
+  /** True once the person has answered that question (sign-up, onboarding or Settings). */
+  account_type_confirmed: boolean;
+  /** The one-off "Do you let out a property?" card is still to be shown (accounts that existed at release). */
+  let_prompt_pending: boolean;
   user_metadata: {
     full_name: string;
     first_name: string;
@@ -43,10 +50,15 @@ const normalizeUser = (raw: unknown): HomePlusUser | null => {
   const profile = (u.profile ?? {}) as Record<string, unknown>;
   const firstName = String(u.first_name ?? '');
   const lastName = String(u.last_name ?? '');
+  const accountType = ACCOUNT_TYPES.some(a => a.value === u.account_type) ? (u.account_type as AccountType) : 'homeowner';
   return {
     id: String(u.id ?? ''),
     email: String(u.email ?? ''),
     created_at: String(u.date_joined ?? ''),
+    account_type: accountType,
+    // Older API responses have neither flag: treat the question as answered and never show the card.
+    account_type_confirmed: profile.account_type_confirmed !== false,
+    let_prompt_pending: profile.let_prompt_pending === true,
     user_metadata: {
       full_name: String(u.full_name ?? `${firstName} ${lastName}`.trim()),
       first_name: firstName,
@@ -157,6 +169,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           uprn: String(metadata.uprn ?? ''),
           epc_certificate_number: String(metadata.epc_certificate_number ?? ''),
           home_details: metadata.home_details ?? {},
+          // "How will you use Home+?", answered at sign-up (omitted by older callers).
+          ...(metadata.account_type ? { account_type: metadata.account_type } : {}),
         },
         skipRefresh,
       );

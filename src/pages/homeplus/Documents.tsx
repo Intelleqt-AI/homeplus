@@ -26,6 +26,8 @@ import { deleteFile, updateDocument, getDocumentDownloadUrl, type NormDoc, type 
 import DocsUploadDialog from '@/components/docsUploadDialog';
 import { exportDocumentPack, fetchAllPages, fetchDocumentSummary, type DocumentSummary } from '@/lib/Api2';
 import { useActiveProperty } from '@/hooks/useActiveProperty';
+import { myUsage } from '@/lib/household';
+import { homeLabels } from '@/lib/account';
 import { useAuth } from '@/hooks/useAuth';
 import { attributionLabel } from '@/lib/household';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
@@ -94,6 +96,10 @@ const EXPIRY_URL = '/api/v1/documents/expiring/?page_size=100';
 const Documents = () => {
   const queryClient = useQueryClient();
   const { activePropertyId, activeProperty } = useActiveProperty();
+  // A renter has nothing to hand over on a sale, so the moving pack (and everything that feeds it) is hidden.
+  const usage = myUsage(activeProperty);
+  const showPack = usage !== 'rented_home';
+  const labels = homeLabels(usage);
   const { user: authUser } = useAuth();
 
   const [openForm, setOpenForm] = useState(false);
@@ -380,7 +386,7 @@ const Documents = () => {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8B8B8B]">Document pack</p>
-                <h1 className="text-[22px] sm:text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-0.5 leading-tight sm:leading-none">Your home paperwork</h1>
+                <h1 className="text-[22px] sm:text-[26px] font-bold tracking-tight text-[#1A1A1A] mt-0.5 leading-tight sm:leading-none">{labels.paperwork}</h1>
               </div>
               <button
                 onClick={() => openUploadForm()}
@@ -390,7 +396,7 @@ const Documents = () => {
                 <span>Upload<span className="hidden xs:inline"> document</span></span>
               </button>
             </div>
-            <p className="text-[13px] text-[#6B6B6B] mt-1.5">Stored safely, organised by category, exportable as a moving pack.</p>
+            <p className="text-[13px] text-[#6B6B6B] mt-1.5">Stored safely, organised by category{showPack ? ', exportable as a moving pack' : ''}.</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
@@ -580,7 +586,7 @@ const Documents = () => {
                       <SelectItem value="expiry">Expiry status</SelectItem>
                     </SelectContent>
                   </Select>
-                  {selectedForExport.length > 0 && (
+                  {showPack && selectedForExport.length > 0 && (
                     <span className="text-[12px] font-medium text-[#FBBF24]">{selectedForExport.length} selected</span>
                   )}
                 </div>
@@ -674,10 +680,12 @@ const Documents = () => {
                         </div>
                         {/* Checkbox: desktop only */}
                         <span className="hidden sm:block" onClick={e => e.stopPropagation()}>
-                          <Checkbox
-                            checked={selectedForExport.includes(doc.id)}
-                            onCheckedChange={checked => handleExportSelection(doc.id, checked as boolean)}
-                          />
+                          {showPack && (
+                            <Checkbox
+                              checked={selectedForExport.includes(doc.id)}
+                              onCheckedChange={checked => handleExportSelection(doc.id, checked as boolean)}
+                            />
+                          )}
                         </span>
                       </div>
                     );
@@ -700,7 +708,8 @@ const Documents = () => {
           <div className="w-full shrink-0 flex flex-col gap-4 xl:w-[290px] xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
 
             {/* PackBuilder */}
-            <div className="rounded-[18px] p-5" style={{ background: '#1A1A1A' }}>
+            {showPack && (
+            <div className="rounded-[18px] p-5" style={{ background: '#1A1A1A' }} data-section="moving-pack">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}>
@@ -816,6 +825,7 @@ const Documents = () => {
                 </>
               )}
             </div>
+            )}
 
             {/* ComplianceCalendar */}
             <div className="bg-white rounded-[18px] border border-[#E8E8E3] p-5">
@@ -917,7 +927,7 @@ const Documents = () => {
       <Quote open={quoteOpen} setOpen={setQuoteOpen} prefill={quotePrefill} />
 
       {/* Export modal */}
-      <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+      <Dialog open={showPack && isExportModalOpen} onOpenChange={setIsExportModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Export Home Pack</DialogTitle></DialogHeader>
           {exportMode === 'pick' ? (
@@ -1264,6 +1274,7 @@ const Documents = () => {
               )}
 
               {/* Pack toggle */}
+              {showPack && (
               <button
                 onClick={() => handleExportSelection(doc.id, !inPack)}
                 className={`w-full flex items-center justify-between px-4 py-3.5 rounded-[16px] border transition-colors ${
@@ -1277,6 +1288,7 @@ const Documents = () => {
                 </span>
                 <Package className="w-4 h-4 shrink-0" />
               </button>
+              )}
             </div>
           </div>
         );

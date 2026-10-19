@@ -27,6 +27,13 @@ import SystemHealthDialog from '@/components/insights/SystemHealthDialog';
 import { ACTION_BUTTON, runSystemAction } from '@/components/insights/systemHealthActions';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
 import AddEvent, { type AddEventInitialValues } from '@/components/event/AddEvent';
+import LetPromptCard from '@/components/dashboard/LetPromptCard';
+import PortfolioOverview from '@/components/dashboard/PortfolioOverview';
+import RentalCertificatesCard from '@/components/dashboard/RentalCertificatesCard';
+import TenancyCard from '@/components/dashboard/TenancyCard';
+import { usePortfolioView } from '@/hooks/usePortfolioView';
+import { myUsage, propertyNickname } from '@/lib/household';
+import { homeLabels } from '@/lib/account';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, PieChart, Pie,
   Tooltip as RTooltip, ResponsiveContainer,
@@ -170,9 +177,13 @@ const epcDate = (iso: string | null): string => {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const HomePlusDashboard = () => {
+const PropertyDashboard = () => {
   const { user } = useAuth();
-  const { properties, activePropertyId } = useActiveProperty();
+  const { properties, activePropertyId, activeProperty } = useActiveProperty();
+  const { canPortfolio, setPortfolioView } = usePortfolioView();
+  // What the open home is to this person: a let home gets the rental certificates card, a rented one the tenancy card.
+  const usage = myUsage(activeProperty);
+  const labels = homeLabels(usage);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -401,6 +412,7 @@ const HomePlusDashboard = () => {
 
   const now_month = now.getMonth();
   const MONTHS_LABELS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  const MONTHS_LABELS_FULL = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   // Events in next 30 days
   const eventsNext30 = dashEvents.filter(ev => {
@@ -416,14 +428,9 @@ const HomePlusDashboard = () => {
     spendYears.find(y => y.year === spendYear) ?? spendYears[spendYears.length - 1] ?? null;
 
   const fmtGBP = (n: number) => `£${Math.round(n).toLocaleString('en-GB')}`;
-  const fmtSpendSub = (yr: AnnualSpendYear | null) => {
-    if (!yr) return 'No spend logged yet';
-    const inv = `${yr.invoice_count} invoice${yr.invoice_count === 1 ? '' : 's'} logged`;
-    if (yr.delta_vs_prev == null) return inv;
-    const d = Math.round(yr.delta_vs_prev);
-    const sign = d > 0 ? '+' : d < 0 ? '−' : '±';
-    return `${sign}£${Math.abs(d).toLocaleString('en-GB')} vs last year · ${inv}`;
-  };
+  // The vs-last-year figure has its own tile in the summary row, so the sub line is just the count.
+  const fmtSpendSub = (yr: AnnualSpendYear | null) =>
+    yr ? `${yr.invoice_count} invoice${yr.invoice_count === 1 ? '' : 's'} logged` : 'No spend logged yet';
 
   const yearData = {
     total: activeSpend ? fmtGBP(activeSpend.total) : '£0',
@@ -444,6 +451,24 @@ const HomePlusDashboard = () => {
   const spendPieData = spendCats.length
     ? spendCats.map(c => ({ name: c.name, value: c.v, fill: c.color }))
     : [{ name: 'No spend yet', value: 1, fill: '#ECECE6' }];
+
+  // Summary row under the charts: the year read three ways, all from the same payload.
+  const spendBusiest = (() => {
+    if (spendEmpty || !activeSpend) return '—';
+    const i = activeSpend.bars.reduce((best, v, idx) => (v > activeSpend.bars[best] ? idx : best), 0);
+    return `${MONTHS_LABELS_FULL[i]} · ${fmtGBP(activeSpend.bars[i])}`;
+  })();
+  const spendMonths = activeSpend && activeSpend.year === now.getFullYear() ? now_month + 1 : 12;
+  const spendAverage = activeSpend && spendMonths > 0 ? fmtGBP(activeSpend.total / spendMonths) : '£0';
+  const spendDelta = (() => {
+    const d = activeSpend?.delta_vs_prev;
+    if (d == null) return { text: 'No data', cls: 'text-muted-foreground' };
+    const r = Math.round(d);
+    if (r === 0) return { text: 'Same as last year', cls: 'text-muted-foreground' };
+    return r > 0
+      ? { text: `+${fmtGBP(r)}`, cls: 'text-destructive' }
+      : { text: `−${fmtGBP(Math.abs(r))}`, cls: 'text-success' };
+  })();
 
   // YTD home-spend vitals tile — derived from the same annual-spend payload.
   const ytdYear = now.getFullYear();
@@ -531,10 +556,11 @@ const HomePlusDashboard = () => {
   // Completion derives entirely from data already on the page. Step 1 (property) is
   // pre-completed at sign-up → endowed progress ("1 of 5 done").
   const motTickedTotal = motYesCount('A') + motYesCount('B') + motYesCount('C');
-  const hasJob = !!quotes?.job;
+  // Any posted job counts: quotes-summary only returns a job once a trader has quoted.
+  const hasJob = !!quotes?.job || leads.length > 0;
 
   const gsSteps: GsStep[] = [
-    { id: 'property', icon: Home, title: 'Add your property', helper: "Your home's address & details — done at sign-up.", done: hasProperty, ctaLabel: 'View', href: '/dashboard/settings?tab=properties' },
+    { id: 'property', icon: Home, title: 'Add your property', helper: labels.addressStep, done: hasProperty, ctaLabel: 'View', href: '/dashboard/settings?tab=properties' },
     { id: 'mot', icon: ClipboardList, title: 'Run your first Home MOT check', helper: 'Three 60-second checks. Each one grows your score.', done: motTickedTotal > 0, ctaLabel: 'Start check', onCta: () => setMotStep('A') },
     { id: 'document', icon: Upload, title: 'Upload your first document', helper: 'Warranties, certificates & manuals — safe and searchable.', done: totalDocs > 0, ctaLabel: 'Upload', onCta: () => setUploadOpen(true) },
     { id: 'epc', icon: Leaf, title: 'Get your EPC rating', helper: 'Upload your certificate for an instant energy rating.', done: hasEpcRating, ctaLabel: 'Add EPC', onCta: () => setEpcUploadOpen(true) },
@@ -556,11 +582,28 @@ const HomePlusDashboard = () => {
     try { localStorage.setItem(gsDismissKey, '1'); } catch { /* ignore */ }
     setGsDismissed(true);
   };
-  const showGettingStarted = !gsDismissed && (accountAgeDays < 30 || meaningfulDone < 2);
+  // A finished checklist stays (with an X to remove it) until the user removes it.
+  const gsAllDone = gsSteps.every(s => s.done);
+  const showGettingStarted = !gsDismissed && (gsAllDone || accountAgeDays < 30 || meaningfulDone < 2);
 
   return (
     <DashboardLayout>
       <div className="space-y-4">
+
+        {/* ── Back to the landlord's overview ───────────────── */}
+        {canPortfolio && (
+          <button
+            type="button"
+            onClick={() => setPortfolioView(true)}
+            data-action="all-properties"
+            className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← All properties
+          </button>
+        )}
+
+        {/* ── One-off: "Do you let out a property?" (accounts that existed before landlord accounts) ── */}
+        <LetPromptCard />
 
         {/* ── PageHeader ─────────────────────────────────────── */}
         <div className="bg-card rounded-[18px] border border-border p-5 flex items-center justify-between gap-4">
@@ -709,7 +752,7 @@ const HomePlusDashboard = () => {
           {/* System health */}
           <div className="bg-card rounded-[18px] border border-border p-5">
             <Eyebrow icon={Cpu} label="System health" trailing={
-              <Link to="/dashboard/calendar"
+              <Link to="/dashboard/log-work"
                 className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border border-border bg-muted text-muted-foreground hover:bg-border transition-colors">
                 <Wrench className="w-3 h-3" /> Log work
               </Link>
@@ -887,10 +930,29 @@ const HomePlusDashboard = () => {
           </div>
         </div>
 
+        {/* ── A let property: rental safety certificates. A rented home: the tenancy ── */}
+        {activePropertyId && usage === 'let' && (
+          <RentalCertificatesCard
+            propertyId={activePropertyId}
+            nickname={propertyNickname(activeProperty)}
+            onAction={action => runSystemAction(action, 'prs', systemActionHandlers)}
+            onUpload={systemActionHandlers.onUpload}
+          />
+        )}
+        {activePropertyId && usage === 'rented_home' && activeProperty?.access !== 'member' && (
+          <TenancyCard
+            propertyId={activePropertyId}
+            tenancyStart={activeProperty?.tenancy_start}
+            tenancyEnd={activeProperty?.tenancy_end}
+            onAction={action => runSystemAction(action, 'prs', systemActionHandlers)}
+            onUpload={systemActionHandlers.onUpload}
+          />
+        )}
+
         {/* ── Row: Spend + EPC ─────────────────────────────────── */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {/* Spend tracker */}
-          <div className="bg-card rounded-[18px] border border-border p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col">
             <Eyebrow icon={PoundSterling} label="Annual spend tracker" trailing={
               <div className="flex gap-1 bg-muted p-1 rounded-full">
                 {spendYearTabs.slice(-3).map(y => (
@@ -901,14 +963,14 @@ const HomePlusDashboard = () => {
                 ))}
               </div>
             } />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6 items-start mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6 items-center mt-4">
               {/* Left: BigStat + BarChart */}
               <div className="flex flex-col gap-3">
                 <div>
                   <span className="text-[28px] font-bold tracking-tight text-foreground leading-none">{yearData.total}</span>
                   <p className="text-[11px] text-muted-foreground mt-1">{yearData.sub}</p>
                 </div>
-                <div className="h-[72px] w-full">
+                <div className="h-[96px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={spendBarChartData} barCategoryGap="25%" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                       <YAxis hide domain={spendEmpty ? [0, 3] : [0, 'auto']} />
@@ -937,13 +999,13 @@ const HomePlusDashboard = () => {
               </div>
               {/* Right: Donut + legend */}
               <div className="flex flex-wrap items-center gap-4">
-                <div className="relative shrink-0" style={{ width: 100, height: 100 }}>
+                <div className="relative shrink-0" style={{ width: 132, height: 132 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={spendPieData}
                         cx="50%" cy="50%"
-                        innerRadius={32} outerRadius={46}
+                        innerRadius={42} outerRadius={62}
                         dataKey="value"
                         isAnimationActive={!spendEmpty} animationBegin={0} animationDuration={500}
                         strokeWidth={0}
@@ -953,11 +1015,11 @@ const HomePlusDashboard = () => {
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-[15px] font-bold text-foreground leading-none">{yearData.center}</span>
+                    <span className="text-[19px] font-bold text-foreground leading-none">{yearData.center}</span>
                     <span className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">YTD</span>
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 flex-1 min-w-[140px]">
+                <div className="flex flex-col gap-2 flex-1 min-w-[130px]">
                   {spendCats.length ? (
                     spendCats.map(c => (
                       <div key={c.name} className="flex items-center gap-2 text-[12px]">
@@ -971,6 +1033,20 @@ const HomePlusDashboard = () => {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* The year in three figures — sits at the card's foot, level with the EPC card */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-auto pt-4 border-t border-border">
+              {[
+                { label: 'Busiest month', value: spendBusiest, cls: 'text-foreground' },
+                { label: 'Avg per month', value: spendAverage, cls: 'text-foreground' },
+                { label: 'vs last year', value: spendDelta.text, cls: spendDelta.cls },
+              ].map(s => (
+                <div key={s.label}>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{s.label}</p>
+                  <p className={cn('text-[15px] font-semibold mt-1 truncate', s.cls)}>{s.value}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1021,10 +1097,20 @@ const HomePlusDashboard = () => {
                           <p className="text-[13px] font-semibold text-foreground truncate">{epc.recommendations[0].title}</p>
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground shrink-0">{epc.source === 'register' ? 'GOV.UK' : 'AI'}</span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                        {/* Kept to two lines so this card stays level with the spend tracker; the EPC page has the rest. */}
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
                           {epc.recommendations[0].detail || 'Recommended improvement'}
-                          {epc.recommendations[0].saving ? ` · saves ${epc.recommendations[0].saving}` : ''}
-                          {epc.recommendations.length > 1 ? ` · +${epc.recommendations.length - 1} more` : ''}
+                        </p>
+                        <p className="text-[11px] mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          {epc.recommendations[0].saving && (
+                            <span className="font-medium text-success">Saves {epc.recommendations[0].saving}</span>
+                          )}
+                          {epc.recommendations.length > 1 && (
+                            <span className="text-muted-foreground">+{epc.recommendations.length - 1} more</span>
+                          )}
+                          <Link to="/dashboard/energy" className="inline-flex items-center font-semibold text-foreground hover:underline">
+                            See more <ChevronRight className="w-3 h-3" />
+                          </Link>
                         </p>
                       </>
                     ) : epc.isEstimate ? (
@@ -1432,6 +1518,20 @@ const HomePlusDashboard = () => {
         propertyId={activePropertyId}
         focusQuestion={motFocus}
       />
+    </DashboardLayout>
+  );
+};
+
+/** The landlord's "All properties" overview, or one property's dashboard (the same one for everyone). */
+const HomePlusDashboard = () => {
+  const { portfolioViewActive } = usePortfolioView();
+  if (!portfolioViewActive) return <PropertyDashboard />;
+  return (
+    <DashboardLayout>
+      <div className="space-y-4">
+        <LetPromptCard />
+        <PortfolioOverview />
+      </div>
     </DashboardLayout>
   );
 };

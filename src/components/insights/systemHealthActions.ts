@@ -28,6 +28,9 @@ export const eventLink = (id: string, view: 'detail' | 'complete' = 'detail') =>
   `/dashboard/calendar?event=${encodeURIComponent(id)}&view=${view}`;
 export const documentLink = (id: string, open: 'preview' | 'edit' = 'preview') =>
   `/dashboard/documents?doc=${encodeURIComponent(id)}&open=${open}`;
+/** The Log work page: earlier tasks still open, optionally for one system. */
+export const logWorkLink = (system?: string) =>
+  `/dashboard/log-work${system ? `?system=${encodeURIComponent(system)}` : ''}`;
 export const propertyEditLink = (id: string, field?: string) =>
   `/dashboard/settings?tab=properties&edit=${encodeURIComponent(id)}${field ? `&field=${field}` : ''}`;
 
@@ -37,7 +40,7 @@ export type SystemActionHandlers = {
   onUpload: (draft?: SystemUploadDraft) => void;
   onQuote: (prefill: QuotePrefill) => void;
   onMot: (step: HomeMotStep, focus?: string) => void;
-  /** Open Add Event prefilled: work already done, a task or a reminder. */
+  /** Open Add Event prefilled: a task or a reminder. */
   onLogWork: (draft: SystemEventDraft) => void;
 };
 
@@ -78,6 +81,7 @@ export function runSystemAction(action: SystemHealthAction, systemKey: string, h
       return h.navigate(id ? propertyEditLink(id, p.field) : '/dashboard/settings?tab=properties');
     }
     default: {
+      if (p.log_work) return h.navigate(logWorkLink(p.log_work));
       if (p.new_event) return h.onLogWork(p.new_event);
       const id = p.event_id ?? action.event_id;
       return h.navigate(id ? eventLink(id, p.view) : '/dashboard/calendar');

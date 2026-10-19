@@ -11,14 +11,15 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/hooks/useAuth';
 import usePatch from '@/hooks/usePatch';
 import { useActiveProperty } from '@/hooks/useActiveProperty';
-import { memberRoleLabel } from '@/lib/household';
-import { PROPERTY_TYPES, ROLES } from './Properties';
+import { memberRoleLabel, propertyNickname, usageOf } from '@/lib/household';
+import { homeLabels, isPortfolioAccount, usageLabel } from '@/lib/account';
+import HowYouUse from './HowYouUse';
+import { PROPERTY_TYPES } from './Properties';
 
 type Form = { first_name: string; last_name: string; phone: string };
 const EMPTY: Form = { first_name: '', last_name: '', phone: '' };
 
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(PROPERTY_TYPES.map(t => [t.value, t.label]));
-const ROLE_LABEL: Record<string, string> = Object.fromEntries(ROLES.map(r => [r.value, r.label]));
 
 const Chip = ({ children, className }: { children: React.ReactNode; className?: string }) => (
   <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap', className)}>
@@ -199,11 +200,14 @@ const Profile = () => {
         </CardContent>
       </Card>
 
+      {/* How you use Home+ */}
+      <HowYouUse />
+
       {/* Your homes */}
       <Card data-section="homes">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Home className="w-5 h-5 shrink-0 text-accent" /> Your homes
+            <Home className="w-5 h-5 shrink-0 text-accent" /> {homeLabels(undefined, isPortfolioAccount(user?.account_type)).settingsHomes}
           </CardTitle>
           <p className="text-sm text-muted-foreground">Each home keeps its own address and details.</p>
         </CardHeader>
@@ -220,15 +224,15 @@ const Profile = () => {
               <ul className="divide-y">
                 {properties.map(p => {
                   const shared = p.access === 'member';
-                  const role = shared ? memberRoleLabel(p.member_role) : ROLE_LABEL[p.role ?? ''];
+                  const role = shared ? memberRoleLabel(p.member_role) : usageLabel(usageOf(p));
                   return (
-                    <li key={p.id} data-home={p.name || p.address} className="py-3.5 first:pt-0 last:pb-0 flex items-center gap-3 min-w-0">
+                    <li key={p.id} data-home={propertyNickname(p)} className="py-3.5 first:pt-0 last:pb-0 flex items-center gap-3 min-w-0">
                       <div className="h-10 w-10 shrink-0 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
                         <Home className="h-[18px] w-[18px]" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <p className="text-sm font-medium truncate max-w-full">{p.name || p.address || 'Home'}</p>
+                          <p className="text-sm font-medium truncate max-w-full">{propertyNickname(p) || 'Home'}</p>
                           {p.id === activePropertyId && (
                             <Chip className="border-accent/40 bg-accent/15 text-foreground">Selected</Chip>
                           )}
@@ -252,7 +256,7 @@ const Profile = () => {
                         </div>
                       </div>
                       <Button asChild variant="outline" size="sm" className="shrink-0">
-                        <Link to={`/dashboard/settings?tab=properties&edit=${p.id}`} aria-label={`Edit ${p.name || p.address || 'home'}`}>
+                        <Link to={`/dashboard/settings?tab=properties&edit=${p.id}`} aria-label={`Edit ${propertyNickname(p) || 'home'}`}>
                           <Pencil className="w-3.5 h-3.5 sm:mr-1.5" />
                           <span className="hidden sm:inline">Edit</span>
                         </Link>

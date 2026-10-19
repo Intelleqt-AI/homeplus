@@ -6,7 +6,9 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchData } from '@/lib/Api';
 import PropertySwitcher from './PropertySwitcher';
 import { useActiveProperty } from '@/hooks/useActiveProperty';
-import { myRole } from '@/lib/household';
+import { usePortfolioView } from '@/hooks/usePortfolioView';
+import { myRole, myUsage } from '@/lib/household';
+import { homeLabels } from '@/lib/account';
 
 const Sidebar = () => {
   const location = useLocation();
@@ -16,13 +18,16 @@ const Sidebar = () => {
 
   // Unread badge for the active property only (matches the Notifications page).
   const { activePropertyId, activeProperty } = useActiveProperty();
+  const { portfolioViewActive } = usePortfolioView();
+  // "All properties" is showing: the badge is for the whole account, not one home.
+  const bellProperty = portfolioViewActive ? null : activePropertyId;
   // The PRS register belongs to a let home: shown only while that home is selected.
   // The register is for whoever lets the home: its landlord owner, or a member they made its landlord.
   const hasLetHome = myRole(activeProperty) === 'landlord';
   const { data: bellData } = useQuery({
-    queryKey: ['ho-notifications', activePropertyId],
+    queryKey: ['ho-notifications', bellProperty],
     queryFn: (): Promise<{ unread_count: number }> =>
-      fetchData(`/api/v1/notifications/${activePropertyId ? `?property=${activePropertyId}` : ''}`).then((r: { data?: { unread_count: number } } & { unread_count?: number }) => r?.data ?? r as { unread_count: number }),
+      fetchData(`/api/v1/notifications/${bellProperty ? `?property=${bellProperty}` : ''}`).then((r: { data?: { unread_count: number } } & { unread_count?: number }) => r?.data ?? r as { unread_count: number }),
     refetchInterval: 5 * 60 * 1000,
   });
   const unreadCount: number = (bellData as { unread_count?: number } | undefined)?.unread_count ?? 0;
@@ -43,8 +48,10 @@ const Sidebar = () => {
     navigate('/login', { replace: true });
   };
 
+  // Where the app says "your home", a let property says "this property" and the overview "your properties".
+  const labels = homeLabels(myUsage(activeProperty), portfolioViewActive);
   const sidebarItems = [
-    { icon: Home, label: 'My Home', path: '/dashboard' },
+    { icon: Home, label: labels.nav, path: '/dashboard' },
     { icon: Search, label: 'Home Improvements', path: '/dashboard/job-leads' },
     { icon: FileText, label: 'Documents', path: '/dashboard/documents' },
     ...(hasLetHome ? [{ icon: ClipboardCheck, label: 'Rental register', path: '/dashboard/rental-register' }] : []),

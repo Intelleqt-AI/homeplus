@@ -33,6 +33,7 @@ import HowItWorks from './pages/homeplus/HowItWorks';
 import NotificationsPage from './pages/homeplus/Notifications';
 import Messages from './pages/homeplus/Messages';
 import EnergyEPC from './pages/homeplus/EnergyEPC';
+import LogWork from './pages/homeplus/LogWork';
 import RentalRegister from './pages/homeplus/RentalRegister';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
@@ -172,6 +173,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <EnergyEPC />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/log-work"
+              element={
+                <ProtectedRoute>
+                  <LogWork />
                 </ProtectedRoute>
               }
             />

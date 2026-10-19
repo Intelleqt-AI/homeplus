@@ -1,7 +1,7 @@
 import { formatDistanceToNow } from 'date-fns';
 import {
   Briefcase, CalendarClock, CalendarDays, CheckCircle2, Clock, FileText,
-  Flag, Home, MapPin, RefreshCw, Users,
+  Flag, Home, KeyRound, MapPin, RefreshCw, Users,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import TraderName from '@/components/trader/TraderName';
@@ -46,6 +46,8 @@ interface BidSummary {
 /** Full `/api/v1/jobs/{id}/` payload (JobLeadSerializer). */
 export interface FullJob extends JobDetail {
   property_address?: string | null;
+  /** "Access note for the trade" (a home that is let out). */
+  access_note?: string;
   answers?: Record<string, unknown>;
   files?: JobFile[];
   todo_at?: string | null;
@@ -188,6 +190,15 @@ const JobInfoDialog = ({ open, onOpenChange, jobDetail, job, bids, conversationI
             <Section title="Description" icon={FileText}>
               <p className="whitespace-pre-wrap rounded-[12px] border border-[#E8E8E3] bg-white p-3 text-sm leading-relaxed text-[#1A1A1A]">
                 {j.description}
+              </p>
+            </Section>
+          )}
+
+          {/* Access note for the trade (a home that is let out) */}
+          {j.access_note?.trim() && (
+            <Section title="Access note" icon={KeyRound}>
+              <p className="whitespace-pre-wrap break-words rounded-[12px] border border-[#E8E8E3] bg-white p-3 text-sm leading-relaxed text-[#1A1A1A]" data-access-note>
+                {j.access_note}
               </p>
             </Section>
           )}

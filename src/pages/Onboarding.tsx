@@ -2,19 +2,26 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Home, ChevronRight, ArrowRight, Building, Building2, Warehouse, LayoutGrid, HelpCircle, KeyRound, Briefcase, Users, Check, Camera } from 'lucide-react';
+import { Home, ChevronRight, ArrowRight, Building, Building2, Warehouse, LayoutGrid, HelpCircle, Camera, Plus, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import apiClient from '@/lib/apiClient';
 import HomeSelector from '@/components/HomeSelector';
+import AccountTypePicker from '@/components/account/AccountTypePicker';
+import NewPropertyFields from '@/components/property/NewPropertyFields';
 import { EMPTY_HOME, fetchHomeDetails, type HomeSelection } from '@/lib/homeLookup';
 import { formatPostcode, postcodeError } from '@/lib/postcode';
 import {
-  PROPERTY_TYPES as TYPE_OPTIONS, ROLES as ROLE_OPTIONS, HEATING_TYPES, TENURE_TYPES, WALL_TYPES, EMPTY_HOME_DETAILS,
-  applyEpc, clearEpc, labelFor, type HomeDetails,
+  PROPERTY_TYPES as TYPE_OPTIONS, HEATING_TYPES, TENURE_TYPES, WALL_TYPES, EMPTY_HOME_DETAILS,
+  applyEpc, clearEpc, labelFor, toHomeDetailsPayload, type HomeDetails,
 } from '@/lib/propertyOptions';
 import PropertyDetailsFields, { type DetailField } from '@/components/PropertyDetailsFields';
+import {
+  ACCOUNT_TYPE_CAPTION, ROLE_FOR_USAGE, clearSrc, firstUsage, readSrc, srcPreselect, usageLabel,
+  wordingFor, type AccountType, type Usage,
+} from '@/lib/account';
+import { propertyNickname } from '@/lib/household';
 
 /** The API's first message for ``field`` ({errors: {field: [...]}}), or ''. */
 const apiFieldError = (err: unknown, field: string): string => {
@@ -36,10 +43,36 @@ type NotifPrefs = {
 const TYPE_ICONS: Record<string, typeof Home> = {
   detached: Home, semi_detached: Building2, terraced: LayoutGrid, flat: Building, bungalow: Warehouse, other: HelpCircle,
 };
-const ROLE_ICONS: Record<string, typeof Home> = { homeowner: KeyRound, landlord: Briefcase, tenant: Users };
 
 const PROPERTY_TYPES = TYPE_OPTIONS.map(t => ({ ...t, icon: TYPE_ICONS[t.value] ?? Home }));
-const ROLES = ROLE_OPTIONS.map(r => ({ ...r, icon: ROLE_ICONS[r.value] ?? Home }));
+
+/** The screens, in the order a person meets them. `type` only for those who have not answered
+ *  "How will you use Home+?" yet (Google/Apple sign-ups, accounts that were mid-way at release);
+ *  `tenancy` only for renters; `extra` and `more` for landlords and "both". */
+type StepId = 'type' | 'phone' | 'property' | 'tenancy' | 'extra' | 'more' | 'notifications' | 'loading';
+
+/** What the first property is called on its screen, by how the person uses Home+. */
+const PROPERTY_HEADINGS: Record<AccountType, { form: [string, string]; summary: [string, string]; hint: string }> = {
+  homeowner: {
+    form: ['Tell us about', 'your home.'], summary: ["Here's your", 'home.'],
+    hint: "We'll use this to tailor your maintenance schedule.",
+  },
+  landlord: {
+    form: ['Tell us about', 'the property you let.'], summary: ["Here's the", 'property you let.'],
+    hint: "We'll use this to tailor your reminders.",
+  },
+  both: {
+    form: ['Tell us about', 'the home you live in.'], summary: ["Here's the home", 'you live in.'],
+    hint: "We'll use this to tailor your maintenance schedule.",
+  },
+  renter: {
+    form: ['Tell us about', 'the home you rent.'], summary: ["Here's the home", 'you rent.'],
+    hint: "We'll use this to tailor your reminders.",
+  },
+};
+
+/** A property after the first (landlords and "both"): what the person has filled in so far. */
+type ExtraDraft = { id: number; home: HomeSelection; details: HomeDetails; error: string };
 
 const LOADING_PHRASES = [
   'Setting up your profile',
@@ -60,12 +93,12 @@ const stepVariants: Variants = {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StepPhone({
-  phone, setPhone, error,
-}: { phone: string; setPhone: (v: string) => void; error: string }) {
+  phone, setPhone, error, stepLabel,
+}: { phone: string; setPhone: (v: string) => void; error: string; stepLabel: string }) {
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 1 of 3</p>
+        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">{stepLabel}</p>
         <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
           What's your<br />phone number?
         </h1>
@@ -85,7 +118,7 @@ function StepPhone({
           <input
             type="tel"
             value={phone}
-            onChange={e => setPhone(e.target.value.replace(/[^0-9 ()+\-]/g, ''))}
+            onChange={e => setPhone(e.target.value.replace(/[^0-9 ()+-]/g, ''))}
             placeholder="7700 900 123"
             autoFocus
             className="flex-1 min-w-0 px-4 py-4 text-[17px] font-medium text-foreground placeholder:text-muted-foreground/50 bg-transparent outline-none"
@@ -103,7 +136,7 @@ function StepProperty({
   name, setName,
   home, onHomeChange, hasSavedHome,
   propertyType, setPropertyType,
-  role, setRole,
+  usage, accountType, stepLabel,
   bedrooms, setBedrooms,
   bathrooms, setBathrooms,
   heatingType, setHeatingType,
@@ -119,7 +152,8 @@ function StepProperty({
   /** The home chosen at signup (or being chosen now), with the map pin. */
   home: HomeSelection; onHomeChange: (h: HomeSelection) => void; hasSavedHome: boolean;
   propertyType: string; setPropertyType: (v: string) => void;
-  role: string; setRole: (v: string) => void;
+  /** What this first property is (set by how the person uses Home+) and what they said that is. */
+  usage: Usage; accountType: AccountType; stepLabel: string;
   bedrooms: string; setBedrooms: (v: string) => void;
   bathrooms: string; setBathrooms: (v: string) => void;
   heatingType: string; setHeatingType: (v: string) => void;
@@ -138,16 +172,19 @@ function StepProperty({
   // People who added their home at signup see a summary (with Edit). Google/Apple
   // sign-ups have no saved home, so they get the full form and must complete it.
   const showSummary = hasSavedHome && !editing && !!home.address;
+  const wording = wordingFor(usage);
+  const headings = PROPERTY_HEADINGS[accountType];
+  const [h1, h2] = showSummary ? headings.summary : headings.form;
 
   return (
     <div className="space-y-7">
       <div className="space-y-3">
-        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 2 of 3</p>
+        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">{stepLabel}</p>
         <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
-          {showSummary ? <>Here&apos;s your<br />home.</> : <>Tell us about<br />your home.</>}
+          {h1}<br />{h2}
         </h1>
         <p className="text-[17px] text-muted-foreground">
-          {showSummary ? 'Check the details. You can edit anything.' : "We'll use this to tailor your maintenance schedule."}
+          {showSummary ? 'Check the details. You can edit anything.' : headings.hint}
         </p>
       </div>
 
@@ -175,7 +212,9 @@ function StepProperty({
           <div className="rounded-2xl border-2 border-border bg-card px-4 py-3.5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your home</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {wording === 'property' ? 'Your property' : 'Your home'}
+                </p>
                 <p className="text-[17px] font-semibold text-foreground break-words">{name.trim() || home.address}</p>
               </div>
               <button type="button" onClick={() => setEditing(true)} className="shrink-0 text-sm font-semibold text-primary hover:underline">
@@ -191,7 +230,7 @@ function StepProperty({
                 ['Floor area', floorArea ? `${floorArea} m²` : ''],
                 ['Built', details.ageBand || yearBuilt],
                 ['Walls', details.wallConstruction ? labelFor(WALL_TYPES, details.wallConstruction) : ''],
-                ['Role', labelFor(ROLES, role)],
+                ['How you use it', usageLabel(usage)],
                 ['Bedrooms', bedrooms],
                 ['Bathrooms', bathrooms],
                 ['Heating', heatingType ? labelFor(HEATING_TYPES, heatingType) : ''],
@@ -232,11 +271,11 @@ function StepProperty({
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="Property name (e.g. Main Home)"
+          placeholder={wording === 'property' ? 'Property name (e.g. Flat 2, Oxford Road)' : 'Property name (e.g. Main Home)'}
           className="w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[15px] font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors"
         />
 
-        <HomeSelector value={home} onChange={onHomeChange} />
+        <HomeSelector value={home} onChange={onHomeChange} wording={wording} />
 
         {/* Property type */}
         <div>
@@ -263,31 +302,6 @@ function StepProperty({
         </div>
         </div>
 
-        {/* Role */}
-        <div>
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Your role</label>
-        <div className="grid grid-cols-1 xs:grid-cols-3 gap-2.5">
-          {ROLES.map(r => (
-            <motion.button
-              key={r.value}
-              type="button"
-              onClick={() => setRole(r.value)}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ duration: 0.15 }}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-2 py-3.5 px-2.5 sm:px-4 text-left transition-all ${
-                role === r.value
-                  ? 'border-accent bg-gradient-hero text-accent-foreground'
-                  : 'border-border bg-card text-foreground hover:border-foreground'
-              }`}
-            >
-              <r.icon className="w-4 h-4 mb-1" />
-              <span className="text-xs sm:text-sm font-bold">{r.label}</span>
-              <span className={`text-xs ${role === r.value ? 'text-accent-foreground/60' : 'text-muted-foreground'}`}>{r.desc}</span>
-            </motion.button>
-          ))}
-        </div>
-        </div>
       </div>
 
         {/* Bedrooms & Bathrooms */}
@@ -393,8 +407,8 @@ function StepProperty({
 }
 
 function StepNotifications({
-  prefs, setPrefs,
-}: { prefs: NotifPrefs; setPrefs: (p: NotifPrefs) => void }) {
+  prefs, setPrefs, stepLabel,
+}: { prefs: NotifPrefs; setPrefs: (p: NotifPrefs) => void; stepLabel: string }) {
   const items: { key: keyof NotifPrefs; label: string; desc: string }[] = [
     { key: 'email_notifications', label: 'Email updates',      desc: 'Reminders, certificates, service alerts' },
     { key: 'sms_notifications',   label: 'SMS alerts',         desc: 'Urgent alerts to your phone. Coming soon.' },
@@ -405,7 +419,7 @@ function StepNotifications({
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">Step 3 of 3</p>
+        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">{stepLabel}</p>
         <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
           How should<br />we reach you?
         </h1>
@@ -527,6 +541,144 @@ function StepLoading({ onDone }: { onDone: () => void }) {
   );
 }
 
+// ─── "How will you use Home+?" and the steps only some people see ────────────
+
+const dateInputClass =
+  'w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[17px] font-medium text-foreground outline-none transition-colors';
+
+function StepAccountType({
+  value, onChange, error, stepLabel,
+}: { value: AccountType | null; onChange: (v: AccountType) => void; error: string; stepLabel: string }) {
+  return (
+    <div className="space-y-7" data-step="account-type">
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">{stepLabel}</p>
+        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
+          How will you use<br />Home+?
+        </h1>
+      </div>
+      <AccountTypePicker value={value} onChange={onChange} variant="onboarding" error={error} />
+      <p className="text-sm text-muted-foreground">{ACCOUNT_TYPE_CAPTION}</p>
+    </div>
+  );
+}
+
+/** A renter's own tenancy dates, one question at a time, each skippable. */
+function StepTenancy({
+  question, start, end, setStart, setEnd, error, stepLabel,
+}: {
+  question: 0 | 1; start: string; end: string; setStart: (v: string) => void; setEnd: (v: string) => void;
+  error: string; stepLabel: string;
+}) {
+  return (
+    <div className="space-y-7" data-step="tenancy">
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">{stepLabel}</p>
+        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
+          {question === 0 ? 'When did your tenancy start?' : 'When does it end or come up for renewal?'}
+        </h1>
+        <p className="text-[17px] text-muted-foreground">Both dates are optional.</p>
+      </div>
+      <div className="space-y-2">
+        {question === 0 ? (
+          <input
+            key="tenancy-start" type="date" value={start} onChange={e => setStart(e.target.value)}
+            aria-label="When did your tenancy start?" className={dateInputClass} autoFocus
+          />
+        ) : (
+          <input
+            key="tenancy-end" type="date" value={end} min={start || undefined} onChange={e => setEnd(e.target.value)}
+            aria-label="When does it end or come up for renewal?" className={dateInputClass} autoFocus
+          />
+        )}
+        {error && <p className="text-sm text-red-500 pl-1">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** A property after the first: a home the person lets out (landlords, and "both"). */
+function StepExtraProperty({
+  draft, firstOfBoth, errors, onHomeChange, onDetailsChange, stepLabel,
+}: {
+  draft: ExtraDraft; firstOfBoth: boolean; errors: Record<string, string>;
+  onHomeChange: (h: HomeSelection) => void; onDetailsChange: (d: HomeDetails) => void; stepLabel: string;
+}) {
+  return (
+    <div className="space-y-7" data-step="extra-property">
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">{stepLabel}</p>
+        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
+          {firstOfBoth ? <>Now add a<br />property you let.</> : <>Add another<br />property you let.</>}
+        </h1>
+        <p className="text-[17px] text-muted-foreground">We&apos;ll use this to tailor your reminders.</p>
+      </div>
+      <NewPropertyFields
+        home={draft.home}
+        onHomeChange={onHomeChange}
+        details={draft.details}
+        onDetailsChange={onDetailsChange}
+        errors={errors}
+        fixedUsage
+        wording="property"
+      />
+      {errors.form && <p className="text-sm text-red-500">{errors.form}</p>}
+    </div>
+  );
+}
+
+/** "Add another property?" after a landlord's (or "both" account's) first let property. */
+function StepMore({
+  items, onAdd, onFinish, onRemove, stepLabel,
+}: {
+  items: { key: string; label: string; usage: Usage; removable: boolean }[];
+  onAdd: () => void; onFinish: () => void; onRemove: (key: string) => void; stepLabel: string;
+}) {
+  return (
+    <div className="space-y-7" data-step="add-another">
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">{stepLabel}</p>
+        <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
+          Add another<br />property?
+        </h1>
+      </div>
+      <ul className="space-y-2" aria-label="Your properties">
+        {items.map(item => (
+          <li key={item.key} className="flex items-center gap-3 rounded-2xl border-2 border-border bg-card px-4 py-3">
+            <Home className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-semibold text-foreground">{item.label}</span>
+              <span className="block text-xs text-muted-foreground">{usageLabel(item.usage)}</span>
+            </span>
+            {item.removable && (
+              <button
+                type="button" onClick={() => onRemove(item.key)} aria-label={`Remove ${item.label}`}
+                className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button
+          type="button" onClick={onAdd} data-action="add-another"
+          className="flex items-center justify-center gap-2 rounded-2xl border-2 border-foreground py-4 text-[16px] font-semibold text-foreground hover:bg-muted transition-colors"
+        >
+          <Plus className="h-4 w-4" /> Add another
+        </button>
+        <button
+          type="button" onClick={onFinish} data-action="go-to-dashboard"
+          className="flex items-center justify-center gap-2 rounded-2xl bg-foreground py-4 text-[16px] font-semibold text-white hover:bg-foreground/90 active:scale-[0.98] transition-all"
+        >
+          Go to my dashboard <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const Onboarding = () => {
@@ -534,9 +686,37 @@ const Onboarding = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [step, setStep] = useState(0);
+  // The screen, and the ones before it (Back walks this list: the flow is not a straight line).
+  const [step, setStep] = useState<StepId | null>(null);
+  const [history, setHistory] = useState<StepId[]>([]);
   const [direction, setDirection] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+
+  // "How will you use Home+?" is asked first, once, by anyone who has not answered it (Google/Apple
+  // sign-ups, accounts that were mid-way when it was introduced). Decided when the user loads and
+  // then kept, so answering it does not take the screen away.
+  const askTypeRef = useRef<boolean | null>(null);
+  if (askTypeRef.current === null && user) askTypeRef.current = !user.account_type_confirmed;
+  const askType = !!askTypeRef.current;
+  const [accountType, setAccountType] = useState<AccountType | null>(null);
+  const [typeError, setTypeError] = useState('');
+  // The first property is what the account type says (for "both": the home they live in).
+  const usage: Usage = firstUsage(accountType ?? 'homeowner');
+
+  // A renter's own tenancy dates, asked one at a time, both optional.
+  const [tenancyStart, setTenancyStart] = useState('');
+  const [tenancyEnd, setTenancyEnd] = useState('');
+  const [tenancyQ, setTenancyQ] = useState<0 | 1>(0);
+  const [tenancyError, setTenancyError] = useState('');
+
+  // The properties after the first (landlords and "both"). Nothing is saved until Finish setup.
+  const [extras, setExtras] = useState<ExtraDraft[]>([]);
+  const [editingExtra, setEditingExtra] = useState<number | null>(null);
+  const [extraErrors, setExtraErrors] = useState<Record<string, string>>({});
+  const nextDraftId = useRef(1);
+  // What has been saved already, so a retry after a failure does not save a home twice.
+  const createdFirst = useRef<string | null>(null);
+  const createdExtras = useRef<Record<number, string>>({});
 
   // Step 1
   const [phone, setPhone] = useState('');
@@ -548,7 +728,6 @@ const Onboarding = () => {
   const [postcode, setPostcode] = useState('');
   const [location, setLocation] = useState('');
   const [propertyType, setPropertyType] = useState('');
-  const [role, setRole] = useState('homeowner');
   const [bedrooms, setBedrooms] = useState('');
   const [bathrooms, setBathrooms] = useState('');
   const [heatingType, setHeatingType] = useState('');
@@ -600,6 +779,13 @@ const Onboarding = () => {
   const meta = user?.user_metadata;
   const hasSavedHome = !!meta?.address && meta.latitude !== null && !!meta.postcode;
   useEffect(() => {
+    if (!user) return;
+    // Answered already: that is the choice. Not yet: nothing is picked for them, except by the page they came from.
+    setAccountType(prev => prev ?? (user.account_type_confirmed ? user.account_type : srcPreselect(readSrc())));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!meta) return;
     if (meta.postcode) setPostcode(prev => prev || formatPostcode(meta.postcode));
     if (meta.location) setLocation(prev => prev || meta.location);
@@ -616,7 +802,6 @@ const Onboarding = () => {
     const text = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '');
     const count = (v: unknown) => (Number(v) > 0 ? String(v) : '');
     if (hd.name) setPropertyName(prev => prev || text(hd.name));
-    if (ROLES.some(r => r.value === hd.role)) setRole(text(hd.role));
     setBedrooms(prev => prev || count(hd.bedrooms));
     setBathrooms(prev => prev || count(hd.bathrooms));
     if (hd.heating_type) setHeatingType(prev => prev || text(hd.heating_type));
@@ -643,7 +828,7 @@ const Onboarding = () => {
   // All the details as one object, so the summary and "Complete your details" share the helpers.
   const details: HomeDetails = {
     ...EMPTY_HOME_DETAILS,
-    name: propertyName, propertyType, role, bedrooms, bathrooms, heatingType, yearBuilt, tenure,
+    name: propertyName, propertyType, usage, bedrooms, bathrooms, heatingType, yearBuilt, tenure,
     floorArea, builtForm, ageBand, wallConstruction, heatingNote, epcFilled,
   };
   const detailsRef = useRef(details);
@@ -651,7 +836,6 @@ const Onboarding = () => {
   const patchDetails = (p: Partial<HomeDetails>) => {
     if (p.name !== undefined) setPropertyName(p.name);
     if (p.propertyType !== undefined) setPropertyType(p.propertyType);
-    if (p.role !== undefined) setRole(p.role);
     if (p.bedrooms !== undefined) setBedrooms(p.bedrooms);
     if (p.bathrooms !== undefined) setBathrooms(p.bathrooms);
     if (p.heatingType !== undefined) setHeatingType(p.heatingType);
@@ -705,15 +889,127 @@ const Onboarding = () => {
   if (!user) return <Navigate to="/login" replace />;
   if (user._raw?.profile?.onboarding_completed) return <Navigate to="/dashboard" replace />;
 
-  const advance = () => {
+  const current: StepId = step ?? (askType ? 'type' : 'phone');
+  const go = (next: StepId) => {
     setDirection(1);
-    setStep(s => s + 1);
+    setHistory(h => [...h, current]);
+    setStep(next);
   };
+
+  // The steps that count in "Step n of N": the extra property screens belong to the property step.
+  const mainSteps: StepId[] = [...(askType ? (['type'] as StepId[]) : []), 'phone', 'property', 'notifications'];
+  const mainIndex = (id: StepId) => {
+    const at = mainSteps.indexOf(id);
+    return at >= 0 ? at : mainSteps.indexOf('property');
+  };
+  const stepLabel = `Step ${mainIndex(current) + 1} of ${mainSteps.length}`;
 
   const back = () => {
     setDirection(-1);
-    setStep(s => s - 1);
+    // Second tenancy question: Back is the first question.
+    if (current === 'tenancy' && tenancyQ === 1) {
+      setTenancyQ(0);
+      setTenancyError('');
+      return;
+    }
+    // Leaving a property form that was never finished: it is not kept.
+    if (current === 'extra') {
+      setExtras(prev => prev.filter(d => d.id !== editingExtra || d.home.address.trim()));
+      setExtraErrors({});
+    }
+    const previous = history[history.length - 1];
+    if (!previous) return;
+    setHistory(history.slice(0, -1));
+    setStep(previous);
   };
+
+  const newDraft = (): ExtraDraft => ({
+    id: nextDraftId.current++, home: EMPTY_HOME, details: { ...EMPTY_HOME_DETAILS, usage: 'let' }, error: '',
+  });
+  const startExtra = () => {
+    const draft = newDraft();
+    setExtras(prev => [...prev, draft]);
+    setEditingExtra(draft.id);
+    setExtraErrors({});
+    go('extra');
+  };
+  const patchExtra = (id: number, patch: Partial<ExtraDraft>) => {
+    setExtras(prev => prev.map(d => (d.id === id ? { ...d, ...patch } : d)));
+    setExtraErrors({});
+  };
+
+  /** Where the property step leads: a renter's tenancy dates; a landlord's "Add another property?";
+   *  for "both", the first property they let; everyone else straight on. */
+  const afterProperty = () => {
+    if (accountType === 'renter') go('tenancy');
+    else if (accountType === 'both') startExtra();
+    else if (accountType === 'landlord') go('more');
+    else go('notifications');
+  };
+
+  const handleTypeContinue = async () => {
+    if (!accountType) {
+      setTypeError('Choose one to continue.');
+      return;
+    }
+    setTypeError('');
+    setSubmitting(true);
+    try {
+      // Saved now, so the answer survives a reload.
+      await apiClient.patch('/api/v1/auth/me/', { account_type: accountType });
+      await refreshUser();
+      clearSrc();
+      go('phone');
+    } catch {
+      setTypeError("We couldn't save that. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleTenancyContinue = () => {
+    if (tenancyQ === 0) {
+      setTenancyQ(1);
+      return;
+    }
+    if (tenancyStart && tenancyEnd && tenancyEnd < tenancyStart) {
+      setTenancyError("The end date can't be before the start date.");
+      return;
+    }
+    setTenancyError('');
+    go('notifications');
+  };
+
+  const handleTenancySkip = () => {
+    setTenancyError('');
+    if (tenancyQ === 0) {
+      setTenancyStart('');
+      setTenancyQ(1);
+    } else {
+      setTenancyEnd('');
+      go('notifications');
+    }
+  };
+
+  const handleExtraContinue = () => {
+    const draft = extras.find(d => d.id === editingExtra);
+    if (!draft) return;
+    const errors: Record<string, string> = {};
+    const { home, details: d } = draft;
+    if (!home.postcode) errors.home = 'Select your area and postcode, then the property.';
+    else if (!home.address.trim()) errors.home = "Select the property, or choose \"This property isn't listed\" and enter the address.";
+    else if (home.lat === null || home.lng === null) errors.home = 'Place the pin on the map to mark the property.';
+    if (!d.propertyType) errors.propertyType = 'Select a property type.';
+    if (d.yearBuilt && (+d.yearBuilt < 1800 || +d.yearBuilt > new Date().getFullYear())) errors.yearBuilt = 'Enter a valid year.';
+    if (Object.keys(errors).length) {
+      setExtraErrors(errors);
+      return;
+    }
+    setExtraErrors({});
+    go('more');
+  };
+
+  const removeExtra = (key: string) => setExtras(prev => prev.filter(d => String(d.id) !== key));
 
   const handlePhoneContinue = async () => {
     if (!phone.trim()) {
@@ -729,7 +1025,7 @@ const Onboarding = () => {
     } finally {
       setSubmitting(false);
     }
-    advance();
+    go('property');
   };
 
   // Validates the home form and moves on; the actual API call is deferred to
@@ -750,7 +1046,7 @@ const Onboarding = () => {
     }
     setPropertyError('');
     setEditingHome(false);
-    advance();
+    afterProperty();
   };
 
   // "Done editing" on a signup user's home: check it, then back to the summary.
@@ -770,7 +1066,7 @@ const Onboarding = () => {
 
   const handlePhoneSkip = () => {
     setPhoneError('');
-    advance();
+    go('property');
   };
 
   const handleNotifContinue = async () => {
@@ -783,7 +1079,7 @@ const Onboarding = () => {
     } finally {
       setSubmitting(false);
     }
-    advance();
+    go('loading');
   };
 
   const handleComplete = async () => {
@@ -797,7 +1093,8 @@ const Onboarding = () => {
       postcode:      formatPostcode(postcode),
       location:      location.trim() || undefined,
       property_type: propertyType,
-      role,
+      usage,
+      role: ROLE_FOR_USAGE[usage],
       bedrooms:  bedrooms  ? parseInt(bedrooms,  10) : 0,
       bathrooms: bathrooms ? parseInt(bathrooms, 10) : 0,
       ...(heatingType ? { heating_type: heatingType } : {}),
@@ -809,20 +1106,28 @@ const Onboarding = () => {
       ...(wallConstruction ? { wall_construction: wallConstruction } : {}),
       ...(lat !== null ? { latitude: lat } : {}),
       ...(lng !== null ? { longitude: lng } : {}),
+      // A renter's own tenancy dates (both optional).
+      ...(usage === 'rented_home' && tenancyStart ? { tenancy_start: tenancyStart } : {}),
+      ...(usage === 'rented_home' && tenancyEnd ? { tenancy_end: tenancyEnd } : {}),
     };
-    let propertyId: string | null = null;
-    try {
-      const { data: res } = await apiClient.post('/api/v1/properties/', payload);
-      propertyId = res?.data?.id ?? res?.id ?? null;
-    } catch (e) {
-      setPropertyError(apiFieldError(e, 'postcode') || apiFieldError(e, 'address')
-        || 'Could not save your home. Check the details and try again.');
-      setDirection(-1);
-      setStep(1);
-      return;
+    // A retry after a later home failed must not save this one twice.
+    const justCreated = !createdFirst.current;
+    let propertyId: string | null = createdFirst.current;
+    if (justCreated) {
+      try {
+        const { data: res } = await apiClient.post('/api/v1/properties/', payload);
+        propertyId = res?.data?.id ?? res?.id ?? null;
+        createdFirst.current = propertyId ?? 'saved';
+      } catch (e) {
+        setPropertyError(apiFieldError(e, 'postcode') || apiFieldError(e, 'address')
+          || 'Could not save your home. Check the details and try again.');
+        setDirection(-1);
+        setStep('property');
+        return;
+      }
     }
 
-    if (coverFile && propertyId) {
+    if (justCreated && coverFile && propertyId) {
       const fd = new FormData();
       fd.append('file', coverFile);
       await apiClient.post(`/api/v1/properties/${propertyId}/cover-image/`, fd, {
@@ -831,7 +1136,7 @@ const Onboarding = () => {
     }
 
     // EPC auto-link on the first home. Non-critical: user can set it manually.
-    if (propertyId && postcode.trim()) {
+    if (justCreated && propertyId && postcode.trim()) {
       try {
         // A home picked from the list already carries its certificate; otherwise match by address.
         let band: string | undefined;
@@ -852,6 +1157,51 @@ const Onboarding = () => {
       }
     }
 
+    // The homes a landlord (or "both") added after the first, each a home they let out.
+    for (const draft of extras) {
+      if (createdExtras.current[draft.id]) continue;
+      const hd = toHomeDetailsPayload(draft.details);
+      try {
+        const { data: res } = await apiClient.post('/api/v1/properties/', {
+          name: hd.name || undefined,
+          address: draft.home.address.trim(),
+          postcode: formatPostcode(draft.home.postcode),
+          location: draft.home.area || undefined,
+          property_type: draft.details.propertyType,
+          usage: hd.usage,
+          role: hd.role,
+          bedrooms: hd.bedrooms,
+          bathrooms: hd.bathrooms,
+          ...(hd.heating_type ? { heating_type: hd.heating_type } : {}),
+          ...(hd.year_built ? { year_built: hd.year_built } : {}),
+          ...(hd.tenure ? { tenure: hd.tenure } : {}),
+          ...(hd.floor_area ? { floor_area: hd.floor_area } : {}),
+          ...(hd.built_form ? { built_form: hd.built_form } : {}),
+          ...(hd.construction_age_band ? { construction_age_band: hd.construction_age_band } : {}),
+          ...(hd.wall_construction ? { wall_construction: hd.wall_construction } : {}),
+          ...(draft.home.lat !== null ? { latitude: draft.home.lat } : {}),
+          ...(draft.home.lng !== null ? { longitude: draft.home.lng } : {}),
+        });
+        const savedId: string | null = res?.data?.id ?? res?.id ?? null;
+        createdExtras.current[draft.id] = savedId ?? 'saved';
+        // A home picked from the list already carries its EPC certificate: link it (non-critical).
+        if (savedId && draft.home.certificateNumber) {
+          await apiClient
+            .post(`/api/v1/properties/${savedId}/epc/link/`, { certificate_number: draft.home.certificateNumber })
+            .catch(() => {});
+        }
+      } catch (e) {
+        // Back to that home's form with the reason; the ones already saved are kept.
+        const reason = apiFieldError(e, 'postcode') || apiFieldError(e, 'address')
+          || 'Could not save this property. Check the details and try again.';
+        setEditingExtra(draft.id);
+        setExtraErrors({ home: reason });
+        setDirection(-1);
+        setStep('extra');
+        return;
+      }
+    }
+
     try {
       await apiClient.patch('/api/v1/auth/me/', { profile: { onboarding_completed: true } });
       await refreshUser();
@@ -865,7 +1215,18 @@ const Onboarding = () => {
     navigate('/dashboard', { replace: true });
   };
 
-  const TOTAL_STEPS = 3; // loading screen is step 3 (index), not counted in progress
+  const activeDraft = extras.find(d => d.id === editingExtra);
+  const savedExtras = extras.filter(d => d.home.address.trim());
+  // "Add another property?" lists what is added so far. "Both" must keep the property it lets.
+  const moreItems = [
+    { key: 'first', label: propertyName.trim() || propertyNickname({ address }), usage, removable: false },
+    ...savedExtras.map(d => ({
+      key: String(d.id),
+      label: propertyNickname({ name: d.details.name, address: d.home.address, postcode: d.home.postcode }),
+      usage: 'let' as Usage,
+      removable: !(accountType === 'both' && savedExtras.length === 1),
+    })),
+  ];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -876,12 +1237,12 @@ const Onboarding = () => {
           <span className="text-[17px] font-semibold text-foreground">Home+</span>
         </div>
 
-        {step < TOTAL_STEPS && (
+        {current !== 'loading' && (
           <div className="flex items-center gap-1.5">
-            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            {mainSteps.map((_, i) => (
               <motion.div
                 key={i}
-                animate={{ width: i === step ? 28 : 8, opacity: i <= step ? 1 : 0.2 }}
+                animate={{ width: i === mainIndex(current) ? 28 : 8, opacity: i <= mainIndex(current) ? 1 : 0.2 }}
                 transition={{ duration: 0.3 }}
                 className="h-2 rounded-full bg-foreground"
               />
@@ -894,7 +1255,25 @@ const Onboarding = () => {
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <div className="w-full max-w-lg">
           <AnimatePresence mode="wait" custom={direction}>
-            {step === 0 && (
+            {current === 'type' && (
+              <motion.div
+                key="type"
+                custom={direction}
+                variants={stepVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <StepAccountType
+                  value={accountType}
+                  onChange={v => { setAccountType(v); setTypeError(''); }}
+                  error={typeError}
+                  stepLabel={stepLabel}
+                />
+              </motion.div>
+            )}
+
+            {current === 'phone' && (
               <motion.div
                 key="phone"
                 custom={direction}
@@ -903,11 +1282,11 @@ const Onboarding = () => {
                 animate="center"
                 exit="exit"
               >
-                <StepPhone phone={phone} setPhone={setPhone} error={phoneError} />
+                <StepPhone phone={phone} setPhone={setPhone} error={phoneError} stepLabel={stepLabel} />
               </motion.div>
             )}
 
-            {step === 1 && (
+            {current === 'property' && (
               <motion.div
                 key="property"
                 custom={direction}
@@ -927,7 +1306,7 @@ const Onboarding = () => {
                   details={details} patchDetails={patchDetails} askFields={askFields ?? []}
                   home={home} onHomeChange={handleHomeChange} hasSavedHome={hasSavedHome}
                   propertyType={propertyType} setPropertyType={setPropertyType}
-                  role={role} setRole={setRole}
+                  usage={usage} accountType={accountType ?? 'homeowner'} stepLabel={stepLabel}
                   coverPreview={coverPreview}
                   onCoverClick={() => coverRef.current?.click()}
                   editing={editingHome} setEditing={setEditingHome} onDoneEditing={handleDoneEditing}
@@ -943,7 +1322,64 @@ const Onboarding = () => {
               </motion.div>
             )}
 
-            {step === 2 && (
+            {current === 'tenancy' && (
+              <motion.div
+                key={`tenancy-${tenancyQ}`}
+                custom={direction}
+                variants={stepVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <StepTenancy
+                  question={tenancyQ} start={tenancyStart} end={tenancyEnd}
+                  setStart={v => { setTenancyStart(v); setTenancyError(''); }}
+                  setEnd={v => { setTenancyEnd(v); setTenancyError(''); }}
+                  error={tenancyError} stepLabel={stepLabel}
+                />
+              </motion.div>
+            )}
+
+            {current === 'extra' && activeDraft && (
+              <motion.div
+                key={`extra-${activeDraft.id}`}
+                custom={direction}
+                variants={stepVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <StepExtraProperty
+                  draft={activeDraft}
+                  firstOfBoth={accountType === 'both' && extras[0]?.id === activeDraft.id}
+                  errors={extraErrors}
+                  onHomeChange={h => patchExtra(activeDraft.id, { home: h })}
+                  onDetailsChange={d => patchExtra(activeDraft.id, { details: d })}
+                  stepLabel={stepLabel}
+                />
+              </motion.div>
+            )}
+
+            {current === 'more' && (
+              <motion.div
+                key="more"
+                custom={direction}
+                variants={stepVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                <StepMore
+                  items={moreItems}
+                  onAdd={startExtra}
+                  onFinish={() => go('notifications')}
+                  onRemove={removeExtra}
+                  stepLabel={stepLabel}
+                />
+              </motion.div>
+            )}
+
+            {current === 'notifications' && (
               <motion.div
                 key="notifications"
                 custom={direction}
@@ -952,11 +1388,11 @@ const Onboarding = () => {
                 animate="center"
                 exit="exit"
               >
-                <StepNotifications prefs={notifPrefs} setPrefs={setNotifPrefs} />
+                <StepNotifications prefs={notifPrefs} setPrefs={setNotifPrefs} stepLabel={stepLabel} />
               </motion.div>
             )}
 
-            {step === 3 && (
+            {current === 'loading' && (
               <motion.div
                 key="loading"
                 initial={{ opacity: 0, scale: 0.96 }}
@@ -971,7 +1407,7 @@ const Onboarding = () => {
       </main>
 
       {/* Footer CTA */}
-      {step < TOTAL_STEPS && (
+      {current !== 'loading' && (
         <motion.footer
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -980,7 +1416,22 @@ const Onboarding = () => {
         >
           <div className="max-w-lg mx-auto space-y-3">
             {/* Primary CTA */}
-            {step === 0 && (
+            {current === 'type' && (
+              <button
+                onClick={handleTypeContinue}
+                disabled={submitting}
+                data-action="continue"
+                className="w-full flex items-center justify-center gap-2 bg-foreground text-white rounded-2xl py-4 text-[16px] font-semibold hover:bg-foreground/90 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {submitting ? (
+                  <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <><span>Continue</span><ArrowRight className="w-4 h-4" /></>
+                )}
+              </button>
+            )}
+
+            {current === 'phone' && (
               <div className="flex items-center gap-3">
                 <button
                   onClick={handlePhoneContinue}
@@ -1003,7 +1454,7 @@ const Onboarding = () => {
               </div>
             )}
 
-            {step === 1 && (
+            {current === 'property' && (
               <button
                 onClick={handlePropertyContinue}
                 disabled={submitting}
@@ -1017,7 +1468,37 @@ const Onboarding = () => {
               </button>
             )}
 
-            {step === 2 && (
+            {current === 'tenancy' && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleTenancyContinue}
+                  data-action="continue"
+                  className="flex-1 flex items-center justify-center gap-2 bg-foreground text-white rounded-2xl py-4 text-[16px] font-semibold hover:bg-foreground/90 active:scale-[0.98] transition-all"
+                >
+                  <span>Continue</span><ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTenancySkip}
+                  data-action="skip"
+                  className="shrink-0 text-[14px] font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                >
+                  Skip <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {current === 'extra' && (
+              <button
+                onClick={handleExtraContinue}
+                data-action="continue"
+                className="w-full flex items-center justify-center gap-2 bg-foreground text-white rounded-2xl py-4 text-[16px] font-semibold hover:bg-foreground/90 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                <span>Continue</span><ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+
+            {current === 'notifications' && (
               <button
                 onClick={handleNotifContinue}
                 disabled={submitting}
@@ -1033,7 +1514,7 @@ const Onboarding = () => {
 
             {/* Secondary CTA */}
             <div className="flex items-center justify-between">
-              {step > 0 ? (
+              {history.length > 0 || (current === 'tenancy' && tenancyQ === 1) ? (
                 <button
                   type="button"
                   onClick={back}

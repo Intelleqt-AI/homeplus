@@ -14,7 +14,7 @@ import {
   type SystemHealthAction, type SystemEventDraft, type SystemUploadDraft,
 } from '@/lib/Api2';
 import {
-  ACTION_BUTTON, SYSTEM_TRADE, documentLink, eventLink, quotePrefillFromDraft, runSystemAction,
+  ACTION_BUTTON, SYSTEM_TRADE, documentLink, eventLink, quotePrefillFromDraft, runSystemAction, logWorkLink,
 } from './systemHealthActions';
 
 const TONE = {
@@ -143,10 +143,10 @@ const SystemHealthDialog = ({
   };
   // Footer: the backend's drafts for this system (older backends: a generic job, plain pages).
   const shortcuts = d?.shortcuts;
+  // Log work = complete the system's earlier tasks that are still open.
   const logWork = () => {
     close();
-    if (shortcuts?.log_work) onLogWork(shortcuts.log_work);
-    else navigate('/dashboard/calendar');
+    navigate(logWorkLink(shortcuts?.log_work || system.key));
   };
   const uploadCertificate = () => { close(); onUpload(shortcuts?.upload); };
   const getQuotes = () => {

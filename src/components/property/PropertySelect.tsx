@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import useFetch from '@/hooks/useFetch';
 import { Check, ChevronsUpDown, Building2, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { groupHomes } from '@/lib/household';
+import { groupHomes, propertyNickname } from '@/lib/household';
 
 export interface PropertyOption {
   id: string;
@@ -25,6 +25,15 @@ export interface PropertyOption {
   // Rest of the Property API shape — not used by this picker, but present on
   // every row, so other consumers (e.g. useActiveProperty) can rely on it too.
   role?: string;
+  /** What the home is to its owner: own_home / let / rented_home. */
+  usage?: 'own_home' | 'let' | 'rented_home';
+  /** What the app calls it: the name, else the first line of the address. */
+  nickname?: string;
+  /** england / scotland / wales / northern_ireland, or '' when it could not be worked out. */
+  nation?: string;
+  tenancy_start?: string | null;
+  tenancy_end?: string | null;
+  contents_insurance_renewal?: string | null;
   property_type?: string;
   heating_type?: string;
   year_built?: number | null;
@@ -81,9 +90,9 @@ const PropertySelect = ({
           <Building2 className="h-4 w-4 shrink-0 text-gray-400" />
           <div className="w-0 flex-1 overflow-hidden">
             <p className="truncate font-medium text-gray-900 leading-tight text-sm">
-              {only.name || only.address}
+              {propertyNickname(only)}
             </p>
-            {only.name && (
+            {propertyNickname(only) !== only.address && (
               <p className="truncate text-xs text-gray-400 leading-tight">
                 {only.address}{only.postcode ? ` · ${only.postcode}` : ''}
               </p>
@@ -115,9 +124,9 @@ const PropertySelect = ({
               {selected ? (
                 <span className="flex flex-col min-w-0 text-left">
                   <span className="truncate font-medium max-w-[300px] text-gray-900 leading-tight">
-                    {selected.name || selected.address}
+                    {propertyNickname(selected)}
                   </span>
-                  {selected.name && (
+                  {propertyNickname(selected) !== selected.address && (
                     <span className="truncate text-xs text-gray-400 max-w-[300px] leading-tight">
                       {selected.address}
                       {selected.postcode ? ` · ${selected.postcode}` : ''}
@@ -144,7 +153,7 @@ const PropertySelect = ({
                 {group.items.map(p => (
                   <CommandItem
                     key={p.id}
-                    value={`${p.name ?? ''} ${p.address}`}
+                    value={`${propertyNickname(p)} ${p.address}`}
                     onSelect={() => {
                       onChange(p.id, p);
                       setOpen(false);
@@ -158,9 +167,9 @@ const PropertySelect = ({
                     />
                     <span className="flex flex-col min-w-0 flex-1">
                       <span className="truncate font-medium text-gray-900 text-sm leading-tight">
-                        {p.name || p.address}
+                        {propertyNickname(p)}
                       </span>
-                      {p.name && (
+                      {propertyNickname(p) !== p.address && (
                         <span className="truncate text-xs text-gray-400 leading-tight">
                           {p.address}
                           {p.postcode ? ` · ${p.postcode}` : ''}
@@ -170,7 +179,7 @@ const PropertySelect = ({
                     {p.is_shared && (
                       <Users className="ml-1 h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Shared" />
                     )}
-                    {p.postcode && !p.name && (
+                    {p.postcode && propertyNickname(p) === p.address && (
                       <Badge variant="outline" className="ml-auto text-xs shrink-0">
                         {p.postcode}
                       </Badge>

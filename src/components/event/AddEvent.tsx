@@ -20,7 +20,6 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Bell,
   Building,
-  CheckCircle,
   CreditCard,
   Flame,
   Home,
@@ -48,7 +47,7 @@ import { JOB_TRADE_OPTIONS, tradeCategoriesByType } from '@/lib/tradeCategories'
 
 // 'done' logs work that is already finished: saved as completed, so it is a record
 // (System Health counts it) and never shows as an overdue task.
-type EventMode = 'task' | 'reminder' | 'done';
+type EventMode = 'task' | 'reminder';
 
 interface EventTemplate {
   id: string;
@@ -120,13 +119,13 @@ interface AddEventProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   initialDate?: string;
-  initialMode?: EventMode;
+  /** 'done' (the removed "already done" mode) opens as a task. */
+  initialMode?: EventMode | 'done';
   /** Applied each time the dialog opens (e.g. "Log work" from System Health). */
   initialValues?: AddEventInitialValues;
   hideTrigger?: boolean;
 }
 
-const todayIso = () => new Date().toISOString().split('T')[0];
 
 const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues, hideTrigger }: AddEventProps = {}) => {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -139,7 +138,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
 
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [taskInput, setTaskInput] = useState('');
-  const [eventMode, setEventMode] = useState<EventMode>(initialMode ?? 'task');
+  const [eventMode, setEventMode] = useState<EventMode>(initialMode === 'reminder' ? 'reminder' : 'task');
   const queryClient = useQueryClient();
 
   const {
@@ -177,7 +176,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
   // Mode and prefilled fields apply on every open (not only at mount).
   useEffect(() => {
     if (!isAddEventOpen) return;
-    if (initialMode) setEventMode(initialMode);
+    if (initialMode) setEventMode(initialMode === 'reminder' ? 'reminder' : 'task');
     if (!initialValues) return;
     if (initialValues.title) setValue('title', initialValues.title);
     if (initialValues.type) setValue('type', initialValues.type);
@@ -207,7 +206,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
   const mutation = usePost({
     mutationFn: addNewEvent,
     onSuccess: () => {
-      ['event', 'systems-health', 'timeline', 'attention'].forEach(key =>
+      ['event', 'systems-health', 'timeline', 'attention', 'open-tasks'].forEach(key =>
         queryClient.invalidateQueries({ queryKey: [key] }));
     },
     onError: error => {
@@ -296,16 +295,15 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
       isRequireTrade: !!data.requiresTrade,
       // Trade fields go with tasks and with logged work (it tells which system the work
       // belongs to). Reminders submit them blank.
-      trade: data.requiresTrade || eventMode === 'done' ? data.trade ?? '' : '',
-      tradeCategory: data.requiresTrade || eventMode === 'done' ? data.tradeCategory ?? '' : '',
+      trade: data.requiresTrade ? data.trade ?? '' : '',
+      tradeCategory: data.requiresTrade ? data.tradeCategory ?? '' : '',
       description: data.description ?? '',
       property: data.propertyId,
-      ...(eventMode === 'done' ? { status: 'completed' } : {}),
     };
 
     mutation.mutate(payload, {
       onSuccess: () => {
-        toast.success(eventMode === 'task' ? 'Task added' : eventMode === 'done' ? 'Work logged' : 'Reminder added');
+        toast.success(eventMode === 'task' ? 'Task added' : 'Reminder added');
         setIsAddEventOpen(false);
         reset();
       },
@@ -463,11 +461,11 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
         </DialogTrigger>
         <DialogContent className="sm:max-w-[600px] max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{eventMode === 'task' ? 'Add Task' : eventMode === 'done' ? 'Log work done' : 'Add Reminder'}</DialogTitle>
+            <DialogTitle>{eventMode === 'task' ? 'Add Task' : 'Add Reminder'}</DialogTitle>
           </DialogHeader>
 
           {/* Task / Reminder mode toggle */}
-          <div className="grid grid-cols-3 gap-2 p-1 bg-gray-100 rounded-lg">
+          <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-lg">
             <button
               type="button"
               onClick={() => setEventMode('task')}
@@ -490,24 +488,11 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
               <Bell className="w-4 h-4" />
               Reminder
             </button>
-            <button
-              type="button"
-              onClick={() => setEventMode('done')}
-              className={cn(
-                'flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-colors',
-                eventMode === 'done' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700',
-              )}
-            >
-              <CheckCircle className="w-4 h-4" />
-              Already done
-            </button>
           </div>
           <p className="text-xs text-gray-500 -mt-2">
             {eventMode === 'task'
               ? 'A task sits in your calendar and lets you press "Get Quotes" to find a trade.'
-              : eventMode === 'done'
-                ? 'Log work that is already finished. It is saved as completed, so it counts as a record and never shows as overdue.'
-                : 'A reminder sits in your calendar with a notification. No trade action.'}
+              : 'A reminder sits in your calendar with a notification. No trade action.'}
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 py-2">
@@ -536,7 +521,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="title">{eventMode === 'task' ? 'Task Title' : eventMode === 'done' ? 'Work done' : 'Reminder Title'} <span className="text-red-500">*</span></Label>
+              <Label htmlFor="title">{eventMode === 'task' ? 'Task Title' : 'Reminder Title'} <span className="text-red-500">*</span></Label>
               <Input
                 id="title"
                 placeholder={eventMode === 'reminder' ? 'e.g., Bin Day' : 'e.g., Annual Boiler Service'}
@@ -547,13 +532,13 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="date">{eventMode === 'done' ? 'Date done' : 'Date'} <span className="text-red-500">*</span></Label>
-              <Input id="date" type="date" max={eventMode === 'done' ? todayIso() : undefined}
+              <Label htmlFor="date">Date <span className="text-red-500">*</span></Label>
+              <Input id="date" type="date" 
                 {...register('date')} className={errors.date ? 'border-red-500' : ''} />
               {errors.date && <p className="text-xs text-red-500">{errors.date.message}</p>}
             </div>
 
-            {(eventMode === 'task' || eventMode === 'done') && (
+            {eventMode === 'task' && (
               <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="trade">Category {eventMode === 'task' ? <span className="text-red-500">*</span> : <span className="text-xs text-gray-400 font-normal">(optional)</span>}</Label>
@@ -731,7 +716,7 @@ const AddEvent = ({ open, onOpenChange, initialDate, initialMode, initialValues,
                 Cancel
               </Button>
               <Button type="submit" disabled={eventMode === 'task' && !propertyId}>
-                {eventMode === 'task' ? 'Add Task' : eventMode === 'done' ? 'Log work' : 'Add Reminder'}
+                {eventMode === 'task' ? 'Add Task' : 'Add Reminder'}
               </Button>
             </div>
           </form>

@@ -111,7 +111,7 @@ const EventDetailDialog = ({ event, open, onOpenChange, onGetQuotes, initialView
   // cards, and (via logged cost) the Annual Spend tracker — refresh them all on
   // any event change.
   const invalidateEventViews = () => {
-    ['event', 'timeline', 'attention', 'annual-spend', 'systems-health'].forEach(k =>
+    ['event', 'timeline', 'attention', 'annual-spend', 'systems-health', 'open-tasks'].forEach(k =>
       queryClient.invalidateQueries({ queryKey: [k] }),
     );
   };

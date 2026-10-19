@@ -2,10 +2,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { HEATING_TYPES, PROPERTY_TYPES, ROLES, TENURE_TYPES, WALL_TYPES, type HomeDetails } from '@/lib/propertyOptions';
+import { HEATING_TYPES, PROPERTY_TYPES, TENURE_TYPES, USAGES, WALL_TYPES, type HomeDetails } from '@/lib/propertyOptions';
+import type { Usage, Wording } from '@/lib/account';
 
 export type DetailField =
-  | 'name' | 'propertyType' | 'role' | 'bedrooms' | 'bathrooms' | 'heatingType' | 'yearBuilt' | 'tenure'
+  | 'name' | 'propertyType' | 'usage' | 'bedrooms' | 'bathrooms' | 'heatingType' | 'yearBuilt' | 'tenure'
   | 'floorArea' | 'wallConstruction';
 
 /**
@@ -20,9 +21,11 @@ interface Props {
   show?: DetailField[];
   required?: DetailField[];
   autoFocus?: boolean;
+  /** `property` for a home someone lets out ("Property name"), else `home`. */
+  wording?: Wording;
 }
 
-const PropertyDetailsFields = ({ value, onChange, errors = {}, show, required = [], autoFocus }: Props) => {
+const PropertyDetailsFields = ({ value, onChange, errors = {}, show, required = [], autoFocus, wording = 'home' }: Props) => {
   const has = (f: DetailField) => !show || show.includes(f);
   const optional = (f: DetailField) => (required.includes(f) ? null : (
     <span className="font-normal text-muted-foreground"> (optional)</span>
@@ -99,10 +102,10 @@ const PropertyDetailsFields = ({ value, onChange, errors = {}, show, required = 
     <div className="space-y-4">
       {has('name') && (
         <div className="space-y-1.5">
-          <Label htmlFor="homeName">Home name{optional('name')}</Label>
+          <Label htmlFor="homeName">{wording === 'property' ? 'Property name' : 'Home name'}{optional('name')}</Label>
           <Input
             id="homeName"
-            placeholder="e.g. Main Home"
+            placeholder={wording === 'property' ? 'e.g. Flat 2, Oxford Road' : 'e.g. Main Home'}
             value={value.name}
             maxLength={200}
             autoFocus={autoFocus}
@@ -128,29 +131,20 @@ const PropertyDetailsFields = ({ value, onChange, errors = {}, show, required = 
         </div>
       )}
 
-      {has('role') && (
+      {has('usage') && (
         <div className="space-y-1.5">
-          <Label>Your role</Label>
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Your role">
-            {ROLES.map(r => (
-              <button
-                key={r.value}
-                type="button"
-                role="radio"
-                aria-checked={value.role === r.value}
-                onClick={() => onChange({ role: r.value })}
-                className={cn(
-                  'flex flex-col items-start rounded-md border px-3 py-2.5 text-left transition-all',
-                  value.role === r.value
-                    ? 'border-primary bg-primary/5 text-primary ring-1 ring-primary'
-                    : 'border-input bg-background hover:bg-muted/50',
-                )}
-              >
-                <span className="text-sm font-medium">{r.label}</span>
-                <span className="text-xs text-muted-foreground">{r.desc}</span>
-              </button>
-            ))}
-          </div>
+          <Label htmlFor="usage">How do you use this property?</Label>
+          <Select value={value.usage || undefined} onValueChange={v => onChange({ usage: v as Usage })}>
+            <SelectTrigger id="usage" className={cn('h-10', errors.usage && 'border-destructive')}>
+              <SelectValue placeholder="Select" />
+            </SelectTrigger>
+            <SelectContent>
+              {USAGES.map(u => (
+                <SelectItem key={u.value} value={u.value} data-usage={u.value}>{u.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.usage && <p className="text-xs text-destructive">{errors.usage}</p>}
         </div>
       )}
 

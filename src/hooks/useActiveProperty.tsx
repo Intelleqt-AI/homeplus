@@ -2,18 +2,31 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import useFetch from '@/hooks/useFetch';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchData } from '@/lib/Api';
+import { isPortfolioAccount, type AccountType } from '@/lib/account';
 import type { PropertyOption } from '@/components/property/PropertySelect';
 
 const STORAGE_KEY = 'hp_active_property_id';
+// "All properties" (the portfolio overview) or one property's own dashboard, per user.
+const portfolioKey = (userId: string) => `hp_portfolio_view_${userId}`;
+const PORTFOLIO_OVERVIEW = false;
 
 interface ActivePropertyContextType {
   properties: PropertyOption[];
   isLoading: boolean;
   /** True once the home list has loaded (false while loading or after a failed load). */
   isLoaded: boolean;
+  /** Always a real property id (pages pass it to the API as ?property=), never "all". */
   activePropertyId: string | null;
   activeProperty: PropertyOption | null;
+  /** Picks a property; this also leaves the portfolio overview so its own dashboard opens. */
   setActivePropertyId: (id: string) => void;
+  accountType: AccountType;
+  /** Landlord / both account holding two or more homes of their own: the portfolio overview exists. */
+  canPortfolio: boolean;
+  /** The "All properties" choice is on (the default for those accounts). Only the dashboard shows it:
+   *  use usePortfolioView() for "is it showing right now". */
+  portfolioView: boolean;
+  setPortfolioView: (on: boolean) => void;
 }
 
 const ActivePropertyContext = createContext<ActivePropertyContextType | undefined>(undefined);
@@ -62,6 +75,32 @@ export const ActivePropertyProvider = ({ children }: { children: React.ReactNode
   }, [user, data, properties, activeId]);
 
 
+  // Portfolio view: stored per user; unset means the default ("All properties" for landlord/both).
+  const [portfolioPref, setPortfolioPref] = useState<'all' | 'property' | null>(null);
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    if (!userId) {
+      setPortfolioPref(null);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(portfolioKey(userId));
+      setPortfolioPref(stored === 'all' || stored === 'property' ? stored : null);
+    } catch {
+      setPortfolioPref(null);
+    }
+  }, [userId]);
+
+  const rememberPortfolioPref = (pref: 'all' | 'property') => {
+    setPortfolioPref(pref);
+    if (!userId) return;
+    try {
+      localStorage.setItem(portfolioKey(userId), pref);
+    } catch {
+      // best effort
+    }
+  };
+
   const setActivePropertyId = (id: string) => {
     setActiveId(id);
     try {
@@ -69,7 +108,16 @@ export const ActivePropertyProvider = ({ children }: { children: React.ReactNode
     } catch {
       // best effort — per-browser convenience only, fine if storage is blocked
     }
+    // Choosing a property (a row in the portfolio, the switcher, a newly added home) opens its dashboard.
+    rememberPortfolioPref('property');
   };
+
+  const accountType: AccountType = user?.account_type ?? 'homeowner';
+  // The "All properties" overview is switched off: every account picks one home from the
+  // sidebar switcher. Set PORTFOLIO_OVERVIEW to bring the overview back.
+  const ownHomes = properties.filter(p => p.access !== 'member').length;
+  const canPortfolio = PORTFOLIO_OVERVIEW && isPortfolioAccount(accountType) && ownHomes >= 2;
+  const portfolioView = canPortfolio && (portfolioPref ?? 'all') === 'all';
 
   const activeProperty = useMemo(
     () => properties.find(p => p.id === activeId) ?? null,
@@ -78,7 +126,11 @@ export const ActivePropertyProvider = ({ children }: { children: React.ReactNode
 
   return (
     <ActivePropertyContext.Provider
-      value={{ properties, isLoading, isLoaded: !!user && data !== undefined, activePropertyId: activeId, activeProperty, setActivePropertyId }}
+      value={{
+        properties, isLoading, isLoaded: !!user && data !== undefined, activePropertyId: activeId, activeProperty,
+        setActivePropertyId, accountType, canPortfolio, portfolioView,
+        setPortfolioView: (on: boolean) => rememberPortfolioPref(on ? 'all' : 'property'),
+      }}
     >
       {children}
     </ActivePropertyContext.Provider>

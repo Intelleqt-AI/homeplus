@@ -33,6 +33,9 @@ import Notifications from "@/components/settings/Notifications";
 import Properties from "@/components/settings/Properties";
 import Family from "@/components/settings/Family";
 import { useActiveProperty } from "@/hooks/useActiveProperty";
+import { usePortfolioView } from "@/hooks/usePortfolioView";
+import { myUsage } from "@/lib/household";
+import { homeLabels } from "@/lib/account";
 
 const CATEGORY_CONFIG: Record<string, {
   label: string;
@@ -113,7 +116,9 @@ const Settings = () => {
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
 
   const queryClient = useQueryClient();
-  const { activePropertyId } = useActiveProperty();
+  const { activePropertyId, activeProperty } = useActiveProperty();
+  const { canPortfolio } = usePortfolioView();
+  const labels = homeLabels(myUsage(activeProperty), canPortfolio);
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['motTemplates'],
@@ -302,7 +307,7 @@ const Settings = () => {
                     {tab.id === 'profile' && 'Your details'}
                     {tab.id === 'notifications' && 'Alerts & emails'}
                     {tab.id === 'security' && 'Password & devices'}
-                    {tab.id === 'properties' && 'Your homes'}
+                    {tab.id === 'properties' && labels.settingsHomes}
                     {tab.id === 'family' && 'Share your home'}
                     {tab.id === 'tasks' && 'Task settings'}
                   </p>

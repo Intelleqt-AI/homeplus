@@ -81,7 +81,7 @@ import { TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { cn } from '@/lib/utils';
 import { useActiveProperty } from '@/hooks/useActiveProperty';
 import { useAuth } from '@/hooks/useAuth';
-import { attributionLabel, type UserBrief } from '@/lib/household';
+import { attributionLabel, myUsage, propertyNickname, type UserBrief } from '@/lib/household';
 import TraderName from '@/components/trader/TraderName';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -146,6 +146,12 @@ interface PropertyData {
   postcode: string;
   location: string;
   name?: string;
+  nickname?: string;
+  /** What the home is to its owner, and to the caller (a tenant member sees a tenant's view). */
+  usage?: string;
+  role?: string;
+  my_role?: string;
+  access?: 'owner' | 'member';
 }
 
 interface Job {
@@ -178,6 +184,8 @@ interface Job {
     upload: { name?: string; discipline?: string; doc_type?: string; category?: string };
   } | null;
   certificate_document?: { id: string; name: string; expires_at: string | null } | null;
+  /** "Access note for the trade" (a home that is let out): shared with a trade once they buy the lead. */
+  access_note?: string;
 }
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
@@ -341,11 +349,15 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
   // answers
   const [answers, setAnswers] = useState<Record<string, string | number | undefined>>({});
 
+  // access note for the trade (only a home that is let out has one)
+  const [accessNote, setAccessNote] = useState('');
+
   // fetch properties
   const { data: propertiesRes } = useFetch<{ results?: PropertyData[]; data?: PropertyData[] }>('/api/v1/properties/');
   const properties: PropertyData[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
   const selectedProperty = properties.find(p => p.id === propertyId);
   const propertyHasPostcode = !!selectedProperty?.postcode;
+  const showAccessNote = !!selectedProperty && myUsage(selectedProperty) === 'let';
 
   // populate form when job changes
   useEffect(() => {
@@ -362,6 +374,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
     setLocationArea(job.location ?? '');
     setLocationPostcode(job.postcode ?? '');
     setAnswers((job.answers as Record<string, string | number | undefined>) ?? {});
+    setAccessNote(job.access_note ?? '');
     setDeleteConfirm(false);
     setPropertyOpen(false);
   }, [job]);
@@ -421,6 +434,8 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
       location: locationArea.trim(),
       postcode: locationPostcode.trim(),
       answers,
+      // Only for a home that is let out; saving something else never touches an existing note.
+      ...(showAccessNote ? { access_note: accessNote.trim() } : {}),
     });
   };
 
@@ -475,9 +490,9 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                     {selectedProperty ? (
                       <span className="flex flex-col min-w-0 overflow-hidden text-left">
                         <span className="truncate font-medium text-gray-900 leading-tight">
-                          {selectedProperty.name || selectedProperty.address}
+                          {propertyNickname(selectedProperty)}
                         </span>
-                        {selectedProperty.name && (
+                        {propertyNickname(selectedProperty) !== selectedProperty.address && (
                           <span className="truncate max-w-[300px] text-xs text-gray-400 leading-tight">
                             {selectedProperty.address}
                             {selectedProperty.postcode ? ` · ${selectedProperty.postcode}` : ''}
@@ -500,7 +515,7 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                       {properties.map(p => (
                         <CommandItem
                           key={p.id}
-                          value={`${p.name ?? ''} ${p.address}`}
+                          value={`${propertyNickname(p)} ${p.address}`}
                           onSelect={() => {
                             setPropertyId(p.id);
                             setLocationArea(p.location ?? '');
@@ -510,15 +525,15 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                         >
                           <Check className={cn('mr-2 h-3.5 w-3.5 shrink-0', propertyId === p.id ? 'opacity-100' : 'opacity-0')} />
                           <span className="flex flex-col min-w-0 flex-1">
-                            <span className="truncate font-medium text-gray-900 text-sm leading-tight">{p.name || p.address}</span>
-                            {p.name && (
+                            <span className="truncate font-medium text-gray-900 text-sm leading-tight">{propertyNickname(p)}</span>
+                            {propertyNickname(p) !== p.address && (
                               <span className="truncate text-xs text-gray-400 leading-tight">
                                 {p.address}
                                 {p.postcode ? ` · ${p.postcode}` : ''}
                               </span>
                             )}
                           </span>
-                          {p.postcode && !p.name && (
+                          {p.postcode && propertyNickname(p) === p.address && (
                             <Badge variant="outline" className="ml-auto text-xs shrink-0">
                               {p.postcode}
                             </Badge>
@@ -629,6 +644,30 @@ const EditJobModal = ({ job, onClose, onSaved, onDeleted }: EditJobModalProps) =
                   className={`${inputCls(locked)} uppercase`}
                 />
                 <p className="text-xs text-gray-400 mt-1">We need this to match you with local trades</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Access note for the trade (a home you let out) ─────── */}
+          {showAccessNote && (
+            <div data-section="access-note">
+              <Label htmlFor="edit-access-note" className="text-sm font-medium text-gray-700">
+                Access note for the trade <span className="font-normal text-gray-400">(optional)</span>
+              </Label>
+              <textarea
+                id="edit-access-note"
+                value={accessNote}
+                onChange={e => setAccessNote(e.target.value.slice(0, 300))}
+                maxLength={300}
+                rows={2}
+                disabled={locked}
+                className={`${inputCls(locked)} resize-none`}
+              />
+              <div className="mt-1 flex items-start justify-between gap-3">
+                <p className="text-xs text-gray-400">
+                  For example: tenant is home weekday mornings, or keys are with the letting agent. Only add a tenant’s name or number if they’ve agreed.
+                </p>
+                <span className="shrink-0 text-xs text-gray-400">{accessNote.length}/300</span>
               </div>
             </div>
           )}

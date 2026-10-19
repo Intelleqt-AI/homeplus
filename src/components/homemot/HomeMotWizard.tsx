@@ -174,7 +174,7 @@ const HomeMotWizard = ({
   // calendar/dashboard events (linked Event), the task list, hydration dates and
   // System Health (a saved "yes" with its date is one of its records).
   const invalidateTasks = () => {
-    ['event', 'mot-tasks', 'mot-last-completed', 'systems-health'].forEach((key) =>
+    ['event', 'mot-tasks', 'mot-last-completed', 'systems-health', 'open-tasks'].forEach((key) =>
       qc.invalidateQueries({ queryKey: [key] })
     );
   };

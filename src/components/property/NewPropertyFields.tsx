@@ -4,6 +4,7 @@ import HomeSelector from '@/components/HomeSelector';
 import PropertyDetailsFields, { type DetailField } from '@/components/PropertyDetailsFields';
 import { fetchHomeDetails, type HomeSelection } from '@/lib/homeLookup';
 import { applyEpc, clearEpc, epcSummary, type HomeDetails } from '@/lib/propertyOptions';
+import type { Wording } from '@/lib/account';
 
 /**
  * Add-a-property fields, the same flow as the onboarding home step: Area → Postcode → Home,
@@ -17,14 +18,20 @@ interface Props {
   details: HomeDetails;
   onDetailsChange: (details: HomeDetails) => void;
   errors?: Record<string, string>;
+  /** When what the property is (own / let / rented) is already decided, the question is not asked. */
+  fixedUsage?: boolean;
+  /** `property` for a home someone lets out. */
+  wording?: Wording;
 }
 
 // The home name comes first, above the address; everything else follows the picked home.
 const AFTER_HOME: DetailField[] = [
-  'propertyType', 'role', 'bedrooms', 'bathrooms', 'heatingType', 'yearBuilt', 'tenure', 'floorArea', 'wallConstruction',
+  'propertyType', 'usage', 'bedrooms', 'bathrooms', 'heatingType', 'yearBuilt', 'tenure', 'floorArea', 'wallConstruction',
 ];
 
-const NewPropertyFields = ({ home, onHomeChange, details, onDetailsChange, errors = {} }: Props) => {
+const NewPropertyFields = ({
+  home, onHomeChange, details, onDetailsChange, errors = {}, fixedUsage = false, wording = 'home',
+}: Props) => {
   // Lookups finish after renders, so they read the latest details from here.
   const detailsRef = useRef(details);
   detailsRef.current = details;
@@ -54,9 +61,9 @@ const NewPropertyFields = ({ home, onHomeChange, details, onDetailsChange, error
 
   return (
     <div className="space-y-5">
-      <PropertyDetailsFields value={details} onChange={patchDetails} show={['name']} />
+      <PropertyDetailsFields value={details} onChange={patchDetails} show={['name']} wording={wording} />
 
-      <HomeSelector value={home} onChange={handleHomeChange} error={errors.home} />
+      <HomeSelector value={home} onChange={handleHomeChange} error={errors.home} wording={wording} />
 
       {homeChosen && (
         <div className="space-y-4 border-t pt-4">
@@ -72,8 +79,9 @@ const NewPropertyFields = ({ home, onHomeChange, details, onDetailsChange, error
             value={details}
             onChange={patchDetails}
             errors={errors}
-            show={AFTER_HOME}
+            show={fixedUsage ? AFTER_HOME.filter(f => f !== 'usage') : AFTER_HOME}
             required={['propertyType']}
+            wording={wording}
           />
         </div>
       )}

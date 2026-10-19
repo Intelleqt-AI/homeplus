@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import PropertyMapPicker from '@/components/PropertyMapPicker';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { formatPostcode, isFullUkPostcode } from '@/lib/postcode';
+import type { Wording } from '@/lib/account';
 import {
   fetchHomesPatiently,
   homeAddressText,
@@ -30,7 +31,30 @@ interface Props {
   value: HomeSelection;
   onChange: (next: HomeSelection) => void;
   error?: string;
+  /** `property` when the person is adding a home they let out. */
+  wording?: Wording;
 }
+
+const WORDS: Record<Wording, {
+  label: string; notListed: string; select: string; unavailable: string; mapHint: string; pinFail: string;
+}> = {
+  home: {
+    label: 'Home',
+    notListed: "My home isn't listed",
+    select: 'Select your home',
+    unavailable: "Couldn't load homes: use \"My home isn't listed\"",
+    mapHint: 'Not in the list? Search any UK postcode below, or click your home on the map.',
+    pinFail: "We couldn't find an address at that spot. Move the pin, or pick your home from the lists.",
+  },
+  property: {
+    label: 'Property',
+    notListed: "This property isn't listed",
+    select: 'Select the property',
+    unavailable: "Couldn't load properties: use \"This property isn't listed\"",
+    mapHint: 'Not in the list? Search any UK postcode below, or click the property on the map.',
+    pinFail: "We couldn't find an address at that spot. Move the pin, or pick the property from the lists.",
+  },
+};
 
 const MANUAL = 'manual' as const;
 
@@ -71,7 +95,8 @@ function Dropdown({
   );
 }
 
-const HomeSelector = ({ value, onChange, error }: Props) => {
+const HomeSelector = ({ value, onChange, error, wording = 'home' }: Props) => {
+  const words = WORDS[wording];
   // Async lookups finish after renders, so they read the latest selection from here.
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -231,7 +256,7 @@ const HomeSelector = ({ value, onChange, error }: Props) => {
     if (token !== pinToken.current) return;
     if (r.status !== 'ok') {
       setPinBusy(false);
-      setPinNote("We couldn't find an address at that spot. Move the pin, or pick your home from the lists.");
+      setPinNote(words.pinFail);
       return;
     }
     let list = homesRef.current;
@@ -258,7 +283,7 @@ const HomeSelector = ({ value, onChange, error }: Props) => {
   const selectedHomeObj = typeof selectedHome === 'number' ? homes.find(h => h.id === selectedHome) : undefined;
   const homeDisplay =
     selectedHome === MANUAL || (value.manual && value.address)
-      ? "My home isn't listed"
+      ? words.notListed
       : selectedHomeObj
         ? homeAddressText(selectedHomeObj)
         : value.address && !loadingHomes
@@ -296,7 +321,7 @@ const HomeSelector = ({ value, onChange, error }: Props) => {
         ))}
       </Dropdown>
       <p className="-mt-2 text-xs text-muted-foreground">
-        Not in the list? Search any UK postcode below, or click your home on the map.
+        {words.mapHint}
       </p>
 
       <Dropdown
@@ -326,12 +351,12 @@ const HomeSelector = ({ value, onChange, error }: Props) => {
       </Dropdown>
 
       <Dropdown
-        label="Home"
+        label={words.label}
         placeholder={
           !value.postcode ? 'Select a postcode first'
             : loadingHomes ? 'Finding homes…'
-              : homesStatus === 'unavailable' ? "Couldn't load homes: use \"My home isn't listed\""
-                : 'Select your home'
+              : homesStatus === 'unavailable' ? words.unavailable
+                : words.select
         }
         display={homeDisplay}
         disabled={!value.postcode || loadingHomes}
@@ -347,9 +372,9 @@ const HomeSelector = ({ value, onChange, error }: Props) => {
               <span className="truncate">{homeAddressText(h)}</span>
             </CommandItem>
           ))}
-          <CommandItem value="my home isn't listed" onSelect={chooseManual}>
+          <CommandItem value={words.notListed.toLowerCase()} onSelect={chooseManual}>
             <Check className={cn('mr-2 h-3.5 w-3.5', selectedHome === MANUAL ? 'opacity-100' : 'opacity-0')} />
-            My home isn&apos;t listed
+            {words.notListed}
           </CommandItem>
         </CommandGroup>
       </Dropdown>
@@ -369,7 +394,7 @@ const HomeSelector = ({ value, onChange, error }: Props) => {
               setSelectedHome(MANUAL);
               emit({ address: e.target.value, uprn: '', certificateNumber: '', manual: true, homeId: null });
             }}
-            placeholder="Fills in when you pick your home or move the pin"
+            placeholder={`Fills in when you pick the ${wording === 'property' ? 'property' : 'home'} or move the pin`}
           />
         </div>
 

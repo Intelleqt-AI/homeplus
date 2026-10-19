@@ -7,6 +7,7 @@ import { useActiveProperty } from '@/hooks/useActiveProperty';
 import { usePost } from '@/hooks/usePost';
 import { toast } from '@/lib/toast';
 import { formatPostcode } from '@/lib/postcode';
+import { firstUsage } from '@/lib/account';
 import {
   EMPTY_FORM,
   PropertyFormFields,
@@ -25,9 +26,10 @@ export default function AddFirstHome() {
   const queryClient = useQueryClient();
   const { signOut, user } = useAuth();
   const { setActivePropertyId } = useActiveProperty();
-  // Starts from the postcode given at sign-up.
+  // Starts from the postcode given at sign-up, and from what the person said they use Home+ for.
   const [form, setForm] = useState<PropertyForm>(() => ({
     ...EMPTY_FORM,
+    usage: firstUsage(user?.account_type ?? 'homeowner'),
     postcode: formatPostcode(user?.user_metadata?.postcode ?? ''),
   }));
   const [errors, setErrors] = useState<FormErrors>({});

@@ -116,7 +116,7 @@ const RentalRegister = () => {
     },
     onQuote: (p: QuotePrefill) => { setQuotePrefill(p); setQuoteOpen(true); },
     onMot: () => navigate('/dashboard'),
-    onLogWork: () => navigate('/dashboard/calendar'),
+    onLogWork: () => navigate('/dashboard/log-work'),
   };
 
   const deadline = data?.deadline;

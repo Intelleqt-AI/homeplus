@@ -14,6 +14,8 @@ import { TRADE_OPTIONS, JOB_TRADE_OPTIONS } from '@/lib/tradeCategories';
 import { Upload, File as FileIcon, X, Loader2, AlertCircle } from 'lucide-react';
 import PropertySelect, { type PropertyOption } from '@/components/property/PropertySelect';
 import { useActiveProperty } from '@/hooks/useActiveProperty';
+import { usePortfolioView } from '@/hooks/usePortfolioView';
+import { myUsage, usageOf } from '@/lib/household';
 import { Link } from 'react-router-dom';
 
 const MAX_FILES = 3;
@@ -49,6 +51,9 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   const [propertyId, setPropertyId] = useState('');
   // Every job belongs to a home.
   const [propertyError, setPropertyError] = useState('');
+  // "Access note for the trade" (let properties) and the renter notice already read for this property.
+  const [accessNote, setAccessNote] = useState('');
+  const [noticeAck, setNoticeAck] = useState('');
 
   // Job details
   const [title, setTitle] = useState('');
@@ -82,12 +87,25 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   );
   const properties: PropertyOption[] = propertiesRes?.results ?? propertiesRes?.data ?? [];
   const { activePropertyId } = useActiveProperty();
-  const selectedProperty = properties.find(p => p.id === propertyId);
+  const { portfolioViewActive } = usePortfolioView();
+  const onlyPropertyId = properties.length === 1 ? properties[0].id : null;
+  // With "All properties" showing and several homes, nothing is chosen for the person: they pick the
+  // property first. Otherwise it is the one open in the sidebar (a prefill wins). Worked out here, not
+  // in an effect, so the dialog never flashes the wrong stage.
+  const fallbackPropertyId = (portfolioViewActive ? null : activePropertyId) ?? onlyPropertyId;
+  const effectivePropertyId = propertyId || (open ? prefill?.property || fallbackPropertyId || '' : '');
+  const selectedProperty = properties.find(p => p.id === effectivePropertyId);
   const propertyHasPostcode = !!selectedProperty?.postcode;
+  // A renter is told first that most repairs are the landlord's job (not a tenant member of someone else's let home).
+  const needsNotice = !!selectedProperty && usageOf(selectedProperty) === 'rented_home'
+    && selectedProperty.access !== 'member' && noticeAck !== selectedProperty.id;
+  const showAccessNote = !!selectedProperty && myUsage(selectedProperty) === 'let';
 
   const reset = () => {
     setPropertyError('');
     setPropertyId('');
+    setAccessNote('');
+    setNoticeAck('');
     setTitle('');
     setDescription('');
     setService('Plumbing');
@@ -145,12 +163,10 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   }, [propertyId, selectedProperty]);
 
   // Default to the property active in the sidebar switcher (a prefill wins).
-  const onlyPropertyId = properties.length === 1 ? properties[0].id : null;
   useEffect(() => {
     if (!open || propertyId || prefill?.property) return;
-    const fallback = activePropertyId ?? onlyPropertyId;
-    if (fallback) setPropertyId(fallback);
-  }, [open, propertyId, prefill?.property, activePropertyId, onlyPropertyId]);
+    if (fallbackPropertyId) setPropertyId(fallbackPropertyId);
+  }, [open, propertyId, prefill?.property, fallbackPropertyId]);
 
   const { mutate: submitJob, isPending } = usePost({
     mutationFn: (vars: Record<string, unknown>) => createJob(vars),
@@ -193,7 +209,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
   };
 
   const handleSubmit = () => {
-    if (!propertyId) {
+    if (!effectivePropertyId) {
       setPropertyError('Choose the home this job is for.');
       toast.error('Choose the home this job is for.');
       return;
@@ -227,7 +243,8 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
     }
 
     submitJob({
-      ...(propertyId ? { property: propertyId } : {}),
+      ...(effectivePropertyId ? { property: effectivePropertyId } : {}),
+      ...(showAccessNote && accessNote.trim() ? { access_note: accessNote.trim() } : {}),
       title,
       description,
       service,
@@ -254,6 +271,34 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
       }}
     >
       <DialogContent className="sm:max-w-[680px] max-h-[90dvh] overflow-y-auto p-0">
+        {needsNotice ? (
+          /* A renter's job: most repairs in a rented home are the landlord's, so say so first. */
+          <div className="px-4 sm:px-6 py-6 space-y-5" data-stage="renter-notice">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold text-gray-900">Post a Job</DialogTitle>
+            </DialogHeader>
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-renter-notice>
+              Most repairs in a rented home are your landlord’s job, such as the boiler, wiring, roof and leaks. Tell your landlord in writing first.
+            </p>
+            <div className="flex gap-3">
+              <Button className="flex-1" onClick={() => setNoticeAck(selectedProperty?.id ?? '')} data-action="continue-anyway">
+                Continue anyway
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                data-action="cancel-notice"
+                onClick={() => {
+                  reset();
+                  setOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Header */}
         <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-gray-100">
           <DialogHeader>
@@ -275,7 +320,7 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
               </div>
             ) : (
               <PropertySelect
-                value={propertyId}
+                value={effectivePropertyId}
                 onChange={id => {
                   setPropertyId(id);
                   setPropertyError('');
@@ -387,6 +432,29 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
                   placeholder="e.g. 12 Baker Street"
                   className={inputCls}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* ── Access note for the trade (a home you let out) ─────── */}
+          {showAccessNote && (
+            <div data-section="access-note">
+              <Label htmlFor="access-note" className="text-sm font-medium text-gray-700">
+                Access note for the trade <span className="font-normal text-gray-400">(optional)</span>
+              </Label>
+              <textarea
+                id="access-note"
+                value={accessNote}
+                onChange={e => setAccessNote(e.target.value.slice(0, 300))}
+                maxLength={300}
+                rows={2}
+                className={`${inputCls} resize-none`}
+              />
+              <div className="mt-1 flex items-start justify-between gap-3">
+                <p className="text-xs text-gray-400">
+                  For example: tenant is home weekday mornings, or keys are with the letting agent. Only add a tenant’s name or number if they’ve agreed.
+                </p>
+                <span className="shrink-0 text-xs text-gray-400" data-access-note-count>{accessNote.length}/300</span>
               </div>
             </div>
           )}
@@ -556,6 +624,8 @@ const Quote = ({ open, setOpen, prefill }: QuoteProps) => {
             Cancel
           </Button>
         </div>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

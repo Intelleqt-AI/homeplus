@@ -378,6 +378,7 @@ export const normLead = (job: any) => ({
   urgency: job.urgency || 'within_2_weeks',
   preferred_date: job.preferred_date ?? null,
   property: job.property ?? null,
+  access_note: job.access_note || '',
   homeID: null,
   isApproved: job.is_approved,
   status: job.status,
@@ -466,6 +467,8 @@ export const createJob = async (job: any) => {
   if (job.property) payload.property = job.property;
   if (job.title) payload.title = job.title;
   if (job.preferred_date) payload.preferred_date = job.preferred_date;
+  // "Access note for the trade": only sent when there is one (the API drops keys it does not know).
+  if (job.access_note) payload.access_note = job.access_note;
 
   const { data: res } = await apiClient.post('/api/v1/jobs/', payload);
   return { success: true, ...(res.data ?? {}) };

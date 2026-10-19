@@ -40,16 +40,15 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import PropertyMapPicker from '@/components/PropertyMapPicker';
-import NewPropertyFields from '@/components/property/NewPropertyFields';
-import apiClient from '@/lib/apiClient';
-import { EMPTY_HOME, type HomeSelection } from '@/lib/homeLookup';
-import { EMPTY_HOME_DETAILS, toHomeDetailsPayload, type HomeDetails } from '@/lib/propertyOptions';
+import AddPropertyDialog from '@/components/property/AddPropertyDialog';
 import { useActiveProperty } from '@/hooks/useActiveProperty';
-import { memberRoleLabel } from '@/lib/household';
+import { memberRoleLabel, propertyNickname, usageOf } from '@/lib/household';
+import { ROLE_FOR_USAGE, USAGE_OPTIONS, usageLabel, type Usage } from '@/lib/account';
 import HomePeople from './HomePeople';
 import { formatPostcode, postcodeError } from '@/lib/postcode';
 
@@ -64,32 +63,45 @@ export const PROPERTY_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
-export const ROLES = [
-  { value: 'homeowner', label: 'Homeowner' },
-  { value: 'landlord', label: 'Landlord' },
-  { value: 'tenant', label: 'Tenant' },
-];
-
-const ROLE_COLORS: Record<string, string> = {
-  homeowner: 'border-blue-300 text-blue-700 bg-blue-50',
-  landlord: 'border-purple-300 text-purple-700 bg-purple-50',
-  tenant: 'border-orange-300 text-orange-700 bg-orange-50',
+/** What the property is to its owner, as a small coloured chip on a card. */
+const USAGE_COLORS: Record<Usage, string> = {
+  own_home: 'border-blue-300 text-blue-700 bg-blue-50',
+  let: 'border-purple-300 text-purple-700 bg-purple-50',
+  rented_home: 'border-orange-300 text-orange-700 bg-orange-50',
 };
 
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(PROPERTY_TYPES.map(t => [t.value, t.label]));
 
 const PAGE_SIZE = 20;
 
+const fmtDay = (iso?: string | null) => {
+  if (!iso) return undefined;
+  try {
+    return format(parseISO(iso), 'd MMM yyyy');
+  } catch {
+    return iso;
+  }
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Property {
   id: string;
   name: string;
+  /** The name, else the first line of the address. */
+  nickname?: string;
   address: string;
   postcode: string;
   location: string;
   property_type: string;
   role: string;
+  /** Own home / let / rented home; older API rows only have `role`. */
+  usage?: Usage;
+  nation?: string;
+  /** A renter's own tenancy dates and contents-insurance renewal (rented homes only). */
+  tenancy_start?: string | null;
+  tenancy_end?: string | null;
+  contents_insurance_renewal?: string | null;
   bedrooms: number;
   bathrooms: number;
   cover_image_url: string | null;
@@ -129,7 +141,7 @@ export interface PropertyForm {
   postcode: string;
   location: string;
   property_type: string;
-  role: string;
+  usage: Usage;
   bedrooms: string;
   bathrooms: string;
   latitude: number | null;
@@ -147,12 +159,16 @@ export interface PropertyForm {
   ownership_type: string;
   freeholder_name: string;
   freeholder_contact: string;
+  tenancy_start: string;
+  tenancy_end: string;
+  contents_insurance_renewal: string;
 }
 
 /** Fields a deep link (System Health, Rental register) can scroll to and highlight. */
 export const HIGHLIGHT_FIELDS = [
-  'role', 'heating_type', 'address', 'property_type', 'bedrooms', 'tenure',
+  'role', 'usage', 'heating_type', 'address', 'property_type', 'bedrooms', 'tenure',
   'ownership_type', 'occupants', 'rent_amount', 'freeholder_name',
+  'tenancy_start', 'tenancy_end', 'contents_insurance_renewal',
 ] as const;
 export type HighlightField = (typeof HIGHLIGHT_FIELDS)[number];
 const LETTING_FIELDS: HighlightField[] = ['ownership_type', 'occupants', 'rent_amount', 'freeholder_name'];
@@ -199,7 +215,7 @@ export const EMPTY_FORM: PropertyForm = {
   postcode: '',
   location: '',
   property_type: '',
-  role: 'homeowner',
+  usage: 'own_home',
   bedrooms: '0',
   bathrooms: '0',
   latitude: null,
@@ -217,6 +233,9 @@ export const EMPTY_FORM: PropertyForm = {
   ownership_type: '',
   freeholder_name: '',
   freeholder_contact: '',
+  tenancy_start: '',
+  tenancy_end: '',
+  contents_insurance_renewal: '',
 };
 
 function propertyToForm(p: Property): PropertyForm {
@@ -226,7 +245,7 @@ function propertyToForm(p: Property): PropertyForm {
     postcode: p.postcode ?? '',
     location: p.location ?? '',
     property_type: p.property_type ?? '',
-    role: p.role ?? 'homeowner',
+    usage: usageOf(p),
     bedrooms: String(p.bedrooms ?? 0),
     bathrooms: String(p.bathrooms ?? 0),
     latitude: p.latitude ?? null,
@@ -244,6 +263,9 @@ function propertyToForm(p: Property): PropertyForm {
     ownership_type: p.ownership_type ?? '',
     freeholder_name: p.freeholder_name ?? '',
     freeholder_contact: p.freeholder_contact ?? '',
+    tenancy_start: p.tenancy_start ?? '',
+    tenancy_end: p.tenancy_end ?? '',
+    contents_insurance_renewal: p.contents_insurance_renewal ?? '',
   };
 }
 
@@ -262,6 +284,9 @@ export function validatePropertyForm(form: PropertyForm): FormErrors {
   if (form.latitude === null || form.longitude === null) {
     errors.postcode = errors.postcode || 'Set the property location on the map.';
   }
+  if (form.usage === 'rented_home' && form.tenancy_start && form.tenancy_end && form.tenancy_end < form.tenancy_start) {
+    errors.tenancy_end = "The end date can't be before the start date.";
+  }
   return errors;
 }
 
@@ -274,7 +299,9 @@ export function formToPayload(form: PropertyForm, withBuildingFacts = false) {
     postcode: formatPostcode(form.postcode),
     location: form.location.trim(),
     property_type: form.property_type,
-    role: form.role,
+    usage: form.usage,
+    // The older twin of `usage`, kept in step by the backend (an older backend only knows this).
+    role: ROLE_FOR_USAGE[form.usage],
     bedrooms: parseInt(form.bedrooms) || 0,
     bathrooms: parseInt(form.bathrooms) || 0,
     latitude: form.latitude,
@@ -296,6 +323,14 @@ export function formToPayload(form: PropertyForm, withBuildingFacts = false) {
     ownership_type: form.ownership_type,
     freeholder_name: form.freeholder_name.trim(),
     freeholder_contact: form.freeholder_contact.trim(),
+    // Only a rented home holds the renter's own dates (the backend clears them on any other).
+    ...(form.usage === 'rented_home'
+      ? {
+          tenancy_start: form.tenancy_start || null,
+          tenancy_end: form.tenancy_end || null,
+          contents_insurance_renewal: form.contents_insurance_renewal || null,
+        }
+      : {}),
   };
 }
 
@@ -505,8 +540,8 @@ export function PropertyFormFields({
           </Select>
           <FieldError message={errors.property_type} />
         </div>
-        <div {...fieldProps('role')}>
-          <Label>Your role</Label>
+        <div {...fieldProps(highlightField === 'usage' ? 'usage' : 'role')} data-field-usage>
+          <Label>{member ? 'Your role' : 'How you use this property'}</Label>
           {member ? (
             <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3 text-sm" aria-readonly="true">
               <span className="truncate">
@@ -515,14 +550,14 @@ export function PropertyFormFields({
               </span>
             </div>
           ) : (
-            <Select value={form.role} onValueChange={v => setForm(prev => ({ ...prev, role: v }))}>
-              <SelectTrigger>
+            <Select value={form.usage} onValueChange={v => setForm(prev => ({ ...prev, usage: v as Usage }))}>
+              <SelectTrigger aria-label="How you use this property">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLES.map(r => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label}
+                {USAGE_OPTIONS.map(u => (
+                  <SelectItem key={u.value} value={u.value}>
+                    {u.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -637,7 +672,37 @@ export function PropertyFormFields({
         )}
       </div>
 
-      {((member?.viewerRole ?? form.role) === 'landlord' || (highlightField && LETTING_FIELDS.includes(highlightField))) && (
+      {!member && form.usage === 'rented_home' && (
+        <div className="pt-1 border-t border-[#E8E8E3]" data-section="tenancy">
+          <p className="text-xs text-muted-foreground mb-3 mt-2">
+            Your tenancy <span className="font-normal">(optional, kept in your account only)</span>
+          </p>
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
+            <div {...fieldProps('tenancy_start')}>
+              <Label>Tenancy start</Label>
+              <Input type="date" value={form.tenancy_start} onChange={set('tenancy_start')} aria-label="Tenancy start" />
+            </div>
+            <div {...fieldProps('tenancy_end')}>
+              <Label>Tenancy end or renewal</Label>
+              <Input
+                type="date" value={form.tenancy_end} min={form.tenancy_start || undefined} onChange={set('tenancy_end')}
+                aria-label="Tenancy end or renewal"
+                className={cn(errors.tenancy_end && 'border-destructive focus-visible:ring-destructive')}
+              />
+              <FieldError message={errors.tenancy_end} />
+            </div>
+          </div>
+          <div {...fieldProps('contents_insurance_renewal')} className={cn(fieldProps('contents_insurance_renewal').className, 'mt-3 sm:max-w-[50%]')}>
+            <Label>Contents insurance renews</Label>
+            <Input
+              type="date" value={form.contents_insurance_renewal} onChange={set('contents_insurance_renewal')}
+              aria-label="Contents insurance renews"
+            />
+          </div>
+        </div>
+      )}
+
+      {((member ? member.viewerRole === 'landlord' : form.usage === 'let') || (highlightField && LETTING_FIELDS.includes(highlightField))) && (
         <div className="pt-1 border-t border-[#E8E8E3]" data-section="letting">
           <p className="text-xs text-muted-foreground mb-3 mt-2">
             Letting details <span className="font-normal">(needed for the PRS Database register)</span>
@@ -743,16 +808,12 @@ export default function Properties() {
   const [editErrors, setEditErrors] = useState<FormErrors>({});
   const [focusField, setFocusField] = useState<HighlightField | undefined>();
 
-  // Add modal
+  // Add property: the shared dialog (also used by the property switcher and the let-property card).
   const [addOpen, setAddOpen] = useState(false);
-  // Add works like onboarding: pick Area → Postcode → Home, EPC fills in the details.
-  const [addHome, setAddHome] = useState<HomeSelection>(EMPTY_HOME);
-  const [addDetails, setAddDetails] = useState<HomeDetails>(EMPTY_HOME_DETAILS);
-  const [addErrors, setAddErrors] = useState<Record<string, string>>({});
-  const addCertificate = useRef('');
-  const [addCoverFile, setAddCoverFile] = useState<File | null>(null);
-  const [addCoverPreview, setAddCoverPreview] = useState<string | null>(null);
-  const addCoverRef = useRef<HTMLInputElement>(null);
+
+  // Rename (just the name: the full edit form needs the map pin)
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<Property | null>(null);
@@ -782,44 +843,14 @@ export default function Properties() {
     },
   });
 
-  const addMutation = usePost<PropertyResponse>({
-    onSuccess: async ({ data: created }) => {
-      if (addCoverFile) {
-        const fd = new FormData();
-        fd.append('file', addCoverFile);
-        addCoverMutation.mutate({
-          url: `/api/v1/properties/${created.id}/cover-image/`,
-          data: fd,
-          config: { headers: { 'Content-Type': 'multipart/form-data' } },
-        });
-      }
-      // A home picked from the list already carries its EPC certificate: link it (non-critical).
-      if (addCertificate.current) {
-        await apiClient
-          .post(`/api/v1/properties/${created.id}/epc/link/`, { certificate_number: addCertificate.current })
-          .catch(() => {});
-      }
-      setAddOpen(false);
-      resetAdd();
-      toast.success('Property added.');
-      // Await the refetch before switching: useActiveProperty's own list query
-      // must already include the new property, or its "stored id not in list
-      // yet" guard would immediately bounce the selection back to the first one.
-      await invalidateProperties();
-      setActivePropertyId(created.id);
+  const renameMutation = usePatch<PropertyResponse>({
+    onSuccess: ({ data: updated }) => {
+      setSelected(prev => (prev ? { ...prev, ...updated } : prev));
+      setRenaming(false);
+      toast.success('Property renamed.');
+      invalidateProperties();
     },
-    onError: (err: Error & { response?: { data?: { errors?: Record<string, string[]> } } }) => {
-      const apiErrs = err?.response?.data?.errors ?? {};
-      const mapped: Record<string, string> = {};
-      const homeError = apiErrs.postcode?.[0] ?? apiErrs.address?.[0];
-      if (homeError) mapped.home = homeError;
-      if (apiErrs.property_type) mapped.propertyType = apiErrs.property_type[0];
-      if (Object.keys(mapped).length) {
-        setAddErrors(mapped);
-      } else {
-        toast.error('Failed to add property.');
-      }
-    },
+    onError: () => toast.error('Could not rename the property.'),
   });
 
   const deleteMutation = useDelete({
@@ -841,39 +872,11 @@ export default function Properties() {
     onError: () => toast.error('Failed to upload cover image.'),
   });
 
-  const addCoverMutation = usePost<CoverResponse>({
-    onSuccess: () => invalidateProperties(),
-    onError: () => toast.error('Property added but cover upload failed.'),
-  });
-
   // ── Helpers ────────────────────────────────────────────────────────────────
-
-  const resetAdd = () => {
-    setAddHome(EMPTY_HOME);
-    setAddDetails(EMPTY_HOME_DETAILS);
-    setAddErrors({});
-    addCertificate.current = '';
-    resetAddCover();
-  };
-
-  const resetAddCover = () => {
-    if (addCoverPreview) URL.revokeObjectURL(addCoverPreview);
-    setAddCoverFile(null);
-    setAddCoverPreview(null);
-    if (addCoverRef.current) addCoverRef.current.value = '';
-  };
-
-  const handleAddCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (addCoverPreview) URL.revokeObjectURL(addCoverPreview);
-    setAddCoverFile(file);
-    setAddCoverPreview(URL.createObjectURL(file));
-    if (addCoverRef.current) addCoverRef.current.value = '';
-  };
 
   const closeModal = () => {
     setModalOpen(false);
+    setRenaming(false);
     setEditMode(false);
     setSelected(null);
     setEditErrors({});
@@ -922,48 +925,15 @@ export default function Properties() {
       return;
     }
     const payload: Partial<ReturnType<typeof formToPayload>> = formToPayload(editForm, true);
-    // Only the owner sets the home's role; a member's role comes from Settings → Family.
-    if (selected.access === 'member') delete payload.role;
+    // Only the owner says what the home is; a member's role comes from Settings → Family.
+    if (selected.access === 'member') {
+      delete payload.role;
+      delete payload.usage;
+      delete payload.tenancy_start;
+      delete payload.tenancy_end;
+      delete payload.contents_insurance_renewal;
+    }
     patchMutation.mutate({ url: `/api/v1/properties/${selected.id}/`, data: payload });
-  };
-
-  const handleAdd = () => {
-    const errors: Record<string, string> = {};
-    if (!addHome.postcode) errors.home = 'Select your area and postcode, then your home.';
-    else if (!addHome.address.trim()) errors.home = "Select your home, or choose \"My home isn't listed\" and enter the address.";
-    else if (addHome.lat === null || addHome.lng === null) errors.home = 'Place the pin on the map to mark your home.';
-    if (!addDetails.propertyType) errors.propertyType = 'Select a property type.';
-    if (addDetails.yearBuilt && (+addDetails.yearBuilt < 1800 || +addDetails.yearBuilt > new Date().getFullYear())) {
-      errors.yearBuilt = 'Enter a valid year.';
-    }
-    if (Object.keys(errors).length) {
-      setAddErrors(errors);
-      return;
-    }
-    const d = toHomeDetailsPayload(addDetails);
-    addCertificate.current = addHome.certificateNumber;
-    addMutation.mutate({
-      url: '/api/v1/properties/',
-      data: {
-        name: d.name,
-        address: addHome.address.trim(),
-        postcode: formatPostcode(addHome.postcode),
-        location: addHome.area,
-        property_type: addDetails.propertyType,
-        role: d.role,
-        bedrooms: d.bedrooms,
-        bathrooms: d.bathrooms,
-        latitude: addHome.lat,
-        longitude: addHome.lng,
-        heating_type: d.heating_type || null,
-        year_built: d.year_built,
-        tenure: d.tenure || null,
-        floor_area: d.floor_area,
-        built_form: d.built_form,
-        construction_age_band: d.construction_age_band,
-        wall_construction: d.wall_construction || null,
-      },
-    });
   };
 
   const handleDelete = () => {
@@ -996,10 +966,8 @@ export default function Properties() {
           </p>
           <Button
             size="sm"
-            onClick={() => {
-              resetAdd();
-              setAddOpen(true);
-            }}
+            onClick={() => setAddOpen(true)}
+            data-action="open-add-property"
           >
             <Plus className="w-4 h-4 mr-1.5" /> Add property
           </Button>
@@ -1037,7 +1005,7 @@ export default function Properties() {
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-semibold text-[#1A1A1A] truncate">{p.name || p.address || 'Unnamed Property'}</p>
+                      <p className="font-semibold text-[#1A1A1A] truncate">{propertyNickname(p) || 'Unnamed Property'}</p>
                       {(p.location || p.address) && (
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 min-w-0">
                           <MapPin className="w-3 h-3 shrink-0" />
@@ -1054,6 +1022,11 @@ export default function Properties() {
                       {p.access !== 'member' && p.is_shared && (
                         <Badge variant="outline" className="text-xs">
                           Shared
+                        </Badge>
+                      )}
+                      {p.access !== 'member' && (
+                        <Badge variant="outline" className={cn('text-xs max-w-[160px] truncate', USAGE_COLORS[usageOf(p)])} data-usage-chip={usageOf(p)}>
+                          {usageLabel(usageOf(p))}
                         </Badge>
                       )}
                       {p.property_type && (
@@ -1099,7 +1072,40 @@ export default function Properties() {
           {selected && (
             <>
               <DialogHeader>
-                <DialogTitle>{selected.name || selected.address || 'Property Details'}</DialogTitle>
+                {renaming ? (
+                  <form
+                    className="flex items-center gap-2"
+                    onSubmit={e => {
+                      e.preventDefault();
+                      renameMutation.mutate({ url: `/api/v1/properties/${selected.id}/`, data: { name: renameValue.trim() } });
+                    }}
+                  >
+                    <DialogTitle className="sr-only">Rename property</DialogTitle>
+                    <Input
+                      autoFocus value={renameValue} maxLength={200} aria-label="Property name"
+                      placeholder="Name this property" onChange={e => setRenameValue(e.target.value)}
+                    />
+                    <Button type="submit" size="sm" disabled={renameMutation.isPending}>
+                      {renameMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setRenaming(false)}>
+                      Cancel
+                    </Button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2 min-w-0 pr-6">
+                    <DialogTitle className="truncate">{propertyNickname(selected) || 'Property Details'}</DialogTitle>
+                    {selected.access !== 'member' && !editMode && (
+                      <button
+                        type="button" aria-label="Rename property" data-action="rename-property"
+                        onClick={() => { setRenameValue(selected.name ?? ''); setRenaming(true); }}
+                        className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </DialogHeader>
 
               {/* Cover image */}
@@ -1134,11 +1140,14 @@ export default function Properties() {
                   {[
                     { label: 'Name', value: selected.name },
                     {
-                      label: 'Your role',
+                      label: selected.access === 'member' ? 'Your role' : 'How you use it',
                       value: selected.access === 'member'
                         ? memberRoleLabel(selected.member_role)
-                        : ROLES.find(r => r.value === selected.role)?.label,
+                        : usageLabel(usageOf(selected)),
                     },
+                    { label: 'Tenancy start', value: fmtDay(selected.tenancy_start) },
+                    { label: 'Tenancy end or renewal', value: fmtDay(selected.tenancy_end) },
+                    { label: 'Contents insurance renews', value: fmtDay(selected.contents_insurance_renewal) },
                     { label: 'Type', value: TYPE_LABEL[selected.property_type] ?? selected.property_type },
                     { label: 'Address', value: selected.address },
                     { label: 'Location', value: selected.location },
@@ -1220,66 +1229,8 @@ export default function Properties() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Add property modal ── */}
-      <Dialog
-        open={addOpen}
-        onOpenChange={open => {
-          if (!open) {
-            setAddOpen(false);
-            resetAdd();
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add property</DialogTitle>
-          </DialogHeader>
-
-          {/* Cover image */}
-          <div
-            className="relative rounded-lg overflow-hidden h-36 bg-[#F5F5F0] cursor-pointer"
-            onClick={() => addCoverRef.current?.click()}
-          >
-            {addCoverPreview ? (
-              <img src={addCoverPreview} alt="Cover preview" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                <Camera className="w-7 h-7 text-[#C0C0B8]" />
-                <p className="text-xs text-muted-foreground">Add cover photo (optional)</p>
-              </div>
-            )}
-            <span className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/60 hover:bg-black/75 text-white text-xs px-3 py-1.5 rounded-full pointer-events-none">
-              <Camera className="w-3.5 h-3.5" />
-              {addCoverPreview ? 'Change' : 'Add photo'}
-            </span>
-            <input ref={addCoverRef} type="file" accept="image/*" className="hidden" onChange={handleAddCoverChange} />
-          </div>
-
-          <NewPropertyFields
-            home={addHome}
-            onHomeChange={h => {
-              setAddHome(h);
-              setAddErrors(prev => ({ ...prev, home: '' }));
-            }}
-            details={addDetails}
-            onDetailsChange={d => {
-              setAddDetails(d);
-              setAddErrors(prev => ({ ...prev, propertyType: '', yearBuilt: '' }));
-            }}
-            errors={addErrors}
-          />
-
-          <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={addMutation.isPending}>
-              Cancel
-            </Button>
-            <Button onClick={handleAdd} disabled={addMutation.isPending} className="min-w-[120px]">
-              {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
-              {addMutation.isPending ? 'Adding…' : 'Add property'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ── Add property ── */}
+      <AddPropertyDialog open={addOpen} onOpenChange={setAddOpen} />
 
       {/* ── Delete confirmation ── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
@@ -1287,12 +1238,9 @@ export default function Properties() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete property?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{deleteTarget?.name || deleteTarget?.address || 'This property'}" will be permanently deleted.
-              {deleteTarget?.is_shared
-                ? ' This removes it for everyone in the household, including its jobs, documents and events.'
-                : ' Its jobs will no longer show in Home+.'}{' '}
+              Delete &quot;{propertyNickname(deleteTarget) || 'this property'}&quot;? Its tasks, reminders and documents will be deleted.
+              {deleteTarget?.is_shared ? ' This removes it for everyone in the household.' : ''}{' '}
               This cannot be undone.
-
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

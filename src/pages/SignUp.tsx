@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,13 +9,17 @@ import { Home, ArrowRight, Check, Shield, Users, Star, Eye, EyeOff, Loader2, Ale
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import SocialSignInButtons from '@/components/auth/SocialSignInButtons';
+import AccountTypePicker from '@/components/account/AccountTypePicker';
 import HomeSelector from '@/components/HomeSelector';
 import PropertyDetailsFields from '@/components/PropertyDetailsFields';
 import { EMPTY_HOME, fetchHomeDetails, type HomeSelection } from '@/lib/homeLookup';
 import {
-  EMPTY_HOME_DETAILS, HEATING_TYPES, PROPERTY_TYPES, ROLES, WALL_TYPES, applyEpc, clearEpc, epcSummary, labelFor,
+  EMPTY_HOME_DETAILS, HEATING_TYPES, PROPERTY_TYPES, WALL_TYPES, applyEpc, clearEpc, epcSummary, labelFor,
   toHomeDetailsPayload, type HomeDetails,
 } from '@/lib/propertyOptions';
+import {
+  ACCOUNT_TYPE_CAPTION, accountTypeTitle, firstUsage, rememberSrc, srcPreselect, wordingFor, type AccountType,
+} from '@/lib/account';
 import Logo from '/homeplus-logo.png';
 
 // ── validation ────────────────────────────────────────────────────────────────
@@ -34,13 +38,35 @@ function validateStep1(data: typeof INITIAL) {
   return e;
 }
 
-function validateHome(home: HomeSelection) {
+function validateHome(home: HomeSelection, wording: 'home' | 'property') {
   const e: Record<string, string> = {};
+  if (wording === 'property') {
+    if (!home.postcode) e.home = 'Select your area and postcode, then the property.';
+    else if (!home.address.trim()) e.home = "Select the property, or choose \"This property isn't listed\" and enter the address.";
+    else if (home.lat === null || home.lng === null) e.home = 'Place the pin on the map to mark the property.';
+    return e;
+  }
   if (!home.postcode) e.home = 'Select your area and postcode, then your home.';
   else if (!home.address.trim()) e.home = "Select your home, or choose \"My home isn't listed\" and enter the address.";
   else if (home.lat === null || home.lng === null) e.home = 'Place the pin on the map to mark your home.';
   return e;
 }
+
+// The titles of the two home steps follow what the first property is. The brief gives the
+// renter's "Tell us about the home you rent"; the rest are written in the same plain style.
+const HOME_STEP_TITLES: Record<AccountType, { where: string; about: string }> = {
+  homeowner: { where: 'Where is your home?', about: 'Tell us about your home' },
+  landlord: { where: 'Where is the property you let?', about: 'Tell us about the property you let' },
+  both: { where: 'Where is the home you live in?', about: 'Tell us about the home you live in' },
+  renter: { where: 'Where is the home you rent?', about: 'Tell us about the home you rent' },
+};
+const HOME_STEP_SUBTITLES: Record<AccountType, { where: string; about: string }> = {
+  homeowner: { where: 'Pick your area, postcode and home', about: 'We use this to tailor your maintenance schedule' },
+  landlord: { where: 'Pick the area, postcode and property', about: 'We use this to tailor your reminders' },
+  both: { where: 'Pick your area, postcode and home', about: 'We use this to tailor your maintenance schedule' },
+  renter: { where: 'Pick your area, postcode and home', about: 'We use this to tailor your reminders' },
+};
+const TOTAL_STEPS = 5;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -71,11 +97,20 @@ const SignUp = () => {
   const [formData, setFormData] = useState(INITIAL);
   const [details, setDetails] = useState<HomeDetails>(EMPTY_HOME_DETAILS);
   const [home, setHome] = useState<HomeSelection>(EMPTY_HOME);
+  // "How will you use Home+?" Nothing is chosen for you, except when the person came from a
+  // landlord page of the website (?src=/landlords...), which pre-selects "Homes I let out".
+  const [accountType, setAccountType] = useState<AccountType | null>(() => srcPreselect(rememberSrc(window.location.search)));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState('');
 
   const { signUp, user } = useAuth();
   const navigate = useNavigate();
+
+  // A card pre-selected from ?src= also decides what the first property is.
+  useEffect(() => {
+    if (accountType) setDetails(prev => ({ ...prev, usage: firstUsage(accountType) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (user) return <Navigate to="/dashboard" replace />;
 
@@ -106,15 +141,33 @@ const SignUp = () => {
     });
   };
 
+  // What the first property is follows the choice ("Both" starts with the home they live in).
+  const handleAccountTypeChange = (type: AccountType) => {
+    setAccountType(type);
+    setDetails(prev => ({ ...prev, usage: firstUsage(type) }));
+    setErrors(prev => {
+      const { accountType: _drop, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const wording = wordingFor(details.usage);
+  const titles = HOME_STEP_TITLES[accountType ?? 'homeowner'];
+  const subtitles = HOME_STEP_SUBTITLES[accountType ?? 'homeowner'];
+
   const handleNext = async () => {
-    const errs = step === 1 ? validateStep1(formData) : step === 2 ? validateHome(home) : {};
+    const errs =
+      step === 1 ? validateStep1(formData)
+        : step === 2 ? (accountType ? {} : { accountType: 'Choose one to continue.' })
+          : step === 3 ? validateHome(home, wording)
+            : {};
     if (Object.keys(errs).length) {
       setErrors(errs);
       return;
     }
     setErrors({});
     setSubmitError('');
-    if (step === 2) {
+    if (step === 3) {
       // Read what the home's EPC certificate says (type, floor area, ...). A failed or empty
       // lookup just means nothing is prefilled.
       setCheckingHome(true);
@@ -136,6 +189,7 @@ const SignUp = () => {
     const { error, email } = await signUp(formData.email, formData.password, {
       first_name: formData.firstName,
       last_name: formData.lastName,
+      account_type: accountType ?? undefined,
       property_type: details.propertyType,
       home_details: toHomeDetailsPayload(details),
       postcode: home.postcode,
@@ -179,7 +233,7 @@ const SignUp = () => {
           <div className="space-y-8">
             <div className="space-y-4">
               <Badge variant="secondary" className="w-fit">
-                Step {step} of 4
+                Step {step} of {TOTAL_STEPS}
               </Badge>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
                 Join thousands of homeowners managing their homes{' '}
@@ -228,16 +282,19 @@ const SignUp = () => {
               <CardHeader className="text-center space-y-2">
                 <CardTitle className="text-2xl">
                   {step === 1 && 'Create your account'}
-                  {step === 2 && 'Where is your home?'}
-                  {step === 3 && 'Tell us about your home'}
-                  {step === 4 && 'Almost there!'}
+                  {step === 2 && 'How will you use Home+?'}
+                  {step === 3 && titles.where}
+                  {step === 4 && titles.about}
+                  {step === 5 && 'Almost there!'}
                 </CardTitle>
-                <CardDescription>
-                  {step === 1 && 'Start your home management journey'}
-                  {step === 2 && 'Pick your area, postcode and home'}
-                  {step === 3 && 'We use this to tailor your maintenance schedule'}
-                  {step === 4 && 'Confirm your details and get started'}
-                </CardDescription>
+                {step !== 2 && (
+                  <CardDescription>
+                    {step === 1 && 'Start your home management journey'}
+                    {step === 3 && subtitles.where}
+                    {step === 4 && subtitles.about}
+                    {step === 5 && 'Confirm your details and get started'}
+                  </CardDescription>
+                )}
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* ── Step 1 ── */}
@@ -341,11 +398,24 @@ const SignUp = () => {
                   </div>
                 )}
 
-                {/* ── Step 2: home ── */}
-                {step === 2 && <HomeSelector value={home} onChange={handleHomeChange} error={errors.home} />}
+                {/* ── Step 2: how will you use Home+? ── */}
+                {step === 2 && (
+                  <div className="space-y-3">
+                    <AccountTypePicker
+                      value={accountType}
+                      onChange={handleAccountTypeChange}
+                      variant="signup"
+                      error={errors.accountType}
+                    />
+                    <p className="text-center text-xs text-muted-foreground">{ACCOUNT_TYPE_CAPTION}</p>
+                  </div>
+                )}
 
-                {/* ── Step 3: property details ── */}
-                {step === 3 && (
+                {/* ── Step 3: home ── */}
+                {step === 3 && <HomeSelector value={home} onChange={handleHomeChange} error={errors.home} wording={wording} />}
+
+                {/* ── Step 4: property details ── */}
+                {step === 4 && (
                   <div className="space-y-4">
                     {epcSummary(details).length > 0 && (
                       <div className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
@@ -359,8 +429,9 @@ const SignUp = () => {
                       value={details}
                       onChange={handleDetailsChange}
                       errors={errors}
-                      show={['name', 'role']}
+                      show={['name']}
                       autoFocus
+                      wording={wording}
                     />
                     <p className="text-xs text-muted-foreground">
                       We&apos;ll ask for any other details, like bedrooms, after you verify your email.
@@ -368,14 +439,15 @@ const SignUp = () => {
                   </div>
                 )}
 
-                {/* ── Step 4 ── */}
-                {step === 4 && (
+                {/* ── Step 5 ── */}
+                {step === 5 && (
                   <div className="space-y-5">
                     <div className="bg-muted/50 rounded-lg border divide-y text-sm">
                       {[
                         ['Name', `${formData.firstName} ${formData.lastName}`],
                         ['Email', formData.email],
-                        ['Home name', details.name.trim()],
+                        ['How you use Home+', accountTypeTitle(accountType)],
+                        [wording === 'property' ? 'Property name' : 'Home name', details.name.trim()],
                         ['Address', home.address],
                         ['Postcode', home.postcode],
                         ['Area', home.area],
@@ -385,7 +457,6 @@ const SignUp = () => {
                         ['Built', details.ageBand || details.yearBuilt],
                         ['Heating', details.heatingType ? labelFor(HEATING_TYPES, details.heatingType) : ''],
                         ['Walls', details.wallConstruction ? labelFor(WALL_TYPES, details.wallConstruction) : ''],
-                        ['Role', labelFor(ROLES, details.role)],
                       ].filter(([, value]) => value).map(([label, value]) => (
                         <div key={label} className="flex items-center justify-between gap-3 px-4 py-2.5">
                           <span className="shrink-0 text-muted-foreground">{label}</span>
@@ -431,7 +502,7 @@ const SignUp = () => {
                 <div className="space-y-2">
                   <button
                     type="button"
-                    onClick={step === 4 ? handleSignUp : handleNext}
+                    onClick={step === TOTAL_STEPS ? handleSignUp : handleNext}
                     disabled={loading || checkingHome}
                     className="w-full h-12 rounded-md bg-primary text-primary-foreground text-base font-medium
                       flex items-center justify-center gap-2
@@ -447,7 +518,7 @@ const SignUp = () => {
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" /> Checking your home…
                       </>
-                    ) : step === 4 ? (
+                    ) : step === TOTAL_STEPS ? (
                       'Complete Registration'
                     ) : (
                       <>

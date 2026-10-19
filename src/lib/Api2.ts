@@ -490,9 +490,14 @@ export type EpcRecommendation = {
   /** Register only: SAP score / band after this improvement. */
   ratingAfter?: number | null;
   bandAfter?: string | null;
+  /** Register only: environmental impact (CO₂) score / band after this improvement. */
+  environmentalAfter?: number | null;
+  environmentalBandAfter?: string | null;
 };
 
 export type EpcFeature = { name: string; description: string; rating: number | null };
+/** Any other value on the certificate, already worded by the backend (section, label, value). */
+export type EpcFact = { section: string; label: string; value: string };
 export type EpcCostLine = { current: number | null; potential: number | null };
 
 export type EpcDetails = {
@@ -503,6 +508,22 @@ export type EpcDetails = {
   co2Current?: number | null;
   co2Potential?: number | null;
   energyUseCurrent?: number | null;
+  /** Register only (see apps/properties/epc_register.parse_certificate). */
+  energyUsePotential?: number | null;
+  environmentalCurrent?: number | null;
+  environmentalPotential?: number | null;
+  co2PerFloorArea?: number | null;
+  energyRatingAverage?: number | null;
+  heatDemand?: {
+    spaceHeating?: number | null;
+    waterHeating?: number | null;
+    insulationSavings?: { label: string; kwh: number }[];
+  };
+  assessmentType?: string;
+  transactionType?: string;
+  builtForm?: string;
+  constructionAgeBand?: string;
+  facts?: EpcFact[];
   costs?: {
     heating?: EpcCostLine;
     hot_water?: EpcCostLine;
@@ -549,6 +570,8 @@ const normEpc = (e: any): EpcAssessment => ({
         indicativeCost: r.indicative_cost ?? '',
         ratingAfter: r.rating_after ?? null,
         bandAfter: r.band_after ?? null,
+        environmentalAfter: r.environmental_after ?? null,
+        environmentalBandAfter: r.environmental_band_after ?? null,
       }))
     : [],
   documentName: e.document_name ?? null,
@@ -566,6 +589,23 @@ const normEpc = (e: any): EpcAssessment => ({
     co2Current: e.details?.co2_current ?? null,
     co2Potential: e.details?.co2_potential ?? null,
     energyUseCurrent: e.details?.energy_use_current ?? null,
+    energyUsePotential: e.details?.energy_use_potential ?? null,
+    environmentalCurrent: e.details?.environmental_current ?? null,
+    environmentalPotential: e.details?.environmental_potential ?? null,
+    co2PerFloorArea: e.details?.co2_per_floor_area ?? null,
+    energyRatingAverage: e.details?.energy_rating_average ?? null,
+    heatDemand: e.details?.heat_demand
+      ? {
+          spaceHeating: e.details.heat_demand.space_heating ?? null,
+          waterHeating: e.details.heat_demand.water_heating ?? null,
+          insulationSavings: Array.isArray(e.details.heat_demand.insulation_savings) ? e.details.heat_demand.insulation_savings : [],
+        }
+      : undefined,
+    assessmentType: e.details?.assessment_type || undefined,
+    transactionType: e.details?.transaction_type || undefined,
+    builtForm: e.details?.built_form || undefined,
+    constructionAgeBand: e.details?.construction_age_band || undefined,
+    facts: Array.isArray(e.details?.facts) ? e.details.facts : [],
     costs: e.details?.costs ?? undefined,
     features: Array.isArray(e.details?.features) ? e.details.features : [],
   },
@@ -729,9 +769,9 @@ export type SystemQuoteDraft = {
 /** What to upload: name, discipline, document type and category (slugs). */
 export type SystemUploadDraft = { name?: string; discipline?: string; doc_type?: string; category?: string };
 
-/** A calendar entry to create: work already done, a task, or a reminder. */
+/** A calendar entry to create: a task or a reminder. */
 export type SystemEventDraft = {
-  mode: 'done' | 'task' | 'reminder';
+  mode: 'task' | 'reminder';
   title: string;
   type?: string;
   trade?: string;
@@ -746,6 +786,8 @@ export type SystemActionPrefill = Partial<SystemQuoteDraft> & SystemUploadDraft 
   event_id?: string;
   view?: 'detail' | 'complete';
   new_event?: SystemEventDraft;
+  /** System key: the action opens the Log work page for it. */
+  log_work?: string;
   step?: 'A' | 'B' | 'C';
   focus?: string;           // Home MOT question to highlight
   document_id?: string;
@@ -800,7 +842,7 @@ export type SystemHealthDetails = {
   epc: { name: string; description: string; rating: number | null; rating_label: string }[];
   actions: SystemHealthAction[];
   /** The footer buttons: the most urgent quote, the certificate to upload, and logging this system's work. */
-  shortcuts?: { quote?: SystemQuoteDraft; upload?: SystemUploadDraft; log_work?: SystemEventDraft };
+  shortcuts?: { quote?: SystemQuoteDraft; upload?: SystemUploadDraft; log_work?: string };
 };
 
 export type SystemHealth = {
@@ -915,4 +957,96 @@ export const getCalendarFeedLinks = async (): Promise<CalendarFeedLinks> => {
 export const rotateCalendarFeedLink = async (): Promise<CalendarFeedLinks> => {
   const { data: res } = await apiClient.post('/api/v1/events/feed-token/');
   return res.data as CalendarFeedLinks;
+};
+
+// ─── Account types: portfolio, certificates, new tenancy ──────────────────────
+
+export type PortfolioStatus = 'overdue' | 'due_soon' | 'up_to_date' | 'check_local_rules';
+
+/** GET /properties/portfolio/ — one row per home the caller owns. */
+export type PortfolioItem = {
+  id: string;
+  nickname: string;
+  usage: 'own_home' | 'let' | 'rented_home';
+  nation: string;
+  access: 'owner' | 'member';
+  status: PortfolioStatus;
+  next_due: { title: string; date: string; task_key: string } | null;
+};
+export type Portfolio = {
+  summary: { properties: number; overdue: number; due_30: number };
+  items: PortfolioItem[];
+};
+
+export const fetchPortfolio = async () => {
+  const { data: res } = await apiClient.get('/api/v1/properties/portfolio/');
+  return res.data as Portfolio;
+};
+
+export type CertificateType = 'gas_safety' | 'eicr' | 'epc';
+export type CertificateStatus = PrsStatus;
+
+/** One certificate of a let home (the "Rental safety certificates" card) or a rented home. */
+export type CertificateItem = {
+  type: CertificateType;
+  label: string;
+  status: CertificateStatus;
+  last_date: string | null;
+  /** `derived` = worked out from the expiry date (the vault only holds that). */
+  last_date_source: 'document' | 'derived' | 'register' | null;
+  expires_on: string | null;
+  next_due: string | null;
+  band?: string | null;
+  document: { id: string; name: string } | null;
+  actions: SystemHealthAction[];
+};
+export type CertificatesPayload = {
+  property_id: string;
+  usage: 'own_home' | 'let' | 'rented_home';
+  nation: string;
+  rules_nation: string;
+  note: { kind: 'different_rules' | 'check_local_rules'; text: string } | null;
+  register_line: { text: string; url: string } | null;
+  certificates: CertificateItem[];
+};
+
+/** GET /properties/{id}/certificates/ */
+export const fetchCertificates = async (propertyId: string) => {
+  const { data: res } = await apiClient.get(`/api/v1/properties/${propertyId}/certificates/`);
+  return res.data as CertificatesPayload;
+};
+
+/** POST /properties/{id}/new-tenancy/ — "New tenancy starting": the first-day alarm check task. */
+export const startNewTenancy = async (propertyId: string, startDate?: string) => {
+  const { data: res } = await apiClient.post(`/api/v1/properties/${propertyId}/new-tenancy/`, startDate ? { start_date: startDate } : {});
+  return res.data;
+};
+
+// ─── Log work: earlier tasks not completed yet ─────────────────────────────────
+
+export type OpenTask = {
+  id: string;
+  title: string;
+  date: string;          // ISO date
+  status: string;
+  system: string;
+  systemName: string;
+  trade: string;
+  complianceType: string;
+  overdue: boolean;
+};
+
+/** GET /insights/systems-health/open-tasks/ — one system's (or every system's) unfinished earlier tasks. */
+export const fetchOpenTasks = async (propertyId?: string | null, system?: string | null) => {
+  const { data: res } = await apiClient.get('/api/v1/insights/systems-health/open-tasks/', {
+    params: { ...(propertyId ? { property: propertyId } : {}), ...(system ? { system } : {}) },
+  });
+  const d = res.data ?? {};
+  return {
+    systems: (d.systems ?? []) as { key: string; name: string }[],
+    tasks: (d.tasks ?? []).map((t: any): OpenTask => ({
+      id: t.id, title: t.title, date: t.date, status: t.status, system: t.system,
+      systemName: t.system_name, trade: t.trade ?? '', complianceType: t.compliance_type ?? '', overdue: !!t.overdue,
+    })),
+  };
 };
