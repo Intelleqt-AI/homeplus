@@ -132,6 +132,9 @@ function StepPhone({
   );
 }
 
+const dateInputClass =
+  'w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[17px] font-medium text-foreground outline-none transition-colors';
+
 function StepProperty({
   name, setName,
   home, onHomeChange, hasSavedHome,
@@ -146,6 +149,7 @@ function StepProperty({
   details, patchDetails, askFields,
   coverPreview, onCoverClick,
   editing, setEditing, onDoneEditing,
+  tenancyStart, setTenancyStart, tenancyEnd, setTenancyEnd,
   error,
 }: {
   name: string; setName: (v: string) => void;
@@ -167,6 +171,9 @@ function StepProperty({
   coverPreview: string | null; onCoverClick: () => void;
   /** Signup users: false = summary of the home they added, true = the full editable form. */
   editing: boolean; setEditing: (v: boolean) => void; onDoneEditing: () => void;
+  /** Renter tenancy dates — shown inline in the property form. */
+  tenancyStart: string; setTenancyStart: (v: string) => void;
+  tenancyEnd: string; setTenancyEnd: (v: string) => void;
   error: string;
 }) {
   // People who added their home at signup see a summary (with Edit). Google/Apple
@@ -401,6 +408,26 @@ function StepProperty({
       </>
       )}
 
+      {/* Renter tenancy dates — inline, both optional */}
+      {usage === 'rented_home' && (
+        <div className="space-y-3 pt-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tenancy dates <span className="font-normal normal-case text-muted-foreground/60">(optional)</span></p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Start date</label>
+              <input type="date" value={tenancyStart} onChange={e => setTenancyStart(e.target.value)}
+                aria-label="Tenancy start date" className={dateInputClass} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">End / renewal date</label>
+              <input type="date" value={tenancyEnd} min={tenancyStart || undefined}
+                onChange={e => setTenancyEnd(e.target.value)}
+                aria-label="Tenancy end date" className={dateInputClass} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {error && <p className="text-sm text-red-500">{error}</p>}
     </div>
   );
@@ -542,9 +569,6 @@ function StepLoading({ onDone }: { onDone: () => void }) {
 }
 
 // ─── "How will you use Home+?" and the steps only some people see ────────────
-
-const dateInputClass =
-  'w-full rounded-2xl border-2 border-border focus:border-foreground bg-card px-4 py-3.5 text-[17px] font-medium text-foreground outline-none transition-colors';
 
 function StepAccountType({
   value, onChange, error, stepLabel,
@@ -940,12 +964,11 @@ const Onboarding = () => {
     setExtraErrors({});
   };
 
-  /** Where the property step leads: a renter's tenancy dates; landlords and "both" to the
-   *  optional "Add a property you let" list (where Finish setup is always available); everyone
-   *  else straight on. */
+  /** Where the property step leads: landlords and "both" to the optional "Add a property you
+   *  let" list (where Finish setup is always available); everyone else straight on.
+   *  Tenancy dates are now inline in the property form, so renters skip ahead too. */
   const afterProperty = () => {
-    if (accountType === 'renter') go('tenancy');
-    else if (accountType === 'both' || accountType === 'landlord') go('more');
+    if (accountType === 'both' || accountType === 'landlord') go('more');
     else go('notifications');
   };
 
@@ -1046,7 +1069,13 @@ const Onboarding = () => {
       setPropertyError(pcError);
       return;
     }
+    // Tenancy date cross-check (both optional, but end must not precede start).
+    if (tenancyStart && tenancyEnd && tenancyEnd < tenancyStart) {
+      setTenancyError("The end date can't be before the start date.");
+      return;
+    }
     setPropertyError('');
+    setTenancyError('');
     setEditingHome(false);
     afterProperty();
   };
@@ -1312,7 +1341,9 @@ const Onboarding = () => {
                   coverPreview={coverPreview}
                   onCoverClick={() => coverRef.current?.click()}
                   editing={editingHome} setEditing={setEditingHome} onDoneEditing={handleDoneEditing}
-                  error={propertyError}
+                  tenancyStart={tenancyStart} setTenancyStart={v => { setTenancyStart(v); setTenancyError(''); }}
+                  tenancyEnd={tenancyEnd} setTenancyEnd={v => { setTenancyEnd(v); setTenancyError(''); }}
+                  error={propertyError || tenancyError}
                 />
                 <input
                   ref={coverRef}
