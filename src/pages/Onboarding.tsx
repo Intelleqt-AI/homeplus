@@ -599,9 +599,9 @@ function StepTenancy({
 
 /** A property after the first: a home the person lets out (landlords, and "both"). */
 function StepExtraProperty({
-  draft, firstOfBoth, errors, onHomeChange, onDetailsChange, stepLabel,
+  draft, errors, onHomeChange, onDetailsChange, stepLabel,
 }: {
-  draft: ExtraDraft; firstOfBoth: boolean; errors: Record<string, string>;
+  draft: ExtraDraft; errors: Record<string, string>;
   onHomeChange: (h: HomeSelection) => void; onDetailsChange: (d: HomeDetails) => void; stepLabel: string;
 }) {
   return (
@@ -609,7 +609,7 @@ function StepExtraProperty({
       <div className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground tracking-widest uppercase">{stepLabel}</p>
         <h1 className="text-3xl sm:text-5xl font-bold text-foreground leading-[1.1] tracking-tight">
-          {firstOfBoth ? <>Now add a<br />property you let.</> : <>Add another<br />property you let.</>}
+          {<>Add a<br />property you let.</>}
         </h1>
         <p className="text-[17px] text-muted-foreground">We&apos;ll use this to tailor your reminders.</p>
       </div>
@@ -896,10 +896,12 @@ const Onboarding = () => {
     setStep(next);
   };
 
-  // The steps that count in "Step n of N": the extra property screens belong to the property step.
+  // The steps that count in "Step n of N": extra/more/tenancy map to their nearest main step.
   const mainSteps: StepId[] = [...(askType ? (['type'] as StepId[]) : []), 'phone', 'property', 'notifications'];
+  const STEP_MAP: Partial<Record<StepId, StepId>> = { extra: 'notifications', more: 'notifications', tenancy: 'notifications' };
   const mainIndex = (id: StepId) => {
-    const at = mainSteps.indexOf(id);
+    const resolved = STEP_MAP[id] ?? id;
+    const at = mainSteps.indexOf(resolved);
     return at >= 0 ? at : mainSteps.indexOf('property');
   };
   const stepLabel = `Step ${mainIndex(current) + 1} of ${mainSteps.length}`;
@@ -1217,14 +1219,14 @@ const Onboarding = () => {
 
   const activeDraft = extras.find(d => d.id === editingExtra);
   const savedExtras = extras.filter(d => d.home.address.trim());
-  // "Add another property?" lists what is added so far. "Both" must keep the property it lets.
+  // "Add another property?" lists what is added so far. All let homes are removable.
   const moreItems = [
     { key: 'first', label: propertyName.trim() || propertyNickname({ address }), usage, removable: false },
     ...savedExtras.map(d => ({
       key: String(d.id),
       label: propertyNickname({ name: d.details.name, address: d.home.address, postcode: d.home.postcode }),
       usage: 'let' as Usage,
-      removable: !(accountType === 'both' && savedExtras.length === 1),
+      removable: true,
     })),
   ];
 
@@ -1351,7 +1353,6 @@ const Onboarding = () => {
               >
                 <StepExtraProperty
                   draft={activeDraft}
-                  firstOfBoth={accountType === 'both' && extras[0]?.id === activeDraft.id}
                   errors={extraErrors}
                   onHomeChange={h => patchExtra(activeDraft.id, { home: h })}
                   onDetailsChange={d => patchExtra(activeDraft.id, { details: d })}
