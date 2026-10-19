@@ -938,12 +938,12 @@ const Onboarding = () => {
     setExtraErrors({});
   };
 
-  /** Where the property step leads: a renter's tenancy dates; a landlord's "Add another property?";
-   *  for "both", the first property they let; everyone else straight on. */
+  /** Where the property step leads: a renter's tenancy dates; landlords and "both" to the
+   *  optional "Add a property you let" list (where Finish setup is always available); everyone
+   *  else straight on. */
   const afterProperty = () => {
     if (accountType === 'renter') go('tenancy');
-    else if (accountType === 'both') startExtra();
-    else if (accountType === 'landlord') go('more');
+    else if (accountType === 'both' || accountType === 'landlord') go('more');
     else go('notifications');
   };
 
