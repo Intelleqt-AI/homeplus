@@ -5,6 +5,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { fetchData } from '@/lib/Api';
 import PropertySwitcher from './PropertySwitcher';
+// Notification bell temporarily hidden; restore by uncommenting this and its two mounts below.
+// import NotificationBell from './NotificationBell';
+import { useBellNotifications } from '@/hooks/useBellNotifications';
 import { useActiveProperty } from '@/hooks/useActiveProperty';
 import { usePortfolioView } from '@/hooks/usePortfolioView';
 import { myRole, myUsage } from '@/lib/household';
@@ -16,21 +19,15 @@ const Sidebar = () => {
   const { signOut, user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Unread badge for the active property only (matches the Notifications page).
-  const { activePropertyId, activeProperty } = useActiveProperty();
+  const { activeProperty } = useActiveProperty();
   const { portfolioViewActive } = usePortfolioView();
-  // "All properties" is showing: the badge is for the whole account, not one home.
-  const bellProperty = portfolioViewActive ? null : activePropertyId;
   // The PRS register belongs to a let home: shown only while that home is selected.
   // The register is for whoever lets the home: its landlord owner, or a member they made its landlord.
   const hasLetHome = myRole(activeProperty) === 'landlord';
-  const { data: bellData } = useQuery({
-    queryKey: ['ho-notifications', bellProperty],
-    queryFn: (): Promise<{ unread_count: number }> =>
-      fetchData(`/api/v1/notifications/${bellProperty ? `?property=${bellProperty}` : ''}`).then((r: { data?: { unread_count: number } } & { unread_count?: number }) => r?.data ?? r as { unread_count: number }),
-    refetchInterval: 5 * 60 * 1000,
-  });
-  const unreadCount: number = (bellData as { unread_count?: number } | undefined)?.unread_count ?? 0;
+  // Unread badge: the active home's, or the whole account's under "All properties".
+  // Same hook as the bell, so the badge and the bell never disagree.
+  const { data: bellData } = useBellNotifications();
+  const unreadCount = bellData?.unread_count ?? 0;
 
   const { data: msgData } = useQuery({
     queryKey: ['/api/v1/messaging/unread-count/'],
@@ -61,12 +58,16 @@ const Sidebar = () => {
     { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
   ];
 
-  const navContent = (
+  // The bell rides in the desktop sidebar's header; on mobile it lives in the top bar.
+  const renderNav = (withBell: boolean) => (
     <>
       {/* Header - Home+ Logo */}
-      <div className="flex items-center gap-2 mb-6">
-        <img src="/homeplus-logo.png" alt="Home+" className="h-9 w-9 object-contain" />
-        <span className="text-lg font-bold text-sidebar-foreground">Home+</span>
+      <div className="flex items-center justify-between gap-2 mb-6">
+        <div className="flex items-center gap-2">
+          <img src="/homeplus-logo.png" alt="Home+" className="h-9 w-9 object-contain" />
+          <span className="text-lg font-bold text-sidebar-foreground">Home+</span>
+        </div>
+        {/* {withBell && <NotificationBell />} */}
       </div>
 
       <PropertySwitcher />
@@ -146,9 +147,12 @@ const Sidebar = () => {
           <img src="/homeplus-logo.png" alt="Home+" className="h-7 w-7 object-contain" />
           <span className="text-base font-bold text-sidebar-foreground">Home+</span>
         </div>
-        <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2 rounded-full hover:bg-sidebar-accent transition-colors">
-          {mobileOpen ? <X className="w-5 h-5 text-sidebar-foreground" /> : <Menu className="w-5 h-5 text-sidebar-foreground" />}
-        </button>
+        <div className="flex items-center gap-1">
+          {/* <NotificationBell /> */}
+          <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2 rounded-full hover:bg-sidebar-accent transition-colors">
+            {mobileOpen ? <X className="w-5 h-5 text-sidebar-foreground" /> : <Menu className="w-5 h-5 text-sidebar-foreground" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile overlay */}
@@ -158,12 +162,12 @@ const Sidebar = () => {
       <nav
         className={`lg:hidden fixed left-0 top-14 bottom-0 w-[280px] bg-sidebar border-r border-sidebar-border z-50 flex flex-col p-5 transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        {navContent}
+        {renderNav(false)}
       </nav>
 
       {/* Desktop sidebar */}
       <nav className="hidden lg:flex fixed left-0 top-0 h-full w-[280px] bg-sidebar border-r border-sidebar-border z-40 flex-col p-5">
-        {navContent}
+        {renderNav(true)}
       </nav>
     </>
   );

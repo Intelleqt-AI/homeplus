@@ -31,8 +31,27 @@ import { homeLabels } from '@/lib/account';
 import { useAuth } from '@/hooks/useAuth';
 import { attributionLabel } from '@/lib/household';
 import Quote, { type QuotePrefill } from '@/components/topbar/Quote';
+import AddEvent, { type AddEventInitialValues } from '@/components/event/AddEvent';
 import { cn } from '@/lib/utils';
 import { TRADE_OPTIONS, DISCIPLINE_OPTIONS, tradeCategoriesByType, getTradeCategoryLabel } from '@/lib/tradeCategories';
+
+// ── Missing-essentials reminder prefill ─────────────────────────────────────────
+// Turn a "Missing essentials" suggestion into reminder prefill for AddEvent.
+// Property auto-fills from useActiveProperty inside AddEvent; the user sets a date.
+type DocSuggestion = { label: string; discipline: string; category: string; reason: string };
+function reminderPrefill(s: DocSuggestion): AddEventInitialValues {
+  const type: AddEventInitialValues['type'] =
+    s.discipline === 'compliance' || s.discipline === 'energy_epc'
+      ? 'compliance'
+      : s.discipline === 'insurance'
+        ? 'admin'
+        : 'other';
+  let complianceType: AddEventInitialValues['complianceType'];
+  if (s.discipline === 'energy_epc') complianceType = 'epc';
+  else if (s.category === 'gas_engineer_gas_safety_certificates') complianceType = 'gas_safety';
+  else if (s.category === 'electrical_testing_certificates') complianceType = 'eicr';
+  return { title: `Add ${s.label}`, type, complianceType, description: s.reason };
+}
 
 // ── Category config ────────────────────────────────────────────────────────────
 
@@ -108,6 +127,7 @@ const Documents = () => {
   const [sort, setSort] = useState<'recent' | 'name' | 'expiry'>('recent');
   const [editDoc, setEditDoc] = useState<NormDoc | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
+  const [remind, setRemind] = useState<AddEventInitialValues | null>(null);
   const [editDateOpen, setEditDateOpen] = useState(false);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<NormDoc | null>(null);
@@ -456,7 +476,11 @@ const Documents = () => {
                         >
                           <Upload className="w-3 h-3" /> Upload
                         </button>
-                        <button className="text-xs font-medium px-3 py-1.5 rounded-full border border-[#E8E8E3] text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => setRemind(reminderPrefill(s))}
+                          className="text-xs font-medium px-3 py-1.5 rounded-full border border-[#E8E8E3] text-[#4A4A4A] hover:bg-[#F5F5F0] transition-colors"
+                        >
                           Remind me
                         </button>
                       </div>
@@ -925,6 +949,13 @@ const Documents = () => {
 
       <DocsUploadDialog openForm={openForm} setOpenForm={setOpenForm} refetch={refetchAll} prefillDiscipline={prefillDiscipline} />
       <Quote open={quoteOpen} setOpen={setQuoteOpen} prefill={quotePrefill} />
+      <AddEvent
+        hideTrigger
+        open={remind !== null}
+        onOpenChange={(o) => { if (!o) setRemind(null); }}
+        initialMode="reminder"
+        initialValues={remind ?? undefined}
+      />
 
       {/* Export modal */}
       <Dialog open={showPack && isExportModalOpen} onOpenChange={setIsExportModalOpen}>

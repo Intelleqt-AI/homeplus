@@ -101,18 +101,22 @@ const freqLabel = (months: number | null) => {
 };
 
 const Settings = () => {
+  // Full id union — kept stable so the dormant Task Templates code (guarded by
+  // activeTab === 'tasks') still type-checks while that tab is hidden.
+  type TabId = 'profile' | 'notifications' | 'security' | 'properties' | 'family' | 'tasks';
   const tabs = [
     { id: "profile" as const, label: "Profile", icon: User },
     { id: "notifications" as const, label: "Notifications", icon: Bell },
     { id: "security" as const, label: "Security", icon: Shield },
     { id: "properties" as const, label: "Properties", icon: Building },
     { id: "family" as const, label: "Family", icon: Users },
-    { id: "tasks" as const, label: "Task Templates", icon: Calendar },
+    // Task Templates temporarily hidden (commented out everywhere; restore by uncommenting).
+    // { id: "tasks" as const, label: "Task Templates", icon: Calendar },
   ];
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as typeof tabs[number]['id']) || 'profile';
-  const setActiveTab = (id: typeof tabs[number]['id']) => setSearchParams({ tab: id }, { replace: true });
+  const activeTab = (searchParams.get('tab') as TabId) || 'profile';
+  const setActiveTab = (id: TabId) => setSearchParams({ tab: id }, { replace: true });
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
 
   const queryClient = useQueryClient();
@@ -283,7 +287,7 @@ const Settings = () => {
             })}
           </div>
 
-          <div className="hidden xl:grid grid-cols-6 gap-4">
+          <div className="hidden xl:grid grid-cols-5 gap-4">
             {tabs.map((tab) => {
               const IconComponent = tab.icon;
               const isActive = activeTab === tab.id;
@@ -309,7 +313,8 @@ const Settings = () => {
                     {tab.id === 'security' && 'Password & devices'}
                     {tab.id === 'properties' && labels.settingsHomes}
                     {tab.id === 'family' && 'Share your home'}
-                    {tab.id === 'tasks' && 'Task settings'}
+                    {/* Task Templates temporarily hidden */}
+                    {/* {tab.id === 'tasks' && 'Task settings'} */}
                   </p>
                 </button>
               );

@@ -458,6 +458,7 @@ export type ActivityItem = {
   good: boolean;         // positive outcome → green accent
   timestamp: string | null; // ISO; formatted to relative time in the UI
   actor?: { id: string; name?: string } | null; // family members: who did it
+  jobId?: string | null;  // related job (notification-sourced rows) → deep links
 };
 
 const normActivity = (a: any): ActivityItem => ({
@@ -468,6 +469,7 @@ const normActivity = (a: any): ActivityItem => ({
   good: Boolean(a.good),
   timestamp: a.timestamp ?? null,
   actor: a.actor ?? null,
+  jobId: a.job_id ?? null,
 });
 
 

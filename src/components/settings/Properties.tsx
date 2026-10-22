@@ -207,6 +207,17 @@ interface CoverResponse {
   data: { url: string | null };
 }
 
+/** What deleting a home would take with it (GET .../deletion-impact/). */
+interface DeletionImpact {
+  jobs_total: number;
+  /** Job posts a trade has already bought — these can never be deleted. */
+  jobs_purchased: number;
+  jobs_unpurchased: number;
+  documents: number;
+  events: number;
+  mot_tasks: number;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export const EMPTY_FORM: PropertyForm = {
@@ -853,12 +864,25 @@ export default function Properties() {
     onError: () => toast.error('Could not rename the property.'),
   });
 
+  // What deleting the home would take with it — drives which confirm dialog shows.
+  const { data: impactRes, isLoading: impactLoading } = useFetch<{ data?: DeletionImpact }>(
+    deleteTarget ? `/api/v1/properties/${deleteTarget.id}/deletion-impact/` : null,
+  );
+  const impact = impactRes?.data ?? null;
+
   const deleteMutation = useDelete({
     onSuccess: () => {
       closeModal();
       setDeleteTarget(null);
       toast.success('Property deleted.');
       invalidateProperties();
+      // Jobs, chats and documents move or disappear with the home.
+      queryClient.invalidateQueries({
+        predicate: q => {
+          const k = q.queryKey[0];
+          return typeof k === 'string' && ['leads', 'jobs', 'conversations', 'documents', 'recent-activity'].some(p => k.includes(p));
+        },
+      });
     },
     onError: () => toast.error('Failed to delete property.'),
   });
@@ -936,9 +960,12 @@ export default function Properties() {
     patchMutation.mutate({ url: `/api/v1/properties/${selected.id}/`, data: payload });
   };
 
-  const handleDelete = () => {
+  // Job posts outlive the home they were posted from, so the owner is asked what to
+  // do with them. 'delete' is only offered while no trade has bought one.
+  const handleDelete = (jobs?: 'keep' | 'delete') => {
     if (!deleteTarget) return;
-    deleteMutation.mutate({ url: `/api/v1/properties/${deleteTarget.id}/` });
+    const query = jobs ? `?jobs=${jobs}` : '';
+    deleteMutation.mutate({ url: `/api/v1/properties/${deleteTarget.id}/${query}` });
   };
 
   const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1235,27 +1262,117 @@ export default function Properties() {
       {/* ── Delete confirmation ── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete property?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete &quot;{propertyNickname(deleteTarget) || 'this property'}&quot;? Its tasks, reminders and documents will be deleted.
-              {deleteTarget?.is_shared ? ' This removes it for everyone in the household.' : ''}{' '}
-              This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="text-black hover:bg-gray-200" disabled={deleteMutation.isPending}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              className="bg-destructive border-none text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {(() => {
+            const name = propertyNickname(deleteTarget) || 'this property';
+            const shared = deleteTarget?.is_shared ? ' This removes it for everyone in the household.' : '';
+            const busy = deleteMutation.isPending;
+            const spinner = busy ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null;
+            const jobs = impact?.jobs_total ?? 0;
+            const purchased = impact?.jobs_purchased ?? 0;
+
+            if (impactLoading || !impact) {
+              return (
+                <>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete property?</AlertDialogTitle>
+                    <AlertDialogDescription className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Checking what&apos;s on this home…
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="text-black hover:bg-gray-200">Cancel</AlertDialogCancel>
+                  </AlertDialogFooter>
+                </>
+              );
+            }
+
+            // No job posts — nothing to decide, everything goes.
+            if (jobs === 0) {
+              return (
+                <>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete property?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Delete &quot;{name}&quot;? Its documents, tasks, reminders and messages will be permanently deleted.
+                      {shared} This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="text-black hover:bg-gray-200" disabled={busy}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleDelete()}
+                      disabled={busy}
+                      className="bg-destructive border-none text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {spinner}Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </>
+              );
+            }
+
+            // A trade has paid to unlock at least one job — those can't be deleted.
+            if (purchased > 0) {
+              return (
+                <>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>What should happen to the job posts?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      &quot;{name}&quot; has {jobs} job post{jobs === 1 ? '' : 's'}, and a trade has already bought{' '}
+                      {purchased === 1 ? 'one of them' : `${purchased} of them`}. Bought job posts can&apos;t be deleted,
+                      so they&apos;ll stay under your account with their messages. Everything else on this home —
+                      documents, tasks, reminders — will be permanently deleted.{shared}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                    <AlertDialogCancel className="text-black hover:bg-gray-200" disabled={busy}>
+                      Don&apos;t delete now
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleDelete('keep')}
+                      disabled={busy}
+                      className="bg-destructive border-none text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {spinner}Keep the jobs, delete the home
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </>
+              );
+            }
+
+            // Jobs exist but none bought — the owner picks whether they go too.
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>What should happen to the job posts?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    &quot;{name}&quot; has {jobs} job post{jobs === 1 ? '' : 's'} that no trade has bought yet.
+                    Everything else on this home — documents, tasks, reminders and messages — will be
+                    permanently deleted.{shared} This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                  <AlertDialogCancel className="text-black hover:bg-gray-200" disabled={busy}>
+                    Don&apos;t delete now
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => handleDelete('keep')}
+                    disabled={busy}
+                    className="bg-transparent border border-border text-foreground hover:bg-muted"
+                  >
+                    {spinner}Keep the jobs
+                  </AlertDialogAction>
+                  <AlertDialogAction
+                    onClick={() => handleDelete('delete')}
+                    disabled={busy}
+                    className="bg-destructive border-none text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {spinner}Delete everything
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
         </AlertDialogContent>
       </AlertDialog>
     </>

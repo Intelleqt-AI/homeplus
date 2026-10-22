@@ -803,15 +803,15 @@ const Calendar = () => {
           </div>
         </div>
 
-        {/* Manage templates shortcut */}
-        <div className="flex justify-end">
+        {/* Manage templates shortcut — Task Templates temporarily hidden */}
+        {/* <div className="flex justify-end">
           <Link to="/dashboard/settings?tab=tasks">
             <Button variant="outline" size="sm" className="flex items-center gap-2 text-[#4A4A4A] border-[#E8E8E3] hover:border-[#1A1A1A]">
               <Settings className="w-4 h-4" />
               Manage task templates
             </Button>
           </Link>
-        </div>
+        </div> */}
 
         {/* Seasonal nudges */}
         {(SEASONAL_TIPS[currentDate.getMonth()] ?? []).length > 0 && (

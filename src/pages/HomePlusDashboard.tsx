@@ -22,6 +22,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import DocsUploadDialog from '@/components/docsUploadDialog';
 import HomeMotWizard, { STEP_CONFIG, type HomeMotStep } from '@/components/homemot/HomeMotWizard';
 import EmptyState from '@/components/homeplus/EmptyState';
+import { fetchNotifications, notificationsKey } from '@/lib/notifications';
 import GettingStarted, { type GsStep } from '@/components/homeplus/GettingStarted';
 import SystemHealthDialog from '@/components/insights/SystemHealthDialog';
 import { ACTION_BUTTON, runSystemAction } from '@/components/insights/systemHealthActions';
@@ -132,6 +133,41 @@ const activityTime = (iso: string | null): string => {
   return isNaN(d.getTime()) ? '' : formatDistanceToNow(d, { addSuffix: true });
 };
 
+// Where a Recent Activity row should navigate, or null if it has no destination.
+// The item id is prefixed with its source + the source row's real id
+// (epc-/evt-/job-/doc-/act-/ntf-); notification rows carry the related job in `jobId`.
+const activityHref = (it: ActivityItem): string | null => {
+  const dash = it.id.indexOf('-');
+  if (dash < 0) return null;
+  const prefix = it.id.slice(0, dash);
+  const rawId = it.id.slice(dash + 1);
+  switch (prefix) {
+    case 'epc':
+      return '/dashboard/energy';
+    case 'evt':
+      return '/dashboard/calendar';
+    case 'job':
+      return rawId ? `/jobs/${rawId}` : null;
+    case 'doc':
+    case 'act':
+      return '/dashboard/documents';
+    case 'ntf': {
+      if (it.type === 'new_message') {
+        if (!it.jobId) return '/dashboard/messages';
+        const sender = (it.sub.split(':')[0] || '').trim();
+        const from = sender ? `&from=${encodeURIComponent(sender)}` : '';
+        return `/dashboard/messages?job=${it.jobId}${from}`;
+      }
+      if (it.jobId && (it.type === 'job_status' || it.type.startsWith('bid_') || it.type.startsWith('quote') || it.type === 'new_quote')) {
+        return `/jobs/${it.jobId}`;
+      }
+      return null;
+    }
+    default:
+      return null;
+  }
+};
+
 // System-health key → icon for the "System health" card.
 const SYSTEM_ICON: Record<string, React.ElementType> = {
   heating: Flame,
@@ -188,7 +224,9 @@ const PropertyDashboard = () => {
   const navigate = useNavigate();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [epcUploadOpen, setEpcUploadOpen] = useState(false);
-  const [spendYear, setSpendYear] = useState<number>(new Date().getFullYear());
+  // null = the reader has not picked a year; the card then opens on the newest
+  // year that actually has spend (see defaultSpendYear).
+  const [spendYear, setSpendYear] = useState<number | null>(null);
   const [motStep, setMotStep] = useState<HomeMotStep | null>(null);
   const [motFocus, setMotFocus] = useState<string | null>(null);
   const [systemKey, setSystemKey] = useState<string | null>(null);
@@ -350,14 +388,13 @@ const PropertyDashboard = () => {
   const hasEpcRating = !!epc && (!!epc.currentBand || epc.currentScore != null);
   const epcExpired = !!epc?.validUntil && !epc.isEstimate && new Date(`${epc.validUntil}T23:59:59`) < new Date();
 
+  // Same cache entry as the sidebar badge, the bell and the Notifications page.
   const { data: notifData } = useQuery({
-    queryKey: ['ho-notifications', activePropertyId],
-    queryFn: () => fetchData<{ notifications: unknown[]; unread_count: number }>(
-      `/api/v1/notifications/${activePropertyId ? `?property=${activePropertyId}` : ''}`,
-    ).then(r => (r as { data?: { unread_count: number } })?.data ?? r),
+    queryKey: notificationsKey(activePropertyId),
+    queryFn: () => fetchNotifications(activePropertyId),
     staleTime: 5 * 60 * 1000,
   });
-  const unreadCount: number = (notifData as { unread_count?: number } | null)?.unread_count ?? 0;
+  const unreadCount: number = notifData?.unread_count ?? 0;
 
   const { data: activityResp } = useFetch('/api/v1/notifications/recent/', {
     queryKey: ['recent-activity', activePropertyId],
@@ -424,8 +461,15 @@ const PropertyDashboard = () => {
   // Annual spend tracker — live from /api/v1/insights/annual-spend/
   const spendYears: AnnualSpendYear[] = annualSpendResp?.data?.years ?? [];
   const spendYearTabs: number[] = spendYears.map(y => y.year);
+  // The API always returns the last three years including this one, so its
+  // default_year is always the current year — useless for landing on data. Open on
+  // the newest year that has spend instead, unless the reader picked one.
+  const latestYearWithData = [...spendYears].reverse().find(y => y.total > 0) ?? null;
+  const defaultSpendYear =
+    latestYearWithData?.year ?? annualSpendResp?.data?.default_year ?? now.getFullYear();
+  const activeYear = spendYear ?? defaultSpendYear;
   const activeSpend: AnnualSpendYear | null =
-    spendYears.find(y => y.year === spendYear) ?? spendYears[spendYears.length - 1] ?? null;
+    spendYears.find(y => y.year === activeYear) ?? spendYears[spendYears.length - 1] ?? null;
 
   const fmtGBP = (n: number) => `£${Math.round(n).toLocaleString('en-GB')}`;
   // The vs-last-year figure has its own tile in the summary row, so the sub line is just the count.
@@ -452,23 +496,22 @@ const PropertyDashboard = () => {
     ? spendCats.map(c => ({ name: c.name, value: c.v, fill: c.color }))
     : [{ name: 'No spend yet', value: 1, fill: '#ECECE6' }];
 
-  // Summary row under the charts: the year read three ways, all from the same payload.
-  const spendBusiest = (() => {
-    if (spendEmpty || !activeSpend) return '—';
-    const i = activeSpend.bars.reduce((best, v, idx) => (v > activeSpend.bars[best] ? idx : best), 0);
-    return `${MONTHS_LABELS_FULL[i]} · ${fmtGBP(activeSpend.bars[i])}`;
-  })();
-  const spendMonths = activeSpend && activeSpend.year === now.getFullYear() ? now_month + 1 : 12;
-  const spendAverage = activeSpend && spendMonths > 0 ? fmtGBP(activeSpend.total / spendMonths) : '£0';
-  const spendDelta = (() => {
-    const d = activeSpend?.delta_vs_prev;
-    if (d == null) return { text: 'No data', cls: 'text-muted-foreground' };
-    const r = Math.round(d);
-    if (r === 0) return { text: 'Same as last year', cls: 'text-muted-foreground' };
-    return r > 0
-      ? { text: `+${fmtGBP(r)}`, cls: 'text-destructive' }
-      : { text: `−${fmtGBP(Math.abs(r))}`, cls: 'text-success' };
-  })();
+  // The message that sits over the ghosted chart. If another year has spend, point
+  // at it rather than implying the home has never cost anything.
+  const spendJump = latestYearWithData && latestYearWithData.year !== activeYear ? latestYearWithData : null;
+  const spendEmptyHint = spendJump
+    ? {
+        title: `Nothing logged for ${activeYear}`,
+        detail: `${spendJump.year} had ${fmtGBP(spendJump.total)} across ${spendJump.invoice_count} invoice${spendJump.invoice_count === 1 ? '' : 's'}.`,
+        ctaLabel: `View ${spendJump.year}`,
+        jumpYear: spendJump.year as number | null,
+      }
+    : {
+        title: 'No spend logged yet',
+        detail: 'Post a job and its cost lands here once the work is done.',
+        ctaLabel: 'Post a job',
+        jumpYear: null as number | null,
+      };
 
   // YTD home-spend vitals tile — derived from the same annual-spend payload.
   const ytdYear = now.getFullYear();
@@ -750,8 +793,8 @@ const PropertyDashboard = () => {
         {/* ── Row: SystemHealth + Attention ───────────────────── */}
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-4">
           {/* System health */}
-          <div className="bg-card rounded-[18px] border border-border p-5">
-            <Eyebrow icon={Cpu} label="System health" trailing={
+          <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col">
+            <Eyebrow icon={Cpu} label="Home Checkup" trailing={
               <Link to="/dashboard/log-work"
                 className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border border-border bg-muted text-muted-foreground hover:bg-border transition-colors">
                 <Wrench className="w-3 h-3" /> Log work
@@ -775,7 +818,7 @@ const PropertyDashboard = () => {
                 )}
               </div>
             )}
-            <div className="mt-3">
+            <div className={allSystems.length === 0 ? 'mt-3 flex-1 flex items-center justify-center' : 'mt-3'}>
               {allSystems.length === 0 ? (
                 <EmptyState
                   icon={Cpu}
@@ -957,12 +1000,24 @@ const PropertyDashboard = () => {
               <div className="flex gap-1 bg-muted p-1 rounded-full">
                 {spendYearTabs.slice(-3).map(y => (
                   <button key={y} onClick={() => setSpendYear(y)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all duration-200 ${y === spendYear ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-muted-foreground'}`}>
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all duration-200 ${y === activeYear ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-muted-foreground'}`}>
                     {y}
                   </button>
                 ))}
               </div>
             } />
+            {spendEmpty ? (
+              <div className="flex-1 flex items-center justify-center">
+                <EmptyState
+                  icon={PoundSterling}
+                  title={spendEmptyHint.title}
+                  subtitle={spendEmptyHint.detail}
+                  ctaLabel={spendEmptyHint.ctaLabel}
+                  onCta={spendEmptyHint.jumpYear !== null ? () => setSpendYear(spendEmptyHint.jumpYear) : undefined}
+                  href={spendEmptyHint.jumpYear === null ? '/dashboard/job-leads' : undefined}
+                />
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6 items-center mt-4">
               {/* Left: BigStat + BarChart */}
               <div className="flex flex-col gap-3">
@@ -1034,20 +1089,7 @@ const PropertyDashboard = () => {
                 </div>
               </div>
             </div>
-
-            {/* The year in three figures — sits at the card's foot, level with the EPC card */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-auto pt-4 border-t border-border">
-              {[
-                { label: 'Busiest month', value: spendBusiest, cls: 'text-foreground' },
-                { label: 'Avg per month', value: spendAverage, cls: 'text-foreground' },
-                { label: 'vs last year', value: spendDelta.text, cls: spendDelta.cls },
-              ].map(s => (
-                <div key={s.label}>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{s.label}</p>
-                  <p className={cn('text-[15px] font-semibold mt-1 truncate', s.cls)}>{s.value}</p>
-                </div>
-              ))}
-            </div>
+            )}
           </div>
 
           {/* EPC */}
@@ -1197,9 +1239,10 @@ const PropertyDashboard = () => {
         {/* ── Row: Activity + TradePilot + DocsGlance ─────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
           {/* Activity */}
-          <div className="bg-card rounded-[18px] border border-border p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col">
             <Eyebrow icon={Clock} label="Recent activity" />
-            <div className="mt-4">
+            {/* Empty: centre the message in the card, which the grid stretches to the row's height. */}
+            <div className={recentActivity.length === 0 ? 'mt-4 flex-1 flex items-center justify-center' : 'mt-4'}>
               {recentActivity.length === 0 ? (
                 <EmptyState
                   icon={Clock}
@@ -1211,8 +1254,10 @@ const PropertyDashboard = () => {
               ) : (
                 recentActivity.map((it, i) => {
                   const Icon = ACTIVITY_ICON[it.type] ?? Bell;
-                  return (
-                    <div key={it.id ?? i} className={`flex items-start gap-3 py-2.5 ${i > 0 ? 'border-t border-border' : ''}`}>
+                  const href = activityHref(it);
+                  const rowClass = `flex items-start gap-3 py-2.5 ${i > 0 ? 'border-t border-border' : ''}`;
+                  const inner = (
+                    <>
                       <span className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${it.good ? 'bg-[#ECFDF5] text-[#10B981]' : 'bg-muted text-muted-foreground'}`}>
                         <Icon className="w-3.5 h-3.5" />
                       </span>
@@ -1229,6 +1274,20 @@ const PropertyDashboard = () => {
 
                       </div>
                       <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{activityTime(it.timestamp)}</span>
+                    </>
+                  );
+                  return href ? (
+                    <button
+                      key={it.id ?? i}
+                      type="button"
+                      onClick={() => navigate(href)}
+                      className={`${rowClass} w-full text-left cursor-pointer hover:bg-muted/50 rounded-lg -mx-1 px-1 transition-colors`}
+                    >
+                      {inner}
+                    </button>
+                  ) : (
+                    <div key={it.id ?? i} className={rowClass}>
+                      {inner}
                     </div>
                   );
                 })
@@ -1237,7 +1296,7 @@ const PropertyDashboard = () => {
           </div>
 
           {/* TradePilot */}
-          <div className="bg-card rounded-[18px] border border-border p-5">
+          <div className="bg-card rounded-[18px] border border-border p-5 flex flex-col">
             <Eyebrow icon={Wrench} label="TradePilot — quotes in" trailing={
               quotes?.job
                 ? <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 whitespace-nowrap">Awaiting decision</span>
@@ -1308,26 +1367,30 @@ const PropertyDashboard = () => {
                 </div>
               </>
             ) : awaitingJobsCount > 0 ? (
-              <EmptyState
-                icon={Clock}
-                title={`${awaitingJobsCount} job${awaitingJobsCount === 1 ? '' : 's'} awaiting quotes`}
-                subtitle="Local trades are reviewing your request — we'll alert you when quotes arrive."
-                ctaLabel="View jobs"
-                href="/dashboard/job-leads"
-              />
+              <div className="flex-1 flex items-center justify-center">
+                <EmptyState
+                  icon={Clock}
+                  title={`${awaitingJobsCount} job${awaitingJobsCount === 1 ? '' : 's'} awaiting quotes`}
+                  subtitle="Local trades are reviewing your request — we'll alert you when quotes arrive."
+                  ctaLabel="View jobs"
+                  href="/dashboard/job-leads"
+                />
+              </div>
             ) : (
-              <EmptyState
-                icon={Wrench}
-                title="No quotes awaiting your decision"
-                subtitle="Post a job to get quotes from verified local trades."
-                ctaLabel="Post a job"
-                href="/dashboard/job-leads"
-              />
+              <div className="flex-1 flex items-center justify-center">
+                <EmptyState
+                  icon={Wrench}
+                  title="No quotes awaiting your decision"
+                  subtitle="Post a job to get quotes from verified local trades."
+                  ctaLabel="Post a job"
+                  href="/dashboard/job-leads"
+                />
+              </div>
             )}
           </div>
 
           {/* DocsGlance */}
-          <div className="bg-card rounded-[18px] border border-border p-5 md:col-span-2 2xl:col-span-1">
+          <div className="bg-card rounded-[18px] border border-border p-5 md:col-span-2 2xl:col-span-1 flex flex-col">
             <Eyebrow icon={FolderOpen} label="Documents at a glance" trailing={
               <Link to="/dashboard/documents"
                 className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-full border border-border bg-muted text-muted-foreground hover:bg-border transition-colors">
@@ -1335,7 +1398,7 @@ const PropertyDashboard = () => {
               </Link>
             } />
             {totalDocs === 0 ? (
-              <div className="mt-2">
+              <div className="mt-2 flex-1 flex items-center justify-center">
                 <EmptyState
                   icon={FolderOpen}
                   title="Build your home's document vault"
