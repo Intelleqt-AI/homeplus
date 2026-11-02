@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Search } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import PropertyMapPicker from '@/components/PropertyMapPicker';
-import { UK_LOCATIONS, LOCATION_POSTCODE } from '@/lib/ukLocations';
 import { formatPostcode, isFullUkPostcode } from '@/lib/postcode';
 import type { Wording } from '@/lib/account';
 import {
@@ -22,7 +21,7 @@ import {
 } from '@/lib/homeLookup';
 
 /**
- * Area → Postcode → Home picker with a map. Picking a postcode or home places the
+ * Postcode search → Home picker with a map. Picking a postcode or home places the
  * pin and fills the address; moving or clicking the pin looks the address up again
  * and updates every field. Used on Sign up, and in Onboarding for people who signed
  * up with Google/Apple (no home yet).
@@ -43,7 +42,7 @@ const WORDS: Record<Wording, {
     notListed: "My home isn't listed",
     select: 'Select your home',
     unavailable: "Couldn't load homes: use \"My home isn't listed\"",
-    mapHint: 'Not in the list? Search any UK postcode below, or click your home on the map.',
+    mapHint: 'Start typing your postcode, or click your home on the map.',
     pinFail: "We couldn't find an address at that spot. Move the pin, or pick your home from the lists.",
   },
   property: {
@@ -51,7 +50,7 @@ const WORDS: Record<Wording, {
     notListed: "This property isn't listed",
     select: 'Select the property',
     unavailable: "Couldn't load properties: use \"This property isn't listed\"",
-    mapHint: 'Not in the list? Search any UK postcode below, or click the property on the map.',
+    mapHint: 'Start typing the postcode, or click the property on the map.',
     pinFail: "We couldn't find an address at that spot. Move the pin, or pick the property from the lists.",
   },
 };
@@ -59,12 +58,10 @@ const WORDS: Record<Wording, {
 const MANUAL = 'manual' as const;
 
 function Dropdown({
-  label, placeholder, display, disabled, open, onOpenChange, children, shouldFilter = true,
-  onSearch, searching,
+  label, placeholder, display, disabled, open, onOpenChange, children, searching,
 }: {
   label: string; placeholder: string; display: string; disabled?: boolean;
-  open: boolean; onOpenChange: (o: boolean) => void; children: ReactNode;
-  shouldFilter?: boolean; onSearch?: (q: string) => void; searching?: boolean;
+  open: boolean; onOpenChange: (o: boolean) => void; children: ReactNode; searching?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
@@ -85,8 +82,8 @@ function Dropdown({
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0" align="start">
-          <Command shouldFilter={shouldFilter}>
-            <CommandInput placeholder={`Search ${label.toLowerCase()}…`} onValueChange={onSearch} />
+          <Command>
+            <CommandInput placeholder={`Search ${label.toLowerCase()}…`} />
             <CommandList>{children}</CommandList>
           </Command>
         </PopoverContent>
@@ -106,13 +103,13 @@ const HomeSelector = ({ value, onChange, error, wording = 'home' }: Props) => {
     onChange(next);
   };
 
-  const [areaOpen, setAreaOpen] = useState(false);
   const [pcOpen, setPcOpen] = useState(false);
   const [homeOpen, setHomeOpen] = useState(false);
 
   const [pcOptions, setPcOptions] = useState<PostcodeOption[]>([]);
   const [pcQuery, setPcQuery] = useState('');
   const [pcSearching, setPcSearching] = useState(false);
+  const [pcActive, setPcActive] = useState(0);
 
   const [homes, setHomes] = useState<LookupHome[]>([]);
   const homesRef = useRef<LookupHome[]>([]);
@@ -130,9 +127,6 @@ const HomeSelector = ({ value, onChange, error, wording = 'home' }: Props) => {
     setHomesStatus(status);
   };
 
-  const outcode = LOCATION_POSTCODE[value.area] ?? '';
-  const areaIsListed = !value.area || value.area in LOCATION_POSTCODE;
-
   // A home that was already chosen (e.g. saved at signup, then "Change"): load its list.
   useEffect(() => {
     if (value.postcode && homesRef.current.length === 0 && !loadingHomes && !homesStatus) {
@@ -141,19 +135,18 @@ const HomeSelector = ({ value, onChange, error, wording = 'home' }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Postcode dropdown: server search as the user types (debounced).
+  // Postcode search box: server suggestions as the user types (debounced).
+  const pcTyped = pcQuery.toUpperCase().replace(/\s+/g, '');
   useEffect(() => {
-    if (!pcOpen) return;
-    const typed = pcQuery.toUpperCase().replace(/\s+/g, '');
-    const rest = outcode && typed.startsWith(outcode) ? typed.slice(outcode.length) : typed;
-    if (!outcode && typed.length < 2) {
+    if (!pcOpen || pcTyped.length < 2) {
       setPcOptions([]);
+      setPcSearching(false);
       return;
     }
     setPcSearching(true);
     let cancelled = false;
     const id = setTimeout(async () => {
-      const results = await searchPostcodes(outcode, outcode ? rest : typed);
+      const results = await searchPostcodes('', pcTyped);
       if (!cancelled) {
         setPcOptions(results);
         setPcSearching(false);
@@ -163,7 +156,7 @@ const HomeSelector = ({ value, onChange, error, wording = 'home' }: Props) => {
       cancelled = true;
       clearTimeout(id);
     };
-  }, [pcOpen, pcQuery, outcode]);
+  }, [pcOpen, pcTyped]);
 
   const typedPostcode = useMemo(
     () => (isFullUkPostcode(pcQuery) ? formatPostcode(pcQuery) : ''),
@@ -186,15 +179,6 @@ const HomeSelector = ({ value, onChange, error, wording = 'home' }: Props) => {
     setHomeList(res.homes ?? [], res.status);
     return res;
   }
-
-  const chooseArea = (area: string) => {
-    setAreaOpen(false);
-    pinToken.current++;
-    setSelectedHome(null);
-    setHomeList([], '');
-    setPinNote('');
-    emit({ area, postcode: '', address: '', uprn: '', certificateNumber: '', lat: null, lng: null, manual: false, homeId: null });
-  };
 
   const choosePostcode = async (opt: PostcodeOption) => {
     setPcOpen(false);
@@ -293,62 +277,83 @@ const HomeSelector = ({ value, onChange, error, wording = 'home' }: Props) => {
 
   return (
     <div className="space-y-4">
-      <Dropdown
-        label="Area"
-        placeholder="Select your area"
-        display={value.area}
-        open={areaOpen}
-        onOpenChange={setAreaOpen}
-      >
-        <CommandEmpty>No area found.</CommandEmpty>
-        {!areaIsListed && (
-          <CommandGroup heading="Your area">
-            <CommandItem value={value.area} onSelect={() => setAreaOpen(false)}>
-              <Check className="mr-2 h-3.5 w-3.5" />
-              {value.area}
-            </CommandItem>
-          </CommandGroup>
-        )}
-        {UK_LOCATIONS.map(group => (
-          <CommandGroup key={group.group} heading={group.group}>
-            {group.items.map(item => (
-              <CommandItem key={item} value={item} onSelect={() => chooseArea(item)}>
-                <Check className={cn('mr-2 h-3.5 w-3.5', value.area === item ? 'opacity-100' : 'opacity-0')} />
-                {item}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
-      </Dropdown>
-      <p className="-mt-2 text-xs text-muted-foreground">
-        {words.mapHint}
-      </p>
-
-      <Dropdown
-        label="Postcode"
-        placeholder={outcode ? `Select a postcode in ${outcode}` : 'Search a postcode, e.g. E8 1AA'}
-        display={value.postcode}
-        open={pcOpen}
-        onOpenChange={o => { setPcOpen(o); if (!o) setPcQuery(''); }}
-        shouldFilter={false}
-        onSearch={setPcQuery}
-        searching={pcSearching}
-      >
-        {pcItems.length === 0 && (
-          <CommandEmpty>
-            {!outcode && pcQuery.replace(/\s+/g, '').length < 2 ? 'Type the start of a postcode.' : pcSearching ? 'Searching…' : 'No postcodes found.'}
-          </CommandEmpty>
-        )}
-        <CommandGroup>
-          {pcItems.map(o => (
-            <CommandItem key={o.postcode} value={o.postcode} onSelect={() => void choosePostcode(o)}>
-              <Check className={cn('mr-2 h-3.5 w-3.5', value.postcode === o.postcode ? 'opacity-100' : 'opacity-0')} />
-              <span className="font-medium">{o.postcode}</span>
-              {o.admin_district && <span className="ml-2 truncate text-xs text-muted-foreground">{o.admin_district}</span>}
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      </Dropdown>
+      <div className="space-y-1.5">
+        <Label htmlFor="home-postcode">Postcode</Label>
+        <div className="relative">
+          <input
+            id="home-postcode"
+            type="text"
+            role="combobox"
+            aria-expanded={pcOpen && pcItems.length > 0}
+            aria-controls="home-postcode-list"
+            aria-autocomplete="list"
+            autoComplete="off"
+            spellCheck={false}
+            value={pcOpen ? pcQuery : value.postcode}
+            placeholder="Search a postcode, e.g. E8 1AA"
+            onFocus={e => {
+              setPcQuery(value.postcode);
+              setPcActive(0);
+              setPcOpen(true);
+              e.target.select();
+            }}
+            onBlur={() => setPcOpen(false)}
+            onChange={e => {
+              setPcQuery(e.target.value);
+              setPcActive(0);
+              setPcOpen(true);
+            }}
+            onKeyDown={e => {
+              if (e.key === 'ArrowDown' && pcItems.length) {
+                e.preventDefault();
+                setPcActive(i => (i + 1) % pcItems.length);
+              } else if (e.key === 'ArrowUp' && pcItems.length) {
+                e.preventDefault();
+                setPcActive(i => (i - 1 + pcItems.length) % pcItems.length);
+              } else if (e.key === 'Enter' && pcOpen && pcItems.length) {
+                e.preventDefault();
+                void choosePostcode(pcItems[Math.min(pcActive, pcItems.length - 1)]);
+              } else if (e.key === 'Escape') {
+                setPcOpen(false);
+              }
+            }}
+            className="flex h-11 w-full rounded-md border border-input bg-background pl-3 pr-9 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          {pcSearching && (
+            <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin opacity-60" />
+          )}
+          {/* z above Leaflet's panes (400) and controls (1000) on the map below */}
+          {pcOpen && (pcItems.length > 0 || (pcTyped.length >= 2 && !pcSearching)) && (
+            <ul
+              id="home-postcode-list"
+              role="listbox"
+              className="absolute left-0 right-0 top-full z-[1001] mt-1 max-h-60 overflow-auto rounded-md border bg-popover py-1 text-sm text-popover-foreground shadow-md"
+            >
+              {pcItems.length === 0 && (
+                <li className="px-3 py-2 text-muted-foreground">No postcodes found.</li>
+              )}
+              {pcItems.map((o, i) => (
+                <li
+                  key={o.postcode}
+                  role="option"
+                  aria-selected={i === pcActive}
+                  onMouseDown={e => { e.preventDefault(); void choosePostcode(o); }}
+                  onMouseEnter={() => setPcActive(i)}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 px-3 py-2',
+                    i === pcActive && 'bg-accent text-accent-foreground',
+                  )}
+                >
+                  <Search className="h-3.5 w-3.5 shrink-0 opacity-40" />
+                  <span className="font-medium">{o.postcode}</span>
+                  {o.admin_district && <span className="truncate text-xs text-muted-foreground">{o.admin_district}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{words.mapHint}</p>
+      </div>
 
       <Dropdown
         label={words.label}

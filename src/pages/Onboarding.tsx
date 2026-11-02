@@ -1021,7 +1021,7 @@ const Onboarding = () => {
     if (!draft) return;
     const errors: Record<string, string> = {};
     const { home, details: d } = draft;
-    if (!home.postcode) errors.home = 'Select your area and postcode, then the property.';
+    if (!home.postcode) errors.home = 'Search the postcode, then select the property.';
     else if (!home.address.trim()) errors.home = "Select the property, or choose \"This property isn't listed\" and enter the address.";
     else if (home.lat === null || home.lng === null) errors.home = 'Place the pin on the map to mark the property.';
     if (!d.propertyType) errors.propertyType = 'Select a property type.';

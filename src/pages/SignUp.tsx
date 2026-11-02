@@ -41,12 +41,12 @@ function validateStep1(data: typeof INITIAL) {
 function validateHome(home: HomeSelection, wording: 'home' | 'property') {
   const e: Record<string, string> = {};
   if (wording === 'property') {
-    if (!home.postcode) e.home = 'Select your area and postcode, then the property.';
+    if (!home.postcode) e.home = 'Search your postcode, then select the property.';
     else if (!home.address.trim()) e.home = "Select the property, or choose \"This property isn't listed\" and enter the address.";
     else if (home.lat === null || home.lng === null) e.home = 'Place the pin on the map to mark the property.';
     return e;
   }
-  if (!home.postcode) e.home = 'Select your area and postcode, then your home.';
+  if (!home.postcode) e.home = 'Search your postcode, then select your home.';
   else if (!home.address.trim()) e.home = "Select your home, or choose \"My home isn't listed\" and enter the address.";
   else if (home.lat === null || home.lng === null) e.home = 'Place the pin on the map to mark your home.';
   return e;
@@ -61,10 +61,10 @@ const HOME_STEP_TITLES: Record<AccountType, { where: string; about: string }> = 
   renter: { where: 'Where is the home you rent?', about: 'Tell us about the home you rent' },
 };
 const HOME_STEP_SUBTITLES: Record<AccountType, { where: string; about: string }> = {
-  homeowner: { where: 'Pick your area, postcode and home', about: 'We use this to tailor your maintenance schedule' },
-  landlord: { where: 'Pick the area, postcode and property', about: 'We use this to tailor your reminders' },
-  both: { where: 'Pick your area, postcode and home', about: 'We use this to tailor your maintenance schedule' },
-  renter: { where: 'Pick your area, postcode and home', about: 'We use this to tailor your reminders' },
+  homeowner: { where: 'Search your postcode and pick your home', about: 'We use this to tailor your maintenance schedule' },
+  landlord: { where: 'Search the postcode and pick the property', about: 'We use this to tailor your reminders' },
+  both: { where: 'Search your postcode and pick your home', about: 'We use this to tailor your maintenance schedule' },
+  renter: { where: 'Search your postcode and pick your home', about: 'We use this to tailor your reminders' },
 };
 const TOTAL_STEPS = 5;
 
